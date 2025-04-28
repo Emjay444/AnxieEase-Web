@@ -1,11 +1,32 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { formatErrorMessage } from "../utils/apiHelpers";
+
+const EyeIcon = ({ show }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="16"
+    height="16"
+    fill="currentColor"
+    viewBox="0 0 16 16"
+    style={{ color: '#6c757d' }}
+  >
+    {show ? (
+      <>
+        <path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8z"/>
+        <path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z"/>
+      </>
+    ) : (
+      <path d="M13.359 11.238C15.06 9.72 16 8 16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5c2.08 0 3.84-.684 5.359-2.262zm-4.076-2.522L10.72 8c0-.412-.099-.796-.255-1.145l.814-1.547a3 3 0 0 0-4.474 3.997l.755-.754zM6.75 8c0-.691.483-1.27 1.125-1.423l.056-.107a3 3 0 0 0-4.056 3.06l.784-.773C6.334 8.537 6.75 8.313 6.75 8zm1.5 0c0 .691-.483 1.27-1.125 1.423l-.056.107a3 3 0 0 0 4.056-3.06l-.784.773C8.666 7.463 8.25 7.687 8.25 8z"/>
+    )}
+  </svg>
+);
 
 const LoginPage = () => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loginError, setLoginError] = useState("");
@@ -66,30 +87,35 @@ const LoginPage = () => {
               <div className="invalid-feedback">{errors.username}</div>
             )}
           </div>
-          <div className="mb-3">
+          <div className="mb-3 position-relative">
             <input
-              type="password"
+              type={showPassword ? "text" : "password"}
               className={`form-control ${errors.password ? "is-invalid" : ""}`}
               placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="current-password"
             />
+            <button
+              type="button"
+              className="btn btn-link position-absolute end-0 top-50 translate-middle-y text-decoration-none border-0"
+              onClick={() => setShowPassword(!showPassword)}
+              style={{ padding: "0 12px" }}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+            >
+              <EyeIcon show={!showPassword} />
+            </button>
             {errors.password && (
               <div className="invalid-feedback">{errors.password}</div>
             )}
           </div>
           <div className="mb-3 text-start">
-            <a
-              href="#"
+            <Link
+              to="/forgot-password"
               className="link-secondary link-underline-opacity-0 link-underline-opacity-100-hover small"
-              onClick={(e) => {
-                e.preventDefault();
-                alert("Forgot Password?");
-              }}
             >
               Forgot Password? Click here
-            </a>
+            </Link>
           </div>
           <button
             type="submit"

@@ -3,6 +3,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { isValidEmail } from "../utils/validation";
 import LogoutButton from "./LogoutButton";
 import ChevronIcon from "./icons/ChevronIcon";
+import AdminLogs from "./AdminLogs";
 
 const psychologists = [
   {
@@ -112,6 +113,9 @@ const AdminPanel = () => {
   const [selectedPsychologist, setSelectedPsychologist] = useState(null);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [selectedPatientId, setSelectedPatientId] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [patientSearchTerm, setPatientSearchTerm] = useState("");
+  const [unassignedSearchTerm, setUnassignedSearchTerm] = useState("");
 
   // New psychologist form state
   const [newPsychologist, setNewPsychologist] = useState({
@@ -125,6 +129,26 @@ const AdminPanel = () => {
   // Assignment state
   const [selectedPatient, setSelectedPatient] = useState("");
   const [assignmentError, setAssignmentError] = useState("");
+
+  // Filter psychologists based on search term
+  const filteredPsychologists = psychologists.filter(p => 
+    p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    p.id.toString().includes(searchTerm)
+  );
+
+  // Filter patients based on search term
+  const filteredPatients = patients.filter(p => 
+    p.name.toLowerCase().includes(patientSearchTerm.toLowerCase()) ||
+    p.id.toString().includes(patientSearchTerm) ||
+    p.email.toLowerCase().includes(patientSearchTerm.toLowerCase())
+  );
+
+  // Filter unassigned patients based on search term
+  const filteredUnassignedPatients = getUnassignedPatients().filter(p => 
+    p.name.toLowerCase().includes(unassignedSearchTerm.toLowerCase()) ||
+    p.id.toString().includes(unassignedSearchTerm) ||
+    p.email.toLowerCase().includes(unassignedSearchTerm.toLowerCase())
+  );
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -310,6 +334,14 @@ const AdminPanel = () => {
           >
             Unassigned Patients
           </button>
+          <button
+            className={`admin-tab-btn ${
+              activeTab === "logs" ? "active" : ""
+            }`}
+            onClick={() => setActiveTab("logs")}
+          >
+            Activity Logs
+          </button>
         </div>
 
         {/* Card */}
@@ -319,13 +351,19 @@ const AdminPanel = () => {
               <div className="d-flex justify-content-between align-items-center mb-3">
                 <div>
                   <h5 className="fw-bold mb-0">List of psychologist</h5>
-                  <small className="text-muted">
-                    345 available psychologist
-                  </small>
+                  <small className="text-muted">345 available psychologist</small>
                 </div>
-                <button className="btn btn-success rounded-pill px-4 py-2">
-                  <i className="bi bi-person-plus me-2"></i> Add new doctor
-                </button>
+                <div className="d-flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Search by ID or name..."
+                    className="form-control"
+                    style={{ width: '300px' }}
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                  <button className="btn btn-success">Add new doctor</button>
+                </div>
               </div>
               <div className="table-responsive">
                 <table className="table align-middle admin-table">
@@ -341,7 +379,7 @@ const AdminPanel = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {psychologists.map((p, idx) => (
+                    {filteredPsychologists.map((p, idx) => (
                       <tr key={p.id}>
                         <td className="d-flex align-items-center gap-2">
                           <img
@@ -401,6 +439,16 @@ const AdminPanel = () => {
                   <h5 className="fw-bold mb-0">List of Patients</h5>
                   <small className="text-muted">345 patients</small>
                 </div>
+                <div className="d-flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Search by ID, name, or email..."
+                    className="form-control"
+                    style={{ width: '300px' }}
+                    value={patientSearchTerm}
+                    onChange={(e) => setPatientSearchTerm(e.target.value)}
+                  />
+                </div>
               </div>
               <div className="table-responsive">
                 <table className="table align-middle admin-table">
@@ -415,7 +463,7 @@ const AdminPanel = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {patients.map((p, idx) => (
+                    {filteredPatients.map((p, idx) => (
                       <tr key={p.id}>
                         <td className="d-flex align-items-center gap-2">
                           <img
@@ -461,8 +509,18 @@ const AdminPanel = () => {
                 <div>
                   <h5 className="fw-bold mb-0">Unassigned Patients</h5>
                   <small className="text-muted">
-                    {getUnassignedPatients().length} unassigned
+                    {filteredUnassignedPatients.length} unassigned
                   </small>
+                </div>
+                <div className="d-flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Search by ID, name, or email..."
+                    className="form-control"
+                    style={{ width: '300px' }}
+                    value={unassignedSearchTerm}
+                    onChange={(e) => setUnassignedSearchTerm(e.target.value)}
+                  />
                 </div>
               </div>
               <div className="table-responsive">
@@ -477,7 +535,7 @@ const AdminPanel = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {getUnassignedPatients().map((p, idx) => (
+                    {filteredUnassignedPatients.map((p, idx) => (
                       <tr key={p.id}>
                         <td className="d-flex align-items-center gap-2">
                           <img
@@ -512,6 +570,7 @@ const AdminPanel = () => {
               </div>
             </>
           )}
+          {activeTab === "logs" && <AdminLogs />}
         </div>
       </div>
       {/* Modal for assigning patients */}

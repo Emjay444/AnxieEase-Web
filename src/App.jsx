@@ -11,6 +11,7 @@ import Dashboard from "./components/Dashboard";
 import PatientProfile from "./components/PatientProfile";
 import AdminPanel from "./components/AdminPanel";
 import ProtectedRoute from "./components/ProtectedRoute";
+import ForgotPasswordPage from "./components/ForgotPasswordPage";
 import "./App.css";
 
 function App() {
@@ -21,6 +22,7 @@ function App() {
           <Routes>
             {/* Public routes */}
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/" element={<Navigate to="/login" replace />} />
 
             {/* Protected routes for all authenticated users */}
