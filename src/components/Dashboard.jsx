@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { usePatient } from "../contexts/PatientContext";
@@ -165,6 +165,66 @@ const moodLogsData = new Map([
   }]
 ]);
 
+// Sample appointment requests data
+const sampleAppointmentRequests = [
+  {
+    id: "ar1",
+    patientId: "p1",
+    patientName: "John Smith",
+    requestDate: "2023-07-15T10:30:00Z",
+    requestedDateTime: "2023-07-20T14:00:00Z",
+    reason: "Need to discuss recent panic attacks",
+    status: "pending", // pending, approved, declined
+    urgency: "medium", // low, medium, high
+    notes: ""
+  },
+  {
+    id: "ar2",
+    patientId: "p3",
+    patientName: "Sarah Johnson",
+    requestDate: "2023-07-14T15:45:00Z",
+    requestedDateTime: "2023-07-19T11:30:00Z",
+    reason: "Medication follow-up",
+    status: "pending",
+    urgency: "low",
+    notes: ""
+  },
+  {
+    id: "ar3",
+    patientId: "p2",
+    patientName: "Emily Brown",
+    requestDate: "2023-07-12T09:15:00Z",
+    requestedDateTime: "2023-07-18T16:00:00Z",
+    reason: "Emergency - severe anxiety episode yesterday",
+    status: "approved",
+    urgency: "high",
+    notes: "Approved for urgent consultation"
+  },
+  {
+    id: "ar4",
+    patientId: "p4",
+    patientName: "Michael Wilson",
+    requestDate: "2023-07-10T13:20:00Z",
+    requestedDateTime: "2023-07-17T10:00:00Z",
+    reason: "Regular check-in",
+    status: "declined",
+    urgency: "low",
+    notes: "Unavailable on requested date. Please reschedule for the following week."
+  }
+];
+
+// Sample patient notes data
+const patientNotes = {
+  p1: [
+    { id: "n1", date: "2023-07-10T14:30:00Z", title: "Initial Assessment", content: "Patient shows signs of generalized anxiety disorder. Recommended CBT and will monitor progress over next 3 sessions.", tags: ["assessment", "GAD", "CBT"] },
+    { id: "n2", date: "2023-07-05T10:15:00Z", title: "Follow-up Session", content: "Patient reports reduced anxiety symptoms after starting medication. Sleep has improved but still experiences morning anxiety.", tags: ["follow-up", "medication", "sleep"] }
+  ],
+  p2: [
+    { id: "n3", date: "2023-07-12T11:00:00Z", title: "Crisis Intervention", content: "Emergency session after panic attack at work. Discussed coping strategies and breathing techniques. Will follow up in 3 days.", tags: ["crisis", "panic attack", "techniques"] },
+    { id: "n4", date: "2023-07-08T15:45:00Z", title: "Therapy Progress", content: "Making good progress with exposure therapy. Patient successfully completed two exposure exercises this week with reduced anxiety response.", tags: ["exposure therapy", "progress"] }
+  ]
+};
+
 const Dashboard = () => {
   const { user, userRole } = useAuth();
   const {
@@ -326,6 +386,136 @@ const Dashboard = () => {
     };
     return colors[level] || { bg: "#f3f4f6", text: "#6b7280" };
   };
+
+  // Inside the Dashboard component, add these constants for tag colors
+  const TAG_COLORS = [
+    { bg: '#e6f7ff', text: '#0072b1' }, // blue
+    { bg: '#f6ffed', text: '#52c41a' }, // green
+    { bg: '#fff7e6', text: '#fa8c16' }, // orange
+    { bg: '#fff0f6', text: '#eb2f96' }, // pink
+    { bg: '#f9f0ff', text: '#722ed1' }, // purple
+    { bg: '#fcffe6', text: '#a0d911' }  // lime
+  ];
+
+  // Replace the tag color function
+  const getTagColor = (tag) => {
+    // Generate a consistent index based on tag string
+    const index = tag.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % TAG_COLORS.length;
+    return TAG_COLORS[index];
+  };
+
+  // Appointment requests state
+  const [showAppointments, setShowAppointments] = useState(false);
+  const [appointmentRequests, setAppointmentRequests] = useState(sampleAppointmentRequests);
+  const [selectedRequest, setSelectedRequest] = useState(null);
+  const [responseNotes, setResponseNotes] = useState("");
+  const [activeRequestsTab, setActiveRequestsTab] = useState("all");
+  
+  // Patient notes state
+  const [showNotes, setShowNotes] = useState(false);
+  const [currentNotes, setCurrentNotes] = useState([]);
+  const [editingNote, setEditingNote] = useState(null);
+  const [newNote, setNewNote] = useState({ title: "", content: "", tags: "" });
+  const [searchNotes, setSearchNotes] = useState("");
+
+  // Load notes for selected patient
+  React.useEffect(() => {
+    if (selectedPatientId && patientNotes[selectedPatientId]) {
+      setCurrentNotes(patientNotes[selectedPatientId]);
+    } else {
+      setCurrentNotes([]);
+    }
+  }, [selectedPatientId]);
+
+  // Filter appointment requests
+  const getFilteredRequests = () => {
+    if (activeRequestsTab === "all") return appointmentRequests;
+    return appointmentRequests.filter(request => request.status === activeRequestsTab);
+  };
+
+  // Handle appointment request response
+  const handleRequestResponse = (requestId, status) => {
+    if (status === "declined" && !responseNotes.trim()) {
+      alert("Please provide notes when declining a request");
+      return;
+    }
+
+    setAppointmentRequests(
+      appointmentRequests.map(req => 
+        req.id === requestId 
+          ? { ...req, status, notes: responseNotes } 
+          : req
+      )
+    );
+    
+    setSelectedRequest(null);
+    setResponseNotes("");
+  };
+
+  // Add new note
+  const handleAddNote = () => {
+    // Validate inputs
+    if (!newNote.title.trim() || !newNote.content.trim()) {
+      alert("Please enter a title and content for the note");
+      return;
+    }
+
+    const noteId = `n${Date.now()}`;
+    const newNoteObj = {
+      id: noteId,
+      date: new Date().toISOString(),
+      title: newNote.title,
+      content: newNote.content,
+      tags: newNote.tags.split(",").map(tag => tag.trim()).filter(tag => tag)
+    };
+
+    // Update state
+    setCurrentNotes([newNoteObj, ...currentNotes]);
+    
+    // Reset form
+    setNewNote({ title: "", content: "", tags: "" });
+  };
+
+  // Update note
+  const handleUpdateNote = () => {
+    if (!editingNote.title.trim() || !editingNote.content.trim()) {
+      alert("Please enter a title and content for the note");
+      return;
+    }
+
+    setCurrentNotes(
+      currentNotes.map(note => 
+        note.id === editingNote.id 
+          ? { 
+              ...note, 
+              title: editingNote.title,
+              content: editingNote.content,
+              tags: typeof editingNote.tags === 'string' 
+                ? editingNote.tags.split(",").map(tag => tag.trim()).filter(tag => tag) 
+                : editingNote.tags
+            } 
+          : note
+      )
+    );
+    
+    setEditingNote(null);
+  };
+
+  // Delete note
+  const handleDeleteNote = (noteId) => {
+    if (window.confirm("Are you sure you want to delete this note?")) {
+      setCurrentNotes(currentNotes.filter(note => note.id !== noteId));
+    }
+  };
+
+  // Filter notes based on search
+  const filteredNotes = searchNotes.trim() 
+    ? currentNotes.filter(note => 
+        note.title.toLowerCase().includes(searchNotes.toLowerCase()) || 
+        note.content.toLowerCase().includes(searchNotes.toLowerCase()) ||
+        note.tags.some(tag => tag.toLowerCase().includes(searchNotes.toLowerCase()))
+      )
+    : currentNotes;
 
   if (loading) {
     return (
@@ -668,6 +858,346 @@ const Dashboard = () => {
             </div>
           </div>
         )}
+        {showAppointments ? (
+          <div className="appointment-management">
+            <div className="section-header">
+              <h2>Appointment Requests</h2>
+              <button 
+                className="close-button"
+                onClick={() => setShowAppointments(false)}
+              >
+                ×
+              </button>
+            </div>
+            
+            <div className="tab-navigation">
+              <button 
+                className={`tab-button ${activeRequestsTab === 'all' ? 'active' : ''}`}
+                onClick={() => setActiveRequestsTab('all')}
+              >
+                All
+              </button>
+              <button 
+                className={`tab-button ${activeRequestsTab === 'pending' ? 'active' : ''}`}
+                onClick={() => setActiveRequestsTab('pending')}
+              >
+                Pending
+              </button>
+              <button 
+                className={`tab-button ${activeRequestsTab === 'approved' ? 'active' : ''}`}
+                onClick={() => setActiveRequestsTab('approved')}
+              >
+                Approved
+              </button>
+              <button 
+                className={`tab-button ${activeRequestsTab === 'declined' ? 'active' : ''}`}
+                onClick={() => setActiveRequestsTab('declined')}
+              >
+                Declined
+              </button>
+            </div>
+            
+            {selectedRequest ? (
+              <div className="request-details">
+                <div className="detail-header">
+                  <h3>Request Details</h3>
+                  <button 
+                    className="back-button"
+                    onClick={() => {
+                      setSelectedRequest(null);
+                      setResponseNotes("");
+                    }}
+                  >
+                    Back to List
+                  </button>
+                </div>
+                
+                <div className="detail-content">
+                  <div className="info-row">
+                    <div className="info-label">Patient:</div>
+                    <div className="info-value">{selectedRequest.patientName}</div>
+                  </div>
+                  
+                  <div className="info-row">
+                    <div className="info-label">Requested Date:</div>
+                    <div className="info-value">
+                      {new Date(selectedRequest.requestedDateTime).toLocaleString()}
+                    </div>
+                  </div>
+                  
+                  <div className="info-row">
+                    <div className="info-label">Request Date:</div>
+                    <div className="info-value">
+                      {new Date(selectedRequest.requestDate).toLocaleString()}
+                    </div>
+                  </div>
+                  
+                  <div className="info-row">
+                    <div className="info-label">Urgency:</div>
+                    <div className="info-value">
+                      <span className={`urgency-badge ${selectedRequest.urgency}`}>
+                        {selectedRequest.urgency}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div className="info-row">
+                    <div className="info-label">Status:</div>
+                    <div className="info-value">
+                      <span className={`status-badge ${selectedRequest.status}`}>
+                        {selectedRequest.status}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div className="info-section">
+                    <div className="section-label">Reason:</div>
+                    <div className="reason-text">{selectedRequest.reason}</div>
+                  </div>
+                  
+                  {selectedRequest.notes && (
+                    <div className="info-section">
+                      <div className="section-label">Notes:</div>
+                      <div className="notes-text">{selectedRequest.notes}</div>
+                    </div>
+                  )}
+                  
+                  {selectedRequest.status === "pending" && (
+                    <div className="response-section">
+                      <div className="section-label">
+                        Response Notes (required for declining):
+                      </div>
+                      <textarea
+                        value={responseNotes}
+                        onChange={(e) => setResponseNotes(e.target.value)}
+                        placeholder="Enter your notes here..."
+                        rows={4}
+                      ></textarea>
+                      
+                      <div className="action-buttons">
+                        <button 
+                          className="decline-button"
+                          onClick={() => handleRequestResponse(selectedRequest.id, "declined")}
+                        >
+                          Decline Request
+                        </button>
+                        <button 
+                          className="approve-button"
+                          onClick={() => handleRequestResponse(selectedRequest.id, "approved")}
+                        >
+                          Approve Request
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="appointment-list">
+                {getFilteredRequests().length === 0 ? (
+                  <div className="empty-state">
+                    <div className="empty-icon">📅</div>
+                    <div className="empty-text">No {activeRequestsTab !== "all" ? activeRequestsTab : ""} appointment requests found</div>
+                  </div>
+                ) : (
+                  getFilteredRequests().map(request => (
+                    <div 
+                      key={request.id} 
+                      className={`appointment-request-card ${request.status}`}
+                      onClick={() => setSelectedRequest(request)}
+                    >
+                      <div className="request-header">
+                        <span className="patient-name">{request.patientName}</span>
+                        <span className={`urgency-badge ${request.urgency}`}>
+                          {request.urgency}
+                        </span>
+                      </div>
+                      
+                      <div className="request-time">
+                        {new Date(request.requestedDateTime).toLocaleString()}
+                      </div>
+                      
+                      <div className="request-reason">
+                        {request.reason.length > 100 
+                          ? `${request.reason.substring(0, 100)}...` 
+                          : request.reason}
+                      </div>
+                      
+                      <div className="request-footer">
+                        <span className={`status-badge ${request.status}`}>
+                          {request.status}
+                        </span>
+                        <span className="view-details">View Details</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        ) : showNotes ? (
+          <div className="notes-management">
+            <div className="section-header">
+              <h2>Notes for {selectedPatient?.name}</h2>
+              <button 
+                className="close-button"
+                onClick={() => setShowNotes(false)}
+              >
+                ×
+              </button>
+            </div>
+            
+            <div className="notes-actions">
+              <div className="notes-search">
+                <input
+                  type="text"
+                  placeholder="Search notes..."
+                  value={searchNotes}
+                  onChange={(e) => setSearchNotes(e.target.value)}
+                />
+              </div>
+            </div>
+            
+            <div className="notes-grid">
+              <div className="new-note-card">
+                <h3>Add New Note</h3>
+                
+                <div className="note-form">
+                  <input
+                    type="text"
+                    placeholder="Note Title"
+                    value={newNote.title}
+                    onChange={(e) => setNewNote({...newNote, title: e.target.value})}
+                    className="note-title-input"
+                  />
+                  
+                  <textarea
+                    placeholder="Note Content"
+                    value={newNote.content}
+                    onChange={(e) => setNewNote({...newNote, content: e.target.value})}
+                    className="note-content-input"
+                    rows={6}
+                  ></textarea>
+                  
+                  <input
+                    type="text"
+                    placeholder="Tags (comma separated)"
+                    value={newNote.tags}
+                    onChange={(e) => setNewNote({...newNote, tags: e.target.value})}
+                    className="note-tags-input"
+                  />
+                  
+                  <button 
+                    className="add-note-button"
+                    onClick={handleAddNote}
+                  >
+                    Add Note
+                  </button>
+                </div>
+              </div>
+              
+              {editingNote && (
+                <div className="edit-note-card">
+                  <h3>Edit Note</h3>
+                  
+                  <div className="note-form">
+                    <input
+                      type="text"
+                      placeholder="Note Title"
+                      value={editingNote.title}
+                      onChange={(e) => setEditingNote({...editingNote, title: e.target.value})}
+                      className="note-title-input"
+                    />
+                    
+                    <textarea
+                      placeholder="Note Content"
+                      value={editingNote.content}
+                      onChange={(e) => setEditingNote({...editingNote, content: e.target.value})}
+                      className="note-content-input"
+                      rows={6}
+                    ></textarea>
+                    
+                    <input
+                      type="text"
+                      placeholder="Tags (comma separated)"
+                      value={typeof editingNote.tags === 'string' 
+                        ? editingNote.tags 
+                        : editingNote.tags.join(", ")}
+                      onChange={(e) => setEditingNote({...editingNote, tags: e.target.value})}
+                      className="note-tags-input"
+                    />
+                    
+                    <div className="edit-note-actions">
+                      <button 
+                        className="cancel-edit-button"
+                        onClick={() => setEditingNote(null)}
+                      >
+                        Cancel
+                      </button>
+                      <button 
+                        className="update-note-button"
+                        onClick={handleUpdateNote}
+                      >
+                        Update Note
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {filteredNotes.length === 0 ? (
+                <div className="empty-state">
+                  <div className="empty-icon">📝</div>
+                  <div className="empty-text">
+                    {searchNotes.trim() 
+                      ? "No notes found matching your search" 
+                      : "No notes found for this patient"}
+                  </div>
+                </div>
+              ) : (
+                filteredNotes.map(note => (
+                  <div key={note.id} className="note-card">
+                    <div className="note-card-header">
+                      <h3 className="note-title">{note.title}</h3>
+                      <div className="note-date">
+                        {new Date(note.date).toLocaleDateString()}
+                      </div>
+                    </div>
+                    
+                    <div className="note-content">
+                      {note.content}
+                    </div>
+                    
+                    {note.tags && note.tags.length > 0 && (
+                      <div className="note-tags">
+                        {note.tags.map((tag, index) => (
+                          <span key={index} className="note-tag">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    
+                    <div className="note-actions">
+                      <button 
+                        className="edit-note-button"
+                        onClick={() => setEditingNote({...note, tags: note.tags.join(", ")})}
+                      >
+                        Edit
+                      </button>
+                      <button 
+                        className="delete-note-button"
+                        onClick={() => handleDeleteNote(note.id)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        ) : null}
       </main>
     </div>
   );

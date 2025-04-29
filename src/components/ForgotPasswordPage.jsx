@@ -1,26 +1,60 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
+import "./Login.css";
 
 const ForgotPasswordPage = () => {
   const [email, setEmail] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState(false);
   const navigate = useNavigate();
+
+  // Validate email format
+  const validateEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  // Simulated registered emails for demo purposes
+  const registeredEmails = ["test@email.com", "user@example.com"];
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Check for empty email
     if (!email.trim()) {
       setError("Email is required");
       return;
     }
+    
+    // Check for valid email format
+    if (!validateEmail(email)) {
+      setError("Please enter a valid email");
+      return;
+    }
+    
     try {
       setIsSubmitting(true);
       setError("");
-      // Here you would typically make an API call to handle password reset
-      // For now, we'll simulate a successful request
+      
+      // Simulate API call to check if email is registered
       await new Promise(resolve => setTimeout(resolve, 1000));
-      setSuccess(true);
+      
+      // Check if email is registered
+      if (!registeredEmails.includes(email.toLowerCase())) {
+        setError("Email not found. Please check your email and try again.");
+        setIsSubmitting(false);
+        return;
+      }
+      
+      // Simulate sending reset email and generating a token
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Generate a dummy token for the demo (in real app, this would come from backend)
+      const dummyToken = Math.random().toString(36).substring(2, 15);
+      
+      // Redirect to new password page with the token
+      navigate(`/new-password?token=${dummyToken}&email=${encodeURIComponent(email)}`);
+      
     } catch (error) {
       setError("Failed to send reset email. Please try again.");
     } finally {
@@ -29,62 +63,71 @@ const ForgotPasswordPage = () => {
   };
 
   return (
-    <div className="d-flex align-items-center justify-content-center min-vh-100 bg-body-secondary">
-      <div
-        className="card shadow-lg p-4"
-        style={{ minWidth: 350, maxWidth: 400, width: "100%" }}
-      >
+    <div className="login-container">
+      <div className="login-form-wrapper">
         <div className="text-center mb-4">
-          <h1 className="fw-bold mb-0" style={{ letterSpacing: "-1px" }}>
-            <span className="text-primary">Anxie</span>Ease
+          <h1>
+            <span className="text-gradient">Anxie</span>Ease
           </h1>
-          <div className="text-muted mb-2">Reset Password</div>
+          <h2>Reset Password</h2>
         </div>
 
-        {success ? (
-          <div className="text-center">
-            <div className="alert alert-success" role="alert">
-              Password reset instructions have been sent to your email.
-            </div>
-            <button
-              className="btn btn-primary w-100 mt-3"
-              onClick={() => navigate("/login")}
-            >
-              Return to Login
-            </button>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit}>
-            <div className="mb-4">
-              <label className="form-label">Email Address</label>
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <div className="input-with-icon">
               <input
                 type="email"
-                className={`form-control ${error ? "is-invalid" : ""}`}
-                placeholder="Enter your email"
+                className={error ? "error" : ""}
+                placeholder="Email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={isSubmitting}
               />
-              {error && <div className="invalid-feedback">{error}</div>}
             </div>
-            <button
-              type="submit"
-              className="btn btn-primary w-100 fw-semibold py-2 mb-3"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? "Sending..." : "Send Reset Instructions"}
-            </button>
-            <div className="text-center">
-              <button
-                type="button"
-                className="btn btn-link text-decoration-none"
-                onClick={() => navigate("/login")}
-              >
-                Back to Login
-              </button>
-            </div>
-          </form>
-        )}
+            {error && (
+              <div className="field-error">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M8 14C11.3137 14 14 11.3137 14 8C14 4.68629 11.3137 2 8 2C4.68629 2 2 4.68629 2 8C2 11.3137 4.68629 14 8 14Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M8 5V8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M8 11H8.01" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                {error}
+              </div>
+            )}
+          </div>
+          
+          <div className="mb-4"></div>
+          
+          <button
+            type="submit"
+            className="login-button"
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? (
+              <>
+                <svg className="animate-spin -ml-1 mr-2" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M10 3.75V6.25" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                  <path opacity="0.5" d="M13.75 5L12.5 7.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                  <path opacity="0.25" d="M15 10H12.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                  <path opacity="0.15" d="M13.75 15L12.5 12.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                  <path opacity="0.35" d="M10 16.25V13.75" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                  <path opacity="0.5" d="M6.25 15L7.5 12.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                  <path opacity="0.65" d="M5 10H7.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                  <path opacity="0.8" d="M6.25 5L7.5 7.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+                Processing...
+              </>
+            ) : (
+              "Send Reset Instructions"
+            )}
+          </button>
+          
+          <div className="text-center mt-4">
+            <Link to="/login" className="forgot-password-link">
+              Back to Login
+            </Link>
+          </div>
+        </form>
       </div>
     </div>
   );

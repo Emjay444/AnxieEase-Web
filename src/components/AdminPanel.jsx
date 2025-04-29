@@ -81,6 +81,42 @@ const patients = [
     date_added: "24/12/2022",
     time_added: "03:00 PM",
   },
+  {
+    id: "p5",
+    name: "Emma Wilson",
+    email: "emma@mail.com",
+    assigned_psychologist_id: null,
+    is_active: true,
+    date_added: "25/12/2022",
+    time_added: "09:15 AM",
+  },
+  {
+    id: "p6",
+    name: "Frank Miller",
+    email: "frank@mail.com",
+    assigned_psychologist_id: null,
+    is_active: true,
+    date_added: "26/12/2022",
+    time_added: "11:30 AM",
+  },
+  {
+    id: "p7",
+    name: "Grace Taylor",
+    email: "grace@mail.com",
+    assigned_psychologist_id: null,
+    is_active: true,
+    date_added: "27/12/2022",
+    time_added: "02:45 PM",
+  },
+  {
+    id: "p8",
+    name: "Henry Davis",
+    email: "henry@mail.com",
+    assigned_psychologist_id: null,
+    is_active: true,
+    date_added: "28/12/2022",
+    time_added: "04:20 PM",
+  },
 ];
 
 const AVATAR_LIST = [

@@ -28,6 +28,30 @@ const sampleLogs = [
   }
 ];
 
+// Define action types with their associated styles and icons
+const actionTypes = {
+  "Added new psychiatrist": {
+    color: "success",
+    icon: "➕",
+    label: "ADD"
+  },
+  "Assigned patient": {
+    color: "primary",
+    icon: "🔄",
+    label: "ASSIGN"
+  },
+  "Deactivated psychiatrist": {
+    color: "danger",
+    icon: "❌",
+    label: "DEACTIVATE"
+  },
+  "Updated psychiatrist": {
+    color: "info",
+    icon: "🔄",
+    label: "UPDATE"
+  }
+};
+
 const AdminLogs = () => {
   const [filterDate, setFilterDate] = useState("");
 
@@ -36,6 +60,16 @@ const AdminLogs = () => {
     const matchesDate = !filterDate || log.timestamp.includes(filterDate);
     return matchesDate;
   });
+
+  // Get action type styling
+  const getActionStyle = (action) => {
+    const actionType = actionTypes[action] || {
+      color: "secondary", 
+      icon: "ℹ️",
+      label: "INFO"
+    };
+    return actionType;
+  };
 
   return (
     <>
@@ -64,21 +98,27 @@ const AdminLogs = () => {
             </tr>
           </thead>
           <tbody>
-            {filteredLogs.map((log) => (
-              <tr key={log.id}>
-                <td>
-                  <span className={`badge rounded-pill px-3 py-2 
-                    ${log.action.includes('Added') ? 'bg-success-subtle text-success' : 
-                      log.action.includes('Deactivated') ? 'bg-danger-subtle text-danger' :
-                      log.action.includes('Updated') ? 'bg-info-subtle text-info' :
-                      'bg-primary-subtle text-primary'}`}>
-                    {log.action}
-                  </span>
-                </td>
-                <td>{log.details}</td>
-                <td>{log.timestamp}</td>
-              </tr>
-            ))}
+            {filteredLogs.map((log) => {
+              const actionStyle = getActionStyle(log.action);
+              return (
+                <tr key={log.id}>
+                  <td>
+                    <div className="d-flex align-items-center gap-2">
+                      <span className={`badge rounded-pill px-3 py-2 
+                        ${`bg-${actionStyle.color}-subtle text-${actionStyle.color} border border-${actionStyle.color}`}`}>
+                        {actionStyle.label}
+                      </span>
+                      <span style={{ fontSize: "14px" }}>
+                        <span className="me-2">{actionStyle.icon}</span>
+                        {log.action}
+                      </span>
+                    </div>
+                  </td>
+                  <td>{log.details}</td>
+                  <td>{log.timestamp}</td>
+                </tr>
+              );
+            })}
             {filteredLogs.length === 0 && (
               <tr>
                 <td colSpan="3" className="text-center py-4 text-muted">
