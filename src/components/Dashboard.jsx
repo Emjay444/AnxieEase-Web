@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useMemo, memo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { usePatient } from "../contexts/PatientContext";
@@ -32,8 +32,6 @@ const patients = [
     avatar: "https://cdn-icons-png.flaticon.com/512/2922/2922510.png",
     age: 28,
     gender: "Female",
-    diagnosis: "Generalized Anxiety Disorder",
-    medications: ["Sertraline", "Buspirone"],
     emergencyContact: {
       name: "John Simmons",
       relationship: "Brother",
@@ -46,8 +44,6 @@ const patients = [
     avatar: "https://cdn-icons-png.flaticon.com/512/2922/2922656.png",
     age: 32,
     gender: "Female",
-    diagnosis: "Panic Disorder",
-    medications: ["Escitalopram", "Alprazolam"],
     emergencyContact: {
       name: "Sarah Watson",
       relationship: "Sister",
@@ -165,65 +161,798 @@ const moodLogsData = new Map([
   }]
 ]);
 
-// Sample appointment requests data
-const sampleAppointmentRequests = [
+// Sample appointment requests
+const appointmentRequests = [
   {
-    id: "ar1",
+    id: "req1",
     patientId: "p1",
-    patientName: "John Smith",
-    requestDate: "2023-07-15T10:30:00Z",
-    requestedDateTime: "2023-07-20T14:00:00Z",
-    reason: "Need to discuss recent panic attacks",
-    status: "pending", // pending, approved, declined
-    urgency: "medium", // low, medium, high
-    notes: ""
-  },
-  {
-    id: "ar2",
-    patientId: "p3",
-    patientName: "Sarah Johnson",
-    requestDate: "2023-07-14T15:45:00Z",
-    requestedDateTime: "2023-07-19T11:30:00Z",
-    reason: "Medication follow-up",
+    patientName: "Brooklyn Simmons",
+    requestDate: "2024-05-10",
+    requestedDate: "2024-05-20",
+    requestedTime: "10:00 AM",
+    reason: "Follow-up on medication adjustment",
     status: "pending",
-    urgency: "low",
-    notes: ""
+    urgency: "medium"
   },
   {
-    id: "ar3",
+    id: "req2",
     patientId: "p2",
-    patientName: "Emily Brown",
-    requestDate: "2023-07-12T09:15:00Z",
-    requestedDateTime: "2023-07-18T16:00:00Z",
-    reason: "Emergency - severe anxiety episode yesterday",
-    status: "approved",
-    urgency: "high",
-    notes: "Approved for urgent consultation"
+    patientName: "Kristin Watson",
+    requestDate: "2024-05-11",
+    requestedDate: "2024-05-22",
+    requestedTime: "2:30 PM",
+    reason: "Experiencing increased anxiety attacks",
+    status: "pending",
+    urgency: "high"
   },
   {
-    id: "ar4",
-    patientId: "p4",
-    patientName: "Michael Wilson",
-    requestDate: "2023-07-10T13:20:00Z",
-    requestedDateTime: "2023-07-17T10:00:00Z",
-    reason: "Regular check-in",
-    status: "declined",
+    id: "req3",
+    patientId: "p1",
+    patientName: "Brooklyn Simmons",
+    requestDate: "2024-05-08",
+    requestedDate: "2024-05-18",
+    requestedTime: "9:00 AM",
+    reason: "Regular monthly check-in",
+    status: "approved",
     urgency: "low",
-    notes: "Unavailable on requested date. Please reschedule for the following week."
+    notes: "Confirmed appointment. Will review medication effectiveness."
+  },
+  {
+    id: "req4",
+    patientId: "p2",
+    patientName: "Kristin Watson",
+    requestDate: "2024-05-05",
+    requestedDate: "2024-05-12",
+    requestedTime: "11:30 AM",
+    reason: "Need to discuss new symptoms",
+    status: "declined",
+    urgency: "medium",
+    notes: "Suggested earlier appointment on May 10th instead."
   }
 ];
 
-// Sample patient notes data
+// Sample clinician notes for patients
 const patientNotes = {
-  p1: [
-    { id: "n1", date: "2023-07-10T14:30:00Z", title: "Initial Assessment", content: "Patient shows signs of generalized anxiety disorder. Recommended CBT and will monitor progress over next 3 sessions.", tags: ["assessment", "GAD", "CBT"] },
-    { id: "n2", date: "2023-07-05T10:15:00Z", title: "Follow-up Session", content: "Patient reports reduced anxiety symptoms after starting medication. Sleep has improved but still experiences morning anxiety.", tags: ["follow-up", "medication", "sleep"] }
+  "p1": [
+    {
+      id: "note1",
+      date: "2024-05-15",
+      title: "Initial Assessment",
+      content: "Patient displays symptoms consistent with Generalized Anxiety Disorder. Exhibits worry across multiple domains including work, health, and relationships. Physical symptoms include tension, fatigue, and sleep disturbance.",
+      tags: ["assessment", "GAD", "symptoms"]
+    },
+    {
+      id: "note2",
+      date: "2024-05-01",
+      title: "Medication Review",
+      content: "Sertraline seems to be effective in reducing overall anxiety levels. Patient reported minor side effects (mild nausea in the mornings) but these are diminishing. Buspirone added to regimen to address breakthrough anxiety.",
+      tags: ["medication", "side effects", "sertraline", "buspirone"]
+    }
   ],
-  p2: [
-    { id: "n3", date: "2023-07-12T11:00:00Z", title: "Crisis Intervention", content: "Emergency session after panic attack at work. Discussed coping strategies and breathing techniques. Will follow up in 3 days.", tags: ["crisis", "panic attack", "techniques"] },
-    { id: "n4", date: "2023-07-08T15:45:00Z", title: "Therapy Progress", content: "Making good progress with exposure therapy. Patient successfully completed two exposure exercises this week with reduced anxiety response.", tags: ["exposure therapy", "progress"] }
+  "p2": [
+    {
+      id: "note3",
+      date: "2024-05-10",
+      title: "Panic Attack Frequency",
+      content: "Patient reports reduction in panic attack frequency (from 3-4 per week to 1-2). Still experiencing anticipatory anxiety about future attacks. Discussed breathing techniques and cognitive restructuring to address catastrophic thinking.",
+      tags: ["panic attacks", "CBT", "breathing techniques"]
+    }
   ]
 };
+
+// Create a memoized chart component
+const AnxietyChart = memo(({ chartData, chartOptions }) => {
+  return (
+    <div className="chart-card">
+      <div className="chart-title">Attack Frequency Over Time</div>
+      <div className="chart-container">
+        <Line data={chartData} options={chartOptions} />
+      </div>
+    </div>
+  );
+});
+
+// Create a memoized patient notes component
+const PatientNotes = memo(({ 
+  selectedPatient, 
+  filteredNotes, 
+  searchNotes, 
+  setSearchNotes, 
+  showNotesForm, 
+  setShowNotesForm,
+  newNote,
+  setNewNote,
+  editingNote,
+  setEditingNote,
+  handleAddNote,
+  handleUpdateNote,
+  handleDeleteNote
+}) => {
+  return (
+    <div className="patient-notes-section">
+      <div className="section-header patient-notes-header">
+        <h2>Patient Notes</h2>
+        <button 
+          className="primary-button"
+          onClick={() => setShowNotesForm(!showNotesForm)}
+        >
+          {showNotesForm ? 'Hide Form' : '+ Add New Note'}
+        </button>
+      </div>
+
+      {showNotesForm && (
+        <div className="create-note-card">
+          {editingNote ? (
+            <>
+              <h3>Edit Note</h3>
+              <input
+                type="text"
+                placeholder="Note title"
+                value={editingNote.title}
+                onChange={(e) => setEditingNote({...editingNote, title: e.target.value})}
+                className="note-title-input"
+              />
+              <textarea
+                placeholder="Note content..."
+                value={editingNote.content}
+                onChange={(e) => setEditingNote({...editingNote, content: e.target.value})}
+                rows="6"
+                className="note-content-input"
+              ></textarea>
+              <input
+                type="text"
+                placeholder="Tags (comma separated)"
+                value={typeof editingNote.tags === 'string' ? editingNote.tags : editingNote.tags.join(', ')}
+                onChange={(e) => setEditingNote({...editingNote, tags: e.target.value})}
+                className="note-tags-input"
+              />
+              <div className="note-actions">
+                <button className="cancel-button" onClick={() => setEditingNote(null)}>
+                  Cancel
+                </button>
+                <button className="save-button" onClick={handleUpdateNote}>
+                  Update Note
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <h3>Create New Note</h3>
+              <input
+                type="text"
+                placeholder="Note title"
+                value={newNote.title}
+                onChange={(e) => setNewNote({...newNote, title: e.target.value})}
+                className="note-title-input"
+              />
+              <textarea
+                placeholder="Note content..."
+                value={newNote.content}
+                onChange={(e) => setNewNote({...newNote, content: e.target.value})}
+                rows="6"
+                className="note-content-input"
+              ></textarea>
+              <input
+                type="text"
+                placeholder="Tags (comma separated)"
+                value={newNote.tags}
+                onChange={(e) => setNewNote({...newNote, tags: e.target.value})}
+                className="note-tags-input"
+              />
+              <button className="create-note-button" onClick={handleAddNote}>
+                Add Note
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      <div className="notes-search-container">
+        <div className="notes-search">
+          <input
+            type="text"
+            placeholder="Search notes..."
+            value={searchNotes}
+            onChange={(e) => setSearchNotes(e.target.value)}
+          />
+        </div>
+      </div>
+
+      <div className="notes-list">
+        {filteredNotes.length > 0 ? (
+          filteredNotes.map((note) => (
+            <div key={note.id} className="note-card">
+              <div className="note-header">
+                <h3>{note.title}</h3>
+                <div className="note-date">{note.date}</div>
+              </div>
+              <div className="note-content">
+                <p>{note.content}</p>
+              </div>
+              {note.tags && note.tags.length > 0 && (
+                <div className="note-tags">
+                  {note.tags.map((tag, index) => (
+                    <span key={index} className="note-tag">{tag}</span>
+                  ))}
+                </div>
+              )}
+              <div className="note-actions">
+                <button
+                  className="edit-button"
+                  onClick={() => {
+                    setEditingNote({...note});
+                    setShowNotesForm(true);
+                  }}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
+                  </svg>
+                  Edit
+                </button>
+                <button
+                  className="delete-button"
+                  onClick={() => handleDeleteNote(note.id)}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                  </svg>
+                  Delete
+                </button>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="empty-state">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+            <h3>No notes found</h3>
+            <p>
+              {searchNotes.trim() 
+                ? `No notes matching "${searchNotes}"` 
+                : `No notes created yet for ${selectedPatient?.name}`}
+            </p>
+            {searchNotes.trim() && (
+              <button 
+                className="clear-search-button"
+                onClick={() => setSearchNotes("")}
+              >
+                Clear Search
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
+
+// Settings panel component
+const SettingsPanel = memo(({ 
+  showSettings, 
+  closeSettings, 
+  darkMode, 
+  toggleDarkMode, 
+  user 
+}) => {
+  const [activeTab, setActiveTab] = useState('profile');
+  const [profileData, setProfileData] = useState({
+    name: user?.name || 'John Doe',
+    email: user?.email || 'john.doe@example.com',
+    phone: user?.phone || '(555) 123-4567',
+    specialization: user?.specialization || 'Clinical Psychology',
+    licenseNumber: user?.licenseNumber || 'PSY12345'
+  });
+
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
+
+  const [formErrors, setFormErrors] = useState({});
+  const [formSuccess, setFormSuccess] = useState('');
+
+  const handleProfileChange = (field, value) => {
+    setProfileData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+    setFormSuccess('');
+  };
+
+  const handlePasswordChange = (field, value) => {
+    setPasswordData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+    setFormSuccess('');
+  };
+
+  const validateForm = () => {
+    const errors = {};
+    if (!profileData.name.trim()) errors.name = 'Name is required';
+    if (!profileData.email.trim()) {
+      errors.email = 'Email is required';
+    } else if (!/\S+@\S+\.\S+/.test(profileData.email)) {
+      errors.email = 'Email is invalid';
+    }
+    
+    // Only validate password fields if any of them are filled
+    if (passwordData.currentPassword || passwordData.newPassword || passwordData.confirmPassword) {
+      if (!passwordData.currentPassword) errors.currentPassword = 'Current password is required';
+      if (!passwordData.newPassword) {
+        errors.newPassword = 'New password is required';
+      } else if (passwordData.newPassword.length < 8) {
+        errors.newPassword = 'Password must be at least 8 characters';
+      }
+      if (!passwordData.confirmPassword) {
+        errors.confirmPassword = 'Please confirm your password';
+      } else if (passwordData.newPassword !== passwordData.confirmPassword) {
+        errors.confirmPassword = 'Passwords do not match';
+      }
+    }
+    
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (validateForm()) {
+      // In a real app, make API call to update profile and password if changed
+      console.log('Profile updated:', profileData);
+      if (passwordData.currentPassword) {
+        console.log('Password updated');
+      }
+      setFormSuccess('Profile updated successfully!');
+      
+      // Reset password fields
+      setPasswordData({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      });
+      
+      // Reset form errors
+      setFormErrors({});
+    }
+  };
+
+  if (!showSettings) return null;
+
+  return (
+    <div className="settings-overlay">
+      <div className="settings-panel">
+        <div className="settings-header">
+          <h2>Settings</h2>
+          <button className="close-button" onClick={closeSettings}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+
+        <div className="settings-tabs">
+          <button 
+            className={`settings-tab ${activeTab === 'profile' ? 'active' : ''}`}
+            onClick={() => setActiveTab('profile')}
+          >
+            Profile
+          </button>
+          <button 
+            className={`settings-tab ${activeTab === 'appearance' ? 'active' : ''}`}
+            onClick={() => setActiveTab('appearance')}
+          >
+            Appearance
+          </button>
+        </div>
+
+        <div className="settings-content">
+          {formSuccess && (
+            <div className="success-message">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+              </svg>
+              {formSuccess}
+            </div>
+          )}
+
+          {activeTab === 'profile' && (
+            <form className="settings-form" onSubmit={handleSubmit}>
+              <div className="form-section">
+                <h3 className="section-title">Personal Information</h3>
+                <div className="form-group">
+                  <label htmlFor="name">Full Name</label>
+                  <input 
+                    type="text" 
+                    id="name" 
+                    value={profileData.name}
+                    onChange={(e) => handleProfileChange('name', e.target.value)}
+                    className={formErrors.name ? 'error' : ''}
+                  />
+                  {formErrors.name && <div className="field-error">{formErrors.name}</div>}
+                </div>
+                
+                <div className="form-group">
+                  <label htmlFor="email">Email Address</label>
+                  <input 
+                    type="email" 
+                    id="email" 
+                    value={profileData.email}
+                    onChange={(e) => handleProfileChange('email', e.target.value)}
+                    className={formErrors.email ? 'error' : ''}
+                  />
+                  {formErrors.email && <div className="field-error">{formErrors.email}</div>}
+                </div>
+                
+                <div className="form-group">
+                  <label htmlFor="phone">Phone Number</label>
+                  <input 
+                    type="tel" 
+                    id="phone" 
+                    value={profileData.phone}
+                    onChange={(e) => handleProfileChange('phone', e.target.value)}
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label htmlFor="specialization">Specialization</label>
+                  <input 
+                    type="text" 
+                    id="specialization" 
+                    value={profileData.specialization}
+                    onChange={(e) => handleProfileChange('specialization', e.target.value)}
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label htmlFor="license">License Number</label>
+                  <input 
+                    type="text" 
+                    id="license" 
+                    value={profileData.licenseNumber}
+                    onChange={(e) => handleProfileChange('licenseNumber', e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="form-section">
+                <h3 className="section-title">Change Password</h3>
+                <div className="form-group">
+                  <label htmlFor="currentPassword">Current Password</label>
+                  <input 
+                    type="password" 
+                    id="currentPassword" 
+                    value={passwordData.currentPassword}
+                    onChange={(e) => handlePasswordChange('currentPassword', e.target.value)}
+                    className={formErrors.currentPassword ? 'error' : ''}
+                  />
+                  {formErrors.currentPassword && <div className="field-error">{formErrors.currentPassword}</div>}
+                </div>
+                
+                <div className="form-group">
+                  <label htmlFor="newPassword">New Password</label>
+                  <input 
+                    type="password" 
+                    id="newPassword" 
+                    value={passwordData.newPassword}
+                    onChange={(e) => handlePasswordChange('newPassword', e.target.value)}
+                    className={formErrors.newPassword ? 'error' : ''}
+                  />
+                  {formErrors.newPassword && <div className="field-error">{formErrors.newPassword}</div>}
+                </div>
+                
+                <div className="form-group">
+                  <label htmlFor="confirmPassword">Confirm New Password</label>
+                  <input 
+                    type="password" 
+                    id="confirmPassword" 
+                    value={passwordData.confirmPassword}
+                    onChange={(e) => handlePasswordChange('confirmPassword', e.target.value)}
+                    className={formErrors.confirmPassword ? 'error' : ''}
+                  />
+                  {formErrors.confirmPassword && <div className="field-error">{formErrors.confirmPassword}</div>}
+                </div>
+              </div>
+              
+              <button type="submit" className="primary-button">
+                Save Changes
+              </button>
+            </form>
+          )}
+
+          {activeTab === 'appearance' && (
+            <div className="appearance-settings">
+              <div className="theme-option">
+                <div className="theme-info">
+                  <h3>Dark Mode</h3>
+                  <p>Switch between light and dark theme.</p>
+                </div>
+                <div className="theme-toggle">
+                  <label className="switch">
+                    <input 
+                      type="checkbox" 
+                      checked={darkMode} 
+                      onChange={toggleDarkMode}
+                    />
+                    <span className="slider round"></span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+});
+
+// Add this mock data for existing doctors (for duplicate checking)
+const existingDoctors = [
+  {
+    id: "D001",
+    email: "john.smith@anxiease.com",
+    name: "Dr. John Smith",
+    contact: "(555) 123-4567",
+    dateRegistered: "2024-03-01",
+    profilePicture: "https://cdn-icons-png.flaticon.com/512/2922/2922510.png"
+  }
+];
+
+// Add Doctor Modal Component
+const AddDoctorModal = memo(({ show, onClose, onSave }) => {
+  const [formData, setFormData] = useState({
+    name: '',
+    idNumber: '',
+    email: '',
+    contact: '',
+    profilePicture: null,
+    dateRegistered: new Date().toISOString().split('T')[0]
+  });
+
+  const [errors, setErrors] = useState({});
+  const [previewUrl, setPreviewUrl] = useState('');
+
+  useEffect(() => {
+    // Reset form when modal is opened
+    if (show) {
+      setFormData({
+        name: '',
+        idNumber: '',
+        email: '',
+        contact: '',
+        profilePicture: null,
+        dateRegistered: new Date().toISOString().split('T')[0]
+      });
+      setErrors({});
+      setPreviewUrl('');
+    }
+  }, [show]);
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    // Clear error when user starts typing
+    if (errors[name]) {
+      setErrors(prev => ({
+        ...prev,
+        [name]: ''
+      }));
+    }
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+        setErrors(prev => ({
+          ...prev,
+          profilePicture: 'File size should not exceed 5MB'
+        }));
+        return;
+      }
+
+      if (!file.type.startsWith('image/')) {
+        setErrors(prev => ({
+          ...prev,
+          profilePicture: 'Please upload an image file'
+        }));
+        return;
+      }
+
+      setFormData(prev => ({
+        ...prev,
+        profilePicture: file
+      }));
+
+      // Create preview URL
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPreviewUrl(reader.result);
+      };
+      reader.readAsDataURL(file);
+
+      // Clear error
+      setErrors(prev => ({
+        ...prev,
+        profilePicture: ''
+      }));
+    }
+  };
+
+  const validateForm = () => {
+    const newErrors = {};
+
+    // Required field validation
+    if (!formData.name.trim()) {
+      newErrors.name = 'Full Name is required';
+    }
+
+    if (!formData.idNumber.trim()) {
+      newErrors.idNumber = 'ID Number is required';
+    } else if (existingDoctors.some(doc => doc.id === formData.idNumber)) {
+      newErrors.idNumber = 'ID number is already registered';
+    }
+
+    if (!formData.email.trim()) {
+      newErrors.email = 'Email is required';
+    } else if (!/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(formData.email)) {
+      newErrors.email = 'Please enter a valid email address';
+    } else if (existingDoctors.some(doc => doc.email === formData.email)) {
+      newErrors.email = 'Email already exists';
+    }
+
+    if (!formData.contact.trim()) {
+      newErrors.contact = 'Contact Number is required';
+    }
+
+    if (!formData.profilePicture && !previewUrl) {
+      newErrors.profilePicture = 'Profile Picture is required';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (validateForm()) {
+      onSave(formData);
+      onClose();
+    }
+  };
+
+  if (!show) return null;
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content add-doctor-modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>Add New Doctor</h2>
+          <button className="close-button" onClick={onClose}>×</button>
+        </div>
+        <div className="modal-body">
+          <form onSubmit={handleSubmit} className="add-doctor-form">
+            <div className="form-section">
+              <div className="profile-picture-upload">
+                <div className="preview-container">
+                  {previewUrl ? (
+                    <img src={previewUrl} alt="Profile preview" className="profile-preview" />
+                  ) : (
+                    <div className="upload-placeholder">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
+                      </svg>
+                    </div>
+                  )}
+                </div>
+                <div className="upload-controls">
+                  <label className="upload-button" htmlFor="profilePicture">
+                    Upload Picture
+                    <input
+                      type="file"
+                      id="profilePicture"
+                      name="profilePicture"
+                      accept="image/*"
+                      onChange={handleFileChange}
+                      className="hidden"
+                    />
+                  </label>
+                  {errors.profilePicture && <div className="field-error">{errors.profilePicture}</div>}
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="name">Full Name</label>
+                <input
+                  type="text"
+                  id="name"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleInputChange}
+                  className={errors.name ? 'error' : ''}
+                />
+                {errors.name && <div className="field-error">{errors.name}</div>}
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="idNumber">ID Number</label>
+                <input
+                  type="text"
+                  id="idNumber"
+                  name="idNumber"
+                  value={formData.idNumber}
+                  onChange={handleInputChange}
+                  className={errors.idNumber ? 'error' : ''}
+                />
+                {errors.idNumber && <div className="field-error">{errors.idNumber}</div>}
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="email">Email</label>
+                <input
+                  type="email"
+                  id="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleInputChange}
+                  className={errors.email ? 'error' : ''}
+                />
+                {errors.email && <div className="field-error">{errors.email}</div>}
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="contact">Contact Number</label>
+                <input
+                  type="tel"
+                  id="contact"
+                  name="contact"
+                  value={formData.contact}
+                  onChange={handleInputChange}
+                  className={errors.contact ? 'error' : ''}
+                />
+                {errors.contact && <div className="field-error">{errors.contact}</div>}
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="dateRegistered">Date Registered</label>
+                <input
+                  type="date"
+                  id="dateRegistered"
+                  name="dateRegistered"
+                  value={formData.dateRegistered}
+                  onChange={handleInputChange}
+                  max={new Date().toISOString().split('T')[0]}
+                />
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button type="button" className="cancel-button" onClick={onClose}>
+                Cancel
+              </button>
+              <button type="submit" className="save-button">
+                Save
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+});
 
 const Dashboard = () => {
   const { user, userRole } = useAuth();
@@ -248,6 +977,24 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const [selectedPatientId, setSelectedPatientId] = useState(patients[0].id);
   const selectedPatient = patients.find((p) => p.id === selectedPatientId);
+
+  const [showAppointments, setShowAppointments] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState(null);
+  const [responseNote, setResponseNote] = useState("");
+  const [appointmentList, setAppointmentList] = useState(appointmentRequests);
+  const [activeTab, setActiveTab] = useState("all");
+
+  const [showNotesForm, setShowNotesForm] = useState(false);
+  const [currentNotes, setCurrentNotes] = useState([]);
+  const [editingNote, setEditingNote] = useState(null);
+  const [newNote, setNewNote] = useState({ title: "", content: "", tags: "" });
+  const [searchNotes, setSearchNotes] = useState("");
+
+  const [showSettings, setShowSettings] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
+
+  const [showAddDoctor, setShowAddDoctor] = useState(false);
+  const [doctors, setDoctors] = useState(existingDoctors);
 
   // Load patients on component mount
   React.useEffect(() => {
@@ -282,6 +1029,26 @@ const Dashboard = () => {
     setFilteredPatients(result);
   }, [apiPatients, searchTerm, searchId, filters, searchPatients, filterPatients]);
 
+  // Load notes for selected patient
+  React.useEffect(() => {
+    if (selectedPatientId) {
+      setCurrentNotes(patientNotes[selectedPatientId] || []);
+    }
+  }, [selectedPatientId]);
+
+  // Apply dark mode when it changes
+  useEffect(() => {
+    if (darkMode) {
+      document.body.classList.add('dark-theme');
+    } else {
+      document.body.classList.remove('dark-theme');
+    }
+  }, [darkMode]);
+
+  const toggleDarkMode = () => {
+    setDarkMode(prevMode => !prevMode);
+  };
+
   const handlePatientClick = (patientId) => {
     navigate(`/patient/${patientId}`);
   };
@@ -312,58 +1079,74 @@ const Dashboard = () => {
     });
   };
 
-  // Update chartData to cover a full month (Jan 1 to Jan 31)
-  const chartData = {
-    labels: Array.from({ length: 31 }, (_, i) => `Jan ${i + 1}`),
+  // Memoized chart data and options to prevent recalculations
+  const chartData = useMemo(() => ({
+    labels: getDatesForCurrentMonth(),
     datasets: [
       {
-        label: "Attacks",
-        data: [
-          1, 2, 1, 3, 2, 1, 2, 2, 1, 3, 2, 1, 2, 1, 2, 1, 3, 2, 1, 2, 2, 1, 3,
-          2, 1, 2, 1, 2, 1, 3, 2,
-        ],
-        fill: false,
-        borderColor: "#22c55e",
-        backgroundColor: "#e6f9ed",
+        label: "Anxiety Attacks",
+        data: generateRandomData(30, 0, 3),
+        borderColor: "#3cba92",
+        backgroundColor: "rgba(60, 186, 146, 0.2)",
         tension: 0.4,
+        fill: true,
       },
     ],
-  };
-  const chartOptions = {
-    responsive: true,
-    plugins: {
-      legend: { display: false },
-      title: { display: false },
-    },
-    scales: {
-      y: { beginAtZero: true, ticks: { stepSize: 1 } },
-    },
-  };
+  }), []);
 
-  const moodChartOptions = {
+  const chartOptions = useMemo(() => ({
     responsive: true,
+    maintainAspectRatio: false,
+    animation: {
+      duration: 0 // Remove animations to prevent layout shifts
+    },
+    layout: {
+      padding: {
+        top: 5,
+        bottom: 5
+      }
+    },
     plugins: {
-      legend: { display: false },
-      title: { display: false },
+      legend: {
+        position: "top",
+      },
     },
     scales: {
       y: { 
         beginAtZero: true, 
-        max: 5,
         ticks: { 
           stepSize: 1,
-          callback: function(value) {
-            const moodLabels = ['', 'Very Low', 'Low', 'Neutral', 'Good', 'Excellent'];
-            return moodLabels[value];
-          }
-        }
+        },
       },
+      x: {
+        ticks: {
+          maxRotation: 0,
+          autoSkip: true,
+          maxTicksLimit: 10
+        }
+      }
     },
-  };
+  }), []);
 
-  const handlePatientLogsClick = () => {
-    setShowPatientLogs(!showPatientLogs);
-  };
+  // Helper function to generate dates for the current month
+  function getDatesForCurrentMonth() {
+    const date = new Date();
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    
+    return Array.from({ length: daysInMonth }, (_, i) => {
+      const day = i + 1;
+      return `${month + 1}/${day}`;
+    });
+  }
+
+  // Helper function to generate random data
+  function generateRandomData(count, min, max) {
+    return Array.from({ length: count }, () => 
+      Math.floor(Math.random() * (max - min + 1)) + min
+    );
+  }
 
   // Get mood badge color
   const getMoodColor = (mood) => {
@@ -387,124 +1170,80 @@ const Dashboard = () => {
     return colors[level] || { bg: "#f3f4f6", text: "#6b7280" };
   };
 
-  // Inside the Dashboard component, add these constants for tag colors
-  const TAG_COLORS = [
-    { bg: '#e6f7ff', text: '#0072b1' }, // blue
-    { bg: '#f6ffed', text: '#52c41a' }, // green
-    { bg: '#fff7e6', text: '#fa8c16' }, // orange
-    { bg: '#fff0f6', text: '#eb2f96' }, // pink
-    { bg: '#f9f0ff', text: '#722ed1' }, // purple
-    { bg: '#fcffe6', text: '#a0d911' }  // lime
-  ];
+  // Filter appointments based on status
+  const filteredAppointments = appointmentList.filter(req => {
+    if (activeTab === "all") return true;
+    return req.status === activeTab;
+  });
 
-  // Replace the tag color function
-  const getTagColor = (tag) => {
-    // Generate a consistent index based on tag string
-    const index = tag.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % TAG_COLORS.length;
-    return TAG_COLORS[index];
-  };
-
-  // Appointment requests state
-  const [showAppointments, setShowAppointments] = useState(false);
-  const [appointmentRequests, setAppointmentRequests] = useState(sampleAppointmentRequests);
-  const [selectedRequest, setSelectedRequest] = useState(null);
-  const [responseNotes, setResponseNotes] = useState("");
-  const [activeRequestsTab, setActiveRequestsTab] = useState("all");
-  
-  // Patient notes state
-  const [showNotes, setShowNotes] = useState(false);
-  const [currentNotes, setCurrentNotes] = useState([]);
-  const [editingNote, setEditingNote] = useState(null);
-  const [newNote, setNewNote] = useState({ title: "", content: "", tags: "" });
-  const [searchNotes, setSearchNotes] = useState("");
-
-  // Load notes for selected patient
-  React.useEffect(() => {
-    if (selectedPatientId && patientNotes[selectedPatientId]) {
-      setCurrentNotes(patientNotes[selectedPatientId]);
-    } else {
-      setCurrentNotes([]);
-    }
-  }, [selectedPatientId]);
-
-  // Filter appointment requests
-  const getFilteredRequests = () => {
-    if (activeRequestsTab === "all") return appointmentRequests;
-    return appointmentRequests.filter(request => request.status === activeRequestsTab);
-  };
-
-  // Handle appointment request response
-  const handleRequestResponse = (requestId, status) => {
-    if (status === "declined" && !responseNotes.trim()) {
-      alert("Please provide notes when declining a request");
+  // Handle appointment response (approve/decline)
+  const handleAppointmentResponse = (requestId, status) => {
+    if (!responseNote.trim() && status === "declined") {
+      alert("Please provide a note explaining why the appointment was declined");
       return;
     }
 
-    setAppointmentRequests(
-      appointmentRequests.map(req => 
+    setAppointmentList(prev => 
+      prev.map(req => 
         req.id === requestId 
-          ? { ...req, status, notes: responseNotes } 
+          ? { ...req, status, notes: responseNote || undefined } 
           : req
       )
     );
     
+    setResponseNote("");
     setSelectedRequest(null);
-    setResponseNotes("");
   };
 
-  // Add new note
+  // Handle creating a new note
   const handleAddNote = () => {
-    // Validate inputs
     if (!newNote.title.trim() || !newNote.content.trim()) {
-      alert("Please enter a title and content for the note");
+      alert("Please provide both a title and content for the note");
       return;
     }
 
-    const noteId = `n${Date.now()}`;
-    const newNoteObj = {
-      id: noteId,
-      date: new Date().toISOString(),
+    const note = {
+      id: `note${Date.now()}`,
+      date: new Date().toISOString().split('T')[0],
       title: newNote.title,
       content: newNote.content,
-      tags: newNote.tags.split(",").map(tag => tag.trim()).filter(tag => tag)
+      tags: newNote.tags ? newNote.tags.split(',').map(tag => tag.trim()) : []
     };
 
-    // Update state
-    setCurrentNotes([newNoteObj, ...currentNotes]);
-    
-    // Reset form
+    // In a real app, you would save this to the backend
+    setCurrentNotes(prev => [note, ...prev]);
     setNewNote({ title: "", content: "", tags: "" });
-  };
-
-  // Update note
-  const handleUpdateNote = () => {
-    if (!editingNote.title.trim() || !editingNote.content.trim()) {
-      alert("Please enter a title and content for the note");
-      return;
-    }
-
-    setCurrentNotes(
-      currentNotes.map(note => 
-        note.id === editingNote.id 
-          ? { 
-              ...note, 
-              title: editingNote.title,
-              content: editingNote.content,
-              tags: typeof editingNote.tags === 'string' 
-                ? editingNote.tags.split(",").map(tag => tag.trim()).filter(tag => tag) 
-                : editingNote.tags
-            } 
-          : note
-      )
-    );
-    
     setEditingNote(null);
   };
 
-  // Delete note
+  // Handle updating an existing note
+  const handleUpdateNote = () => {
+    if (!editingNote.title.trim() || !editingNote.content.trim()) {
+      alert("Please provide both a title and content for the note");
+      return;
+    }
+
+    // Process tags if they're a string
+    if (typeof editingNote.tags === 'string') {
+      editingNote.tags = editingNote.tags.split(',').map(tag => tag.trim());
+    }
+
+    // In a real app, you would save this to the backend
+    setCurrentNotes(prev => 
+      prev.map(note => 
+        note.id === editingNote.id 
+          ? { ...editingNote, date: new Date().toISOString().split('T')[0] } 
+          : note
+      )
+    );
+    setEditingNote(null);
+  };
+
+  // Handle deleting a note
   const handleDeleteNote = (noteId) => {
     if (window.confirm("Are you sure you want to delete this note?")) {
-      setCurrentNotes(currentNotes.filter(note => note.id !== noteId));
+      // In a real app, you would delete this from the backend
+      setCurrentNotes(prev => prev.filter(note => note.id !== noteId));
     }
   };
 
@@ -516,6 +1255,35 @@ const Dashboard = () => {
         note.tags.some(tag => tag.toLowerCase().includes(searchNotes.toLowerCase()))
       )
     : currentNotes;
+
+  // Add these handlers right after the other handlers
+  const handlePatientLogsClick = () => {
+    setShowPatientLogs(true);
+  };
+
+  const handleAppointmentsClick = () => {
+    setShowAppointments(true);
+  };
+
+  const handleCloseAppointments = () => {
+    setShowAppointments(false);
+    setSelectedRequest(null);
+    setResponseNote("");
+  };
+
+  const handleClosePatientLogs = () => {
+    setShowPatientLogs(false);
+  };
+
+  const handleAddDoctor = (doctorData) => {
+    // In a real app, you would make an API call here
+    const newDoctor = {
+      ...doctorData,
+      id: doctorData.idNumber,
+      profilePicture: URL.createObjectURL(doctorData.profilePicture)
+    };
+    setDoctors(prev => [...prev, newDoctor]);
+  };
 
   if (loading) {
     return (
@@ -531,673 +1299,392 @@ const Dashboard = () => {
   }
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: "#f6faf7" }}>
+    <div className="dashboard-layout">
       {/* Sidebar */}
-      <aside
-        style={{
-          width: 260,
-          background: "#fff",
-          borderRight: "1px solid #e5e7eb",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        <div style={{ padding: 24, borderBottom: "1px solid #e5e7eb" }}>
-          <h3 style={{ margin: 0, fontWeight: 700, fontSize: 20 }}>
-            Patients Details
-          </h3>
+      <aside className="dashboard-sidebar">
+        <div className="app-logo">
+          <h1>
+            <span className="text-gradient">Anxie</span>Ease
+          </h1>
+        </div>
+        
+        <div className="patient-search">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clipRule="evenodd" />
+          </svg>
           <input
             type="text"
-            placeholder="Search Patients"
-            style={{
-              width: "100%",
-              marginTop: 16,
-              padding: 8,
-              borderRadius: 8,
-              border: "1px solid #e5e7eb",
-            }}
+            placeholder="Search patients..."
             value={searchTerm}
             onChange={handleSearchChange}
           />
-          <input
-            type="text"
-            placeholder="Search by ID"
-            style={{
-              width: "100%",
-              marginTop: 8,
-              padding: 8,
-              borderRadius: 8,
-              border: "1px solid #e5e7eb",
-            }}
-            value={searchId}
-            onChange={handleSearchIdChange}
-          />
         </div>
-        <div style={{ flex: 1, overflowY: "auto", padding: 24 }}>
-          <div style={{ color: "#6b7280", fontSize: 14, marginBottom: 8 }}>
-            {patients.length} patients
+        
+        <div className="patient-list">
+          <div className="patient-list-header">
+            {patients.length} Patients
           </div>
-          {patients.map((p) => (
+          
+          {patients.map((patient) => (
             <div
-              key={p.id}
-              onClick={() => setSelectedPatientId(p.id)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                padding: "10px 0",
-                cursor: "pointer",
-                background:
-                  selectedPatientId === p.id ? "#e6f9ed" : "transparent",
-                borderRadius: 8,
-                marginBottom: 4,
-              }}
+              key={patient.id}
+              className={`patient-item ${selectedPatientId === patient.id ? 'active' : ''}`}
+              onClick={() => setSelectedPatientId(patient.id)}
             >
-              <img
-                src={p.avatar}
-                alt={p.name}
-                style={{ width: 36, height: 36, borderRadius: "50%" }}
-              />
-              <span style={{ fontWeight: 500 }}>{p.name}</span>
+              <img src={patient.avatar} alt={patient.name} />
+              <div className="patient-info">
+                <div className="patient-name">{patient.name}</div>
+                <div className="patient-id">ID: {patient.id}</div>
+              </div>
             </div>
           ))}
         </div>
-        <div style={{ padding: 24, borderTop: "1px solid #e5e7eb" }}>
-          <LogoutButton />
-        </div>
-      </aside>
-      {/* Main Content */}
-      <main style={{ flex: 1, padding: 40 }}>
-        {selectedPatient && (
-          <div
-            style={{
-              background: "#fff",
-              borderRadius: 16,
-              padding: 24,
-              boxShadow: "0 2px 8px rgba(44,62,80,0.06)",
-              marginBottom: 32,
-            }}
+
+        <div className="sidebar-actions">
+          <button 
+            className="action-button"
+            onClick={handleAppointmentsClick}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24 }}>
-              <img
-                src={selectedPatient.avatar}
-                alt={selectedPatient.name}
-                style={{ width: 64, height: 64, borderRadius: "50%" }}
-              />
-              <div>
-                <h3 style={{ margin: 0, fontSize: 24, fontWeight: 600 }}>{selectedPatient.name}</h3>
-                <div style={{ color: "#6b7280", fontSize: 14 }}>Patient ID: {selectedPatient.id}</div>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+            Appointment Requests
+            {appointmentList.filter(req => req.status === "pending").length > 0 && (
+              <span className="badge">{appointmentList.filter(req => req.status === "pending").length}</span>
+            )}
+          </button>
+
+          <button 
+            className="action-button settings-button"
+            onClick={() => setShowSettings(true)}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+            Settings
+          </button>
+        </div>
+        
+        <LogoutButton />
+      </aside>
+
+      {/* Main Content */}
+      <main className="dashboard-main">
+        {/* Add Doctor Button - Place it at the top of the main content */}
+        <div className="dashboard-header">
+          <h2>Dashboard</h2>
+          <button 
+            className="add-doctor-button"
+            onClick={() => setShowAddDoctor(true)}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            Add New Doctor
+          </button>
+        </div>
+
+        {showAppointments && (
+          <div className="modal-overlay">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h2>Appointment Requests</h2>
+                <button className="close-button" onClick={handleCloseAppointments}>×</button>
               </div>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 24 }}>
-              <div>
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ color: "#6b7280", fontSize: 14, marginBottom: 4 }}>Age</div>
-                  <div style={{ fontSize: 16, fontWeight: 500 }}>{selectedPatient.age} years</div>
+              <div className="modal-body">
+                <div className="tab-navigation">
+                  <button 
+                    className={`tab-button ${activeTab === "all" ? "active" : ""}`}
+                    onClick={() => setActiveTab("all")}
+                  >
+                    All
+                  </button>
+                  <button 
+                    className={`tab-button ${activeTab === "pending" ? "active" : ""}`}
+                    onClick={() => setActiveTab("pending")}
+                  >
+                    Pending
+                    {appointmentList.filter(req => req.status === "pending").length > 0 && (
+                      <span className="badge">{appointmentList.filter(req => req.status === "pending").length}</span>
+                    )}
+                  </button>
+                  <button 
+                    className={`tab-button ${activeTab === "approved" ? "active" : ""}`}
+                    onClick={() => setActiveTab("approved")}
+                  >
+                    Approved
+                  </button>
+                  <button 
+                    className={`tab-button ${activeTab === "declined" ? "active" : ""}`}
+                    onClick={() => setActiveTab("declined")}
+                  >
+                    Declined
+                  </button>
                 </div>
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ color: "#6b7280", fontSize: 14, marginBottom: 4 }}>Gender</div>
-                  <div style={{ fontSize: 16, fontWeight: 500 }}>{selectedPatient.gender}</div>
-                </div>
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ color: "#6b7280", fontSize: 14, marginBottom: 4 }}>Diagnosis</div>
-                  <div style={{ fontSize: 16, fontWeight: 500 }}>{selectedPatient.diagnosis}</div>
-                </div>
-              </div>
-              <div>
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ color: "#6b7280", fontSize: 14, marginBottom: 4 }}>Medications</div>
-                  <div style={{ fontSize: 16, fontWeight: 500 }}>
-                    {selectedPatient.medications.map((med, index) => (
-                      <div key={index}>{med}</div>
+
+                {selectedRequest ? (
+                  <div className="request-detail-card">
+                    <div className="card-header">
+                      <h3>Appointment Details</h3>
+                      <button className="close-button" onClick={() => setSelectedRequest(null)}>×</button>
+                    </div>
+                    <div className="request-info">
+                      <div className="info-row">
+                        <div className="info-label">Patient Name</div>
+                        <div className="info-value">{selectedRequest.patientName}</div>
+                      </div>
+                      <div className="info-row">
+                        <div className="info-label">Requested Date</div>
+                        <div className="info-value">{selectedRequest.requestedDate}</div>
+                      </div>
+                      <div className="info-row">
+                        <div className="info-label">Requested Time</div>
+                        <div className="info-value">{selectedRequest.requestedTime}</div>
+                      </div>
+                      <div className="info-row">
+                        <div className="info-label">Status</div>
+                        <div className="info-value">
+                          <span className={`status-badge ${selectedRequest.status}`}>
+                            {selectedRequest.status.charAt(0).toUpperCase() + selectedRequest.status.slice(1)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="info-row">
+                        <div className="info-label">Reason</div>
+                        <div className="info-value">
+                          <div className="reason-text">{selectedRequest.reason}</div>
+                        </div>
+                      </div>
+                      {selectedRequest.notes && (
+                        <div className="info-row">
+                          <div className="info-label">Notes</div>
+                          <div className="info-value">
+                            <div className="notes-text">{selectedRequest.notes}</div>
+                          </div>
+                        </div>
+                      )}
+
+                      {selectedRequest.status === "pending" && (
+                        <div className="response-section">
+                          <label htmlFor="responseNote">Response Note (Required for declining)</label>
+                          <textarea
+                            id="responseNote"
+                            value={responseNote}
+                            onChange={(e) => setResponseNote(e.target.value)}
+                            placeholder="Add a note about your decision..."
+                            rows={4}
+                          />
+                          <div className="action-buttons">
+                            <button 
+                              className="decline-button"
+                              onClick={() => handleAppointmentResponse(selectedRequest.id, "declined")}
+                            >
+                              Decline Request
+                            </button>
+                            <button 
+                              className="approve-button"
+                              onClick={() => handleAppointmentResponse(selectedRequest.id, "approved")}
+                            >
+                              Approve Request
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="appointment-list">
+                    {filteredAppointments.map((request) => (
+                      <div 
+                        key={request.id} 
+                        className={`appointment-request-card ${request.status}`}
+                        onClick={() => setSelectedRequest(request)}
+                      >
+                        <div className="request-header">
+                          <h3>{request.patientName}</h3>
+                          <span className={`status-badge ${request.status}`}>
+                            {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
+                          </span>
+                        </div>
+                        <div className="request-details">
+                          <p><strong>Date:</strong> {request.requestedDate}</p>
+                          <p><strong>Time:</strong> {request.requestedTime}</p>
+                          <p><strong>Reason:</strong> {request.reason}</p>
+                        </div>
+                      </div>
                     ))}
                   </div>
-                </div>
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ color: "#6b7280", fontSize: 14, marginBottom: 4 }}>Emergency Contact</div>
-                  <div style={{ fontSize: 16, fontWeight: 500 }}>
-                    <div>{selectedPatient.emergencyContact.name}</div>
-                    <div style={{ color: "#6b7280", fontSize: 14 }}>
-                      {selectedPatient.emergencyContact.relationship}
-                    </div>
-                    <div style={{ color: "#6b7280", fontSize: 14 }}>
-                      {selectedPatient.emergencyContact.phone}
-                    </div>
-                  </div>
-                </div>
+                )}
               </div>
             </div>
           </div>
         )}
-        <div style={{ display: "flex", gap: 24, marginBottom: 32 }}>
-          {stats.map((stat, i) => (
-            <div
-              key={i}
-              onClick={stat.label === "Patient logs" ? handlePatientLogsClick : undefined}
-              style={{
-                background: "#fff",
-                borderRadius: 16,
-                padding: 24,
-                flex: 1,
-                boxShadow: "0 2px 8px rgba(44,62,80,0.06)",
-                cursor: stat.label === "Patient logs" ? "pointer" : "default",
-                transition: "transform 0.2s",
-                "&:hover": stat.label === "Patient logs" ? {
-                  transform: "scale(1.02)"
-                } : {}
-              }}
-            >
-              <div style={{ fontSize: 28, fontWeight: 700 }}>{stat.value}</div>
-              <div style={{ color: "#b0b0b0", fontSize: 14 }}>{stat.label}</div>
-              <div style={{ color: "#b0b0b0", fontSize: 12 }}>{stat.sub}</div>
-              <span style={{ fontSize: 12, color: "#22c55e", fontWeight: 600 }}>
-                {stat.status}
-              </span>
-            </div>
-          ))}
-        </div>
-        <div
-          style={{
-            background: "#fff",
-            borderRadius: 16,
-            padding: 32,
-            boxShadow: "0 2px 8px rgba(44,62,80,0.06)",
-            marginBottom: 32,
-            width: "100%",
-            display: "block",
-          }}
-        >
-          <h4 style={{ marginBottom: 24 }}>Attack Frequency Over Time</h4>
-          <div style={{ width: "100%", height: 400 }}>
-            <Line data={chartData} options={chartOptions} />
+
+        {!selectedPatient ? (
+          <div className="no-selection">
+            <p>Select a patient to view their details</p>
           </div>
-        </div>
-        {showPatientLogs && (
-          <div style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: "rgba(0, 0, 0, 0.5)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 1000,
-          }}>
-            <div style={{
-              background: "#fff",
-              borderRadius: 16,
-              width: "90%",
-              maxWidth: 600,
-              maxHeight: "80vh",
-              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
-              display: "flex",
-              flexDirection: "column",
-            }}>
-              <div style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                padding: "16px 24px",
-                borderBottom: "1px solid #e5e7eb",
-              }}>
-                <h3 style={{ 
-                  margin: 0, 
-                  fontSize: 16, 
-                  fontWeight: 500,
-                  color: "#111827"
-                }}>
-                  Patient Calendar Entries
-                </h3>
-                <button
-                  onClick={handlePatientLogsClick}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    padding: "4px",
-                    color: "#6b7280",
-                    fontSize: 18,
-                    lineHeight: 1,
-                  }}
-                >
-                  ×
-                </button>
-              </div>
-              <div style={{
-                overflowY: "auto",
-                flex: 1,
-              }}>
-                {getDatesInMonth().map(date => {
-                  const log = moodLogsData.get(date);
-                  console.log('Date:', date, 'Log:', log);
+        ) : (
+          <>
+            <div className="patient-detail-card">
+                  <div className="patient-detail-header">
+                    <img
+                      src={selectedPatient.avatar}
+                      alt={selectedPatient.name}
+                    />
+                    <div>
+                      <div className="patient-name">{selectedPatient.name}</div>
+                      <div className="patient-id">Patient ID: {selectedPatient.id}</div>
+                          </div>
+                      </div>
                   
-                  return (
-                    <div
-                      key={date}
-                      style={{
-                        padding: "12px 24px",
-                        borderBottom: "1px solid #e5e7eb",
-                      }}
-                    >
-                      <div style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 16,
-                        marginBottom: log ? 8 : 0,
-                      }}>
-                        <div style={{ 
-                          width: "120px", 
-                          fontSize: 14,
-                          color: "#374151"
-                        }}>
-                          {formatDisplayDate(date)}
+                  <div className="patient-info-grid">
+                    <div className="info-item">
+                      <div className="label">Age</div>
+                      <div className="value">{selectedPatient.age} years</div>
+                    </div>
+                    
+                    <div className="info-item">
+                      <div className="label">Gender</div>
+                      <div className="value">{selectedPatient.gender}</div>
+                    </div>
+                    
+                    <div className="info-item">
+                      <div className="label">Emergency Contact</div>
+                      <div className="value">
+                        {selectedPatient.emergencyContact.name}
+                        <div style={{ fontSize: "0.75rem", color: "var(--text-light)" }}>
+                          {selectedPatient.emergencyContact.relationship}
                         </div>
-                        {log ? (
-                          <>
-                            <div style={{
-                              padding: "2px 12px",
-                              borderRadius: 12,
-                              fontSize: 13,
-                              background: getMoodColor(log.mood).bg,
-                              color: getMoodColor(log.mood).text,
-                              minWidth: "70px",
-                              textAlign: "center"
-                            }}>
-                              {log.mood}
+                        <div style={{ fontSize: "0.75rem", color: "var(--text-light)" }}>
+                          {selectedPatient.emergencyContact.phone}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+            </div>
+
+            <div className="stats-grid">
+              {stats.map((stat, index) => (
+                <div
+                  key={index}
+                  className="stat-card"
+                  onClick={stat.label === "Patient logs" ? handlePatientLogsClick : undefined}
+                  style={{ cursor: stat.label === "Patient logs" ? "pointer" : "default" }}
+                >
+                  <div className="stat-value">{stat.value}</div>
+                  <div className="stat-label">{stat.label}</div>
+                  <div className="stat-sublabel">{stat.sub}</div>
+                  <span className="stat-status">{stat.status}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Use memoized chart component */}
+            <AnxietyChart 
+              chartData={chartData} 
+              chartOptions={chartOptions} 
+            />
+
+            {/* Use memoized notes component */}
+            <PatientNotes
+              selectedPatient={selectedPatient}
+              filteredNotes={filteredNotes}
+              searchNotes={searchNotes}
+              setSearchNotes={setSearchNotes}
+              showNotesForm={showNotesForm}
+              setShowNotesForm={setShowNotesForm}
+              newNote={newNote}
+              setNewNote={setNewNote}
+              editingNote={editingNote}
+              setEditingNote={setEditingNote}
+              handleAddNote={handleAddNote}
+              handleUpdateNote={handleUpdateNote}
+              handleDeleteNote={handleDeleteNote}
+            />
+
+            {/* Patient Logs Modal */}
+            {showPatientLogs && (
+              <div className="modal-overlay">
+                <div className="modal-content">
+                  <div className="modal-header">
+                    <div className="modal-title">
+                      <h2>Patient Activity Logs</h2>
+                      <p className="modal-subtitle">Daily mood and symptom tracking for {selectedPatient.name}</p>
+                    </div>
+                    <button className="close-button" onClick={handleClosePatientLogs}>×</button>
+                  </div>
+                  <div className="modal-body">
+                    <div className="logs-container">
+                      {Array.from(moodLogsData.entries()).map(([date, log]) => (
+                        <div key={date} className="log-entry">
+                          <div className="log-date">
+                            <div className="date-circle">
+                              {formatDisplayDate(date).split(' ')[0]}
                             </div>
-                            <div style={{
-                              padding: "2px 12px",
-                              borderRadius: 12,
-                              fontSize: 13,
-                              background: getStressLevelColor(log.stressLevel).bg,
-                              color: getStressLevelColor(log.stressLevel).text,
-                              minWidth: "70px",
-                              textAlign: "center"
-                            }}>
-                              {log.stressLevel}
+                            <div className="full-date">
+                              {formatDisplayDate(date)}
                             </div>
-                            {log.symptoms && log.symptoms.length > 0 && log.symptoms[0] !== "None" && (
-                              <div style={{
-                                flex: 1,
-                                display: "flex",
-                                gap: 8,
-                                flexWrap: "wrap"
-                              }}>
-                                {log.symptoms.map((symptom, i) => (
-                                  <span
-                                    key={i}
-                                    style={{
-                                      padding: "2px 8px",
-                                      borderRadius: 12,
-                                      fontSize: 13,
-                                      background: "#f3f4f6",
-                                      color: "#6b7280",
-                                    }}
-                                  >
+                          </div>
+                          <div className="log-details">
+                            <div className="log-row">
+                              <div className="log-item">
+                                <span className="log-label">Mood</span>
+                                <span className={`mood-badge ${log.mood.toLowerCase()}`}>
+                                  {log.mood}
+                                </span>
+                              </div>
+                              <div className="log-item">
+                                <span className="log-label">Stress Level</span>
+                                <span className={`stress-badge ${log.stressLevel.toLowerCase()}`}>
+                                  {log.stressLevel}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="log-item symptoms-section">
+                              <span className="log-label">Symptoms</span>
+                              <div className="symptoms-container">
+                                {log.symptoms.map((symptom, index) => (
+                                  <span key={index} className={`symptom-tag ${symptom === 'None' ? 'no-symptoms' : ''}`}>
                                     {symptom}
                                   </span>
                                 ))}
                               </div>
-                            )}
-                          </>
-                        ) : (
-                          <div style={{ 
-                            color: "#9ca3af", 
-                            fontSize: 13
-                          }}>
-                            No entry
+                            </div>
                           </div>
-                        )}
-                      </div>
+                        </div>
+                      ))}
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
-        {showAppointments ? (
-          <div className="appointment-management">
-            <div className="section-header">
-              <h2>Appointment Requests</h2>
-              <button 
-                className="close-button"
-                onClick={() => setShowAppointments(false)}
-              >
-                ×
-              </button>
-            </div>
-            
-            <div className="tab-navigation">
-              <button 
-                className={`tab-button ${activeRequestsTab === 'all' ? 'active' : ''}`}
-                onClick={() => setActiveRequestsTab('all')}
-              >
-                All
-              </button>
-              <button 
-                className={`tab-button ${activeRequestsTab === 'pending' ? 'active' : ''}`}
-                onClick={() => setActiveRequestsTab('pending')}
-              >
-                Pending
-              </button>
-              <button 
-                className={`tab-button ${activeRequestsTab === 'approved' ? 'active' : ''}`}
-                onClick={() => setActiveRequestsTab('approved')}
-              >
-                Approved
-              </button>
-              <button 
-                className={`tab-button ${activeRequestsTab === 'declined' ? 'active' : ''}`}
-                onClick={() => setActiveRequestsTab('declined')}
-              >
-                Declined
-              </button>
-            </div>
-            
-            {selectedRequest ? (
-              <div className="request-details">
-                <div className="detail-header">
-                  <h3>Request Details</h3>
-                  <button 
-                    className="back-button"
-                    onClick={() => {
-                      setSelectedRequest(null);
-                      setResponseNotes("");
-                    }}
-                  >
-                    Back to List
-                  </button>
+                  </div>
                 </div>
-                
-                <div className="detail-content">
-                  <div className="info-row">
-                    <div className="info-label">Patient:</div>
-                    <div className="info-value">{selectedRequest.patientName}</div>
-                  </div>
-                  
-                  <div className="info-row">
-                    <div className="info-label">Requested Date:</div>
-                    <div className="info-value">
-                      {new Date(selectedRequest.requestedDateTime).toLocaleString()}
-                    </div>
-                  </div>
-                  
-                  <div className="info-row">
-                    <div className="info-label">Request Date:</div>
-                    <div className="info-value">
-                      {new Date(selectedRequest.requestDate).toLocaleString()}
-                    </div>
-                  </div>
-                  
-                  <div className="info-row">
-                    <div className="info-label">Urgency:</div>
-                    <div className="info-value">
-                      <span className={`urgency-badge ${selectedRequest.urgency}`}>
-                        {selectedRequest.urgency}
-                      </span>
-                    </div>
-                  </div>
-                  
-                  <div className="info-row">
-                    <div className="info-label">Status:</div>
-                    <div className="info-value">
-                      <span className={`status-badge ${selectedRequest.status}`}>
-                        {selectedRequest.status}
-                      </span>
-                    </div>
-                  </div>
-                  
-                  <div className="info-section">
-                    <div className="section-label">Reason:</div>
-                    <div className="reason-text">{selectedRequest.reason}</div>
-                  </div>
-                  
-                  {selectedRequest.notes && (
-                    <div className="info-section">
-                      <div className="section-label">Notes:</div>
-                      <div className="notes-text">{selectedRequest.notes}</div>
-                    </div>
-                  )}
-                  
-                  {selectedRequest.status === "pending" && (
-                    <div className="response-section">
-                      <div className="section-label">
-                        Response Notes (required for declining):
-                      </div>
-                      <textarea
-                        value={responseNotes}
-                        onChange={(e) => setResponseNotes(e.target.value)}
-                        placeholder="Enter your notes here..."
-                        rows={4}
-                      ></textarea>
-                      
-                      <div className="action-buttons">
-                        <button 
-                          className="decline-button"
-                          onClick={() => handleRequestResponse(selectedRequest.id, "declined")}
-                        >
-                          Decline Request
-                        </button>
-                        <button 
-                          className="approve-button"
-                          onClick={() => handleRequestResponse(selectedRequest.id, "approved")}
-                        >
-                          Approve Request
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="appointment-list">
-                {getFilteredRequests().length === 0 ? (
-                  <div className="empty-state">
-                    <div className="empty-icon">📅</div>
-                    <div className="empty-text">No {activeRequestsTab !== "all" ? activeRequestsTab : ""} appointment requests found</div>
-                  </div>
-                ) : (
-                  getFilteredRequests().map(request => (
-                    <div 
-                      key={request.id} 
-                      className={`appointment-request-card ${request.status}`}
-                      onClick={() => setSelectedRequest(request)}
-                    >
-                      <div className="request-header">
-                        <span className="patient-name">{request.patientName}</span>
-                        <span className={`urgency-badge ${request.urgency}`}>
-                          {request.urgency}
-                        </span>
-                      </div>
-                      
-                      <div className="request-time">
-                        {new Date(request.requestedDateTime).toLocaleString()}
-                      </div>
-                      
-                      <div className="request-reason">
-                        {request.reason.length > 100 
-                          ? `${request.reason.substring(0, 100)}...` 
-                          : request.reason}
-                      </div>
-                      
-                      <div className="request-footer">
-                        <span className={`status-badge ${request.status}`}>
-                          {request.status}
-                        </span>
-                        <span className="view-details">View Details</span>
-                      </div>
-                    </div>
-                  ))
-                )}
               </div>
             )}
-          </div>
-        ) : showNotes ? (
-          <div className="notes-management">
-            <div className="section-header">
-              <h2>Notes for {selectedPatient?.name}</h2>
-              <button 
-                className="close-button"
-                onClick={() => setShowNotes(false)}
-              >
-                ×
-              </button>
-            </div>
-            
-            <div className="notes-actions">
-              <div className="notes-search">
-                <input
-                  type="text"
-                  placeholder="Search notes..."
-                  value={searchNotes}
-                  onChange={(e) => setSearchNotes(e.target.value)}
-                />
-              </div>
-            </div>
-            
-            <div className="notes-grid">
-              <div className="new-note-card">
-                <h3>Add New Note</h3>
-                
-                <div className="note-form">
-                  <input
-                    type="text"
-                    placeholder="Note Title"
-                    value={newNote.title}
-                    onChange={(e) => setNewNote({...newNote, title: e.target.value})}
-                    className="note-title-input"
-                  />
-                  
-                  <textarea
-                    placeholder="Note Content"
-                    value={newNote.content}
-                    onChange={(e) => setNewNote({...newNote, content: e.target.value})}
-                    className="note-content-input"
-                    rows={6}
-                  ></textarea>
-                  
-                  <input
-                    type="text"
-                    placeholder="Tags (comma separated)"
-                    value={newNote.tags}
-                    onChange={(e) => setNewNote({...newNote, tags: e.target.value})}
-                    className="note-tags-input"
-                  />
-                  
-                  <button 
-                    className="add-note-button"
-                    onClick={handleAddNote}
-                  >
-                    Add Note
-                  </button>
-                </div>
-              </div>
-              
-              {editingNote && (
-                <div className="edit-note-card">
-                  <h3>Edit Note</h3>
-                  
-                  <div className="note-form">
-                    <input
-                      type="text"
-                      placeholder="Note Title"
-                      value={editingNote.title}
-                      onChange={(e) => setEditingNote({...editingNote, title: e.target.value})}
-                      className="note-title-input"
-                    />
-                    
-                    <textarea
-                      placeholder="Note Content"
-                      value={editingNote.content}
-                      onChange={(e) => setEditingNote({...editingNote, content: e.target.value})}
-                      className="note-content-input"
-                      rows={6}
-                    ></textarea>
-                    
-                    <input
-                      type="text"
-                      placeholder="Tags (comma separated)"
-                      value={typeof editingNote.tags === 'string' 
-                        ? editingNote.tags 
-                        : editingNote.tags.join(", ")}
-                      onChange={(e) => setEditingNote({...editingNote, tags: e.target.value})}
-                      className="note-tags-input"
-                    />
-                    
-                    <div className="edit-note-actions">
-                      <button 
-                        className="cancel-edit-button"
-                        onClick={() => setEditingNote(null)}
-                      >
-                        Cancel
-                      </button>
-                      <button 
-                        className="update-note-button"
-                        onClick={handleUpdateNote}
-                      >
-                        Update Note
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-              
-              {filteredNotes.length === 0 ? (
-                <div className="empty-state">
-                  <div className="empty-icon">📝</div>
-                  <div className="empty-text">
-                    {searchNotes.trim() 
-                      ? "No notes found matching your search" 
-                      : "No notes found for this patient"}
-                  </div>
-                </div>
-              ) : (
-                filteredNotes.map(note => (
-                  <div key={note.id} className="note-card">
-                    <div className="note-card-header">
-                      <h3 className="note-title">{note.title}</h3>
-                      <div className="note-date">
-                        {new Date(note.date).toLocaleDateString()}
-                      </div>
-                    </div>
-                    
-                    <div className="note-content">
-                      {note.content}
-                    </div>
-                    
-                    {note.tags && note.tags.length > 0 && (
-                      <div className="note-tags">
-                        {note.tags.map((tag, index) => (
-                          <span key={index} className="note-tag">
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    
-                    <div className="note-actions">
-                      <button 
-                        className="edit-note-button"
-                        onClick={() => setEditingNote({...note, tags: note.tags.join(", ")})}
-                      >
-                        Edit
-                      </button>
-                      <button 
-                        className="delete-note-button"
-                        onClick={() => handleDeleteNote(note.id)}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        ) : null}
+          </>
+        )}
+
+        {/* Modals */}
+        {showSettings && (
+          <SettingsPanel 
+            showSettings={showSettings} 
+            closeSettings={() => setShowSettings(false)} 
+            darkMode={darkMode}
+            toggleDarkMode={toggleDarkMode}
+            user={user}
+          />
+        )}
+
+        {showAddDoctor && (
+          <AddDoctorModal
+            show={showAddDoctor}
+            onClose={() => setShowAddDoctor(false)}
+            onSave={handleAddDoctor}
+          />
+        )}
       </main>
     </div>
   );

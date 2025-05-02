@@ -72,7 +72,7 @@ const ForgotPasswordPage = () => {
           <h2>Reset Password</h2>
         </div>
 
-        <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit}>
           <div className="form-group">
             <div className="input-with-icon">
               <input
@@ -98,11 +98,11 @@ const ForgotPasswordPage = () => {
           
           <div className="mb-4"></div>
           
-          <button
-            type="submit"
+            <button
+              type="submit"
             className="login-button"
-            disabled={isSubmitting}
-          >
+              disabled={isSubmitting}
+            >
             {isSubmitting ? (
               <>
                 <svg className="animate-spin -ml-1 mr-2" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -120,14 +120,14 @@ const ForgotPasswordPage = () => {
             ) : (
               "Send Reset Instructions"
             )}
-          </button>
+            </button>
           
           <div className="text-center mt-4">
             <Link to="/login" className="forgot-password-link">
-              Back to Login
+                Back to Login
             </Link>
-          </div>
-        </form>
+            </div>
+          </form>
       </div>
     </div>
   );

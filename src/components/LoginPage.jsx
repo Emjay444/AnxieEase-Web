@@ -5,7 +5,12 @@ import { formatErrorMessage } from "../utils/apiHelpers";
 import "./Login.css";
 
 const MAX_LOGIN_ATTEMPTS = 5;
-const LOCKOUT_DURATION = 15 * 60 * 1000; // 15 minutes in milliseconds
+const LOCKOUT_DURATIONS = {
+  1: 60 * 1000,        // 1 minute
+  2: 2 * 60 * 1000,    // 2 minutes
+  3: 5 * 60 * 1000,    // 5 minutes
+  4: 15 * 60 * 1000    // 15 minutes
+};
 const SESSION_TIMEOUT = 15 * 60 * 1000; // 15 minutes in milliseconds
 
 const LoginPage = () => {
@@ -18,9 +23,15 @@ const LoginPage = () => {
   const [loginAttempts, setLoginAttempts] = useState(0);
   const [lockoutTime, setLockoutTime] = useState(null);
   const [remainingTime, setRemainingTime] = useState(0);
+  const [lockoutCount, setLockoutCount] = useState(1); // Start from 1 for first lockout
 
   const { signIn, signOut } = useAuth();
   const navigate = useNavigate();
+
+  // Calculate lockout duration based on lockout count
+  const calculateLockoutDuration = (count) => {
+    return LOCKOUT_DURATIONS[count] || LOCKOUT_DURATIONS[4]; // Default to 15 minutes if count exceeds 4
+  };
 
   // Handle session timeout
   useEffect(() => {
@@ -54,37 +65,51 @@ const LoginPage = () => {
           setLockoutTime(null);
           setLoginAttempts(0);
           setRemainingTime(0);
+          setLoginError("");
           clearInterval(intervalId);
         } else {
-          setRemainingTime(Math.ceil(remaining / 1000));
+          const minutes = Math.floor(remaining / 60000);
+          const seconds = Math.floor((remaining % 60000) / 1000);
+          setRemainingTime(remaining);
+          setLoginError(
+            <div className="lockout-message">
+              <p>
+                Too many failed login attempts try again in: {minutes}:{seconds.toString().padStart(2, '0')}
+              </p>
+            </div>
+          );
         }
       }, 1000);
     }
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
-  }, [lockoutTime]);
+  }, [lockoutTime, lockoutCount]);
 
   const validateEmail = (email) => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
     return emailRegex.test(email);
   };
 
   const validateForm = () => {
     const newErrors = {};
+    let isValid = true;
 
     if (!email.trim()) {
       newErrors.email = "Email is required";
+      isValid = false;
     } else if (!validateEmail(email)) {
       newErrors.email = "Please enter a valid email address";
+      isValid = false;
     }
 
     if (!password) {
       newErrors.password = "Password is required";
+      isValid = false;
     }
 
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    return isValid;
   };
 
   const togglePasswordVisibility = () => {
@@ -94,11 +119,12 @@ const LoginPage = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    // Reset errors
+    setErrors({});
+    setLoginError("");
+
     // Check if account is locked
     if (lockoutTime && lockoutTime > Date.now()) {
-      const minutes = Math.floor(remainingTime / 60);
-      const seconds = remainingTime % 60;
-      setLoginError(`Account is locked. Please try again in ${minutes}:${seconds.toString().padStart(2, '0')}`);
       return;
     }
 
@@ -109,13 +135,12 @@ const LoginPage = () => {
 
     try {
       setIsSubmitting(true);
-      setLoginError("");
-      setErrors({});
       
       const { role } = await signIn(email, password);
       
-      // Reset login attempts on successful login
+      // Reset login attempts and lockout count on successful login
       setLoginAttempts(0);
+      setLockoutCount(1); // Reset to 1 for next potential lockout
       
       if (role === "admin") {
         navigate("/admin");
@@ -129,12 +154,13 @@ const LoginPage = () => {
 
       // Check if account should be locked
       if (newAttempts >= MAX_LOGIN_ATTEMPTS) {
-        const lockoutEndTime = Date.now() + LOCKOUT_DURATION;
+        const lockoutDuration = calculateLockoutDuration(lockoutCount);
+        const lockoutEndTime = Date.now() + lockoutDuration;
         setLockoutTime(lockoutEndTime);
-        setLoginError(`Too many failed attempts. Account is locked for 15 minutes.`);
+        setLockoutCount(prev => Math.min(prev + 1, 4)); // Increment lockout count but cap at 4
       } else {
         const remainingAttempts = MAX_LOGIN_ATTEMPTS - newAttempts;
-        setLoginError(`${formatErrorMessage(error)}. ${remainingAttempts} attempts remaining.`);
+        setLoginError(`${formatErrorMessage(error)}. ${remainingAttempts} ${remainingAttempts === 1 ? 'attempt' : 'attempts'} remaining.`);
       }
     } finally {
       setIsSubmitting(false);
@@ -154,7 +180,7 @@ const LoginPage = () => {
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <div className="input-with-icon">
-              <input
+            <input
                 type="email"
                 className={errors.email ? "error" : ""}
                 placeholder="Email"
@@ -162,7 +188,7 @@ const LoginPage = () => {
                 onChange={(e) => setEmail(e.target.value)}
                 autoComplete="email"
                 disabled={isSubmitting || (lockoutTime && lockoutTime > Date.now())}
-              />
+            />
             </div>
             {errors.email && (
               <div className="field-error">
@@ -178,20 +204,20 @@ const LoginPage = () => {
 
           <div className="form-group">
             <div className="password-input-container">
-              <input
-                type={showPassword ? "text" : "password"}
+            <input
+              type={showPassword ? "text" : "password"}
                 className={errors.password ? "error" : ""}
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
                 disabled={isSubmitting || (lockoutTime && lockoutTime > Date.now())}
-              />
-              <button
-                type="button"
+            />
+            <button
+              type="button"
                 className="toggle-password"
                 onClick={togglePasswordVisibility}
-                aria-label={showPassword ? "Hide password" : "Show password"}
+              aria-label={showPassword ? "Hide password" : "Show password"}
                 tabIndex={0}
                 disabled={isSubmitting || (lockoutTime && lockoutTime > Date.now())}
               >
@@ -208,7 +234,7 @@ const LoginPage = () => {
                     <path d="M5.24834 5.25C4.61668 5.97 4.06334 6.77834 3.60834 7.66C3.60834 7.66 5.83334 12.3917 10 12.3917C10.6467 12.3917 11.28 12.2967 11.8867 12.1033" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 )}
-              </button>
+            </button>
             </div>
             {errors.password && (
               <div className="field-error">
