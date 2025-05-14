@@ -5,24 +5,6 @@ const loginAttempts = {};
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCKOUT_DURATION = 30 * 60 * 1000; // 30 minutes in milliseconds
 
-// Mock data for development
-const MOCK_USERS = [
-  {
-    id: "1",
-    email: "admin@anxiease.com",
-    password: "admin123",
-    role: "admin",
-    name: "Admin User",
-  },
-  {
-    id: "2",
-    email: "psychologist@anxiease.com",
-    password: "psych123",
-    role: "psychologist",
-    name: "Test Psychologist",
-  },
-];
-
 export const authService = {
   // Sign in with email and password
   async signIn(email, password) {
@@ -32,35 +14,48 @@ export const authService = {
     }
 
     try {
-      // Try to use mock data for development without Supabase
-      const mockUser = MOCK_USERS.find(
-        (user) => user.email === email && user.password === password
-      );
+      // Use Supabase authentication
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-      // If we have a matching mock user, return it
-      if (mockUser) {
-        console.log("Using mock authentication");
-        // Reset login attempts on successful login
-        this.resetLoginAttempts(email);
-        return {
-          user: {
-            id: mockUser.id,
-            email: mockUser.email,
-            user_metadata: {
-              name: mockUser.name,
-            },
-          },
-          role: mockUser.role,
-        };
-      }
-
-      // For mock users, check if email exists but password is wrong
-      if (MOCK_USERS.some((user) => user.email === email)) {
+      if (error) {
         this.recordFailedAttempt(email);
-        throw new Error("Invalid login credentials");
+        throw error;
       }
 
-      throw new Error("User not found");
+      // Reset login attempts on successful login
+      this.resetLoginAttempts(email);
+
+      // Get user role from metadata or from the database
+      const role =
+        data.user?.user_metadata?.role ||
+        (await this.getUserRole(data.user.id));
+
+      // If this is a psychologist, update their user_id
+      if (role === "psychologist") {
+        try {
+          const { error: updateError } = await supabase
+            .from("psychologists")
+            .update({ user_id: data.user.id })
+            .eq("email", email);
+
+          if (updateError) {
+            console.error(
+              "Failed to update psychologist user_id:",
+              updateError
+            );
+          }
+        } catch (updateError) {
+          console.error("Error updating psychologist user_id:", updateError);
+        }
+      }
+
+      return {
+        user: data.user,
+        role: role,
+      };
     } catch (error) {
       console.error("Login error:", error.message);
       throw error;
@@ -70,7 +65,8 @@ export const authService = {
   // Sign out
   async signOut() {
     try {
-      // No need to call Supabase since we're using mock auth
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
       return { error: null };
     } catch (error) {
       console.error("Logout error:", error.message);
@@ -81,8 +77,8 @@ export const authService = {
   // Get current user
   async getCurrentUser() {
     try {
-      // For mock auth, we don't persist the session
-      return null;
+      const { data } = await supabase.auth.getUser();
+      return data?.user || null;
     } catch (error) {
       console.error("Get current user error:", error.message);
       return null;
@@ -92,11 +88,39 @@ export const authService = {
   // Get user role (psychologist or admin)
   async getUserRole(userId) {
     try {
-      // Check mock users first
-      const mockUser = MOCK_USERS.find((user) => user.id === userId);
-      if (mockUser) {
-        console.log("Using mock user role");
-        return mockUser.role;
+      if (!userId) return null;
+
+      // First check user metadata
+      const { data: userData } = await supabase.auth.getUser();
+      if (userData?.user?.user_metadata?.role) {
+        return userData.user.user_metadata.role;
+      }
+
+      // Then check psychologists table by user_id
+      const { data: psychData } = await supabase
+        .from("psychologists")
+        .select("id, email")
+        .eq("user_id", userId)
+        .single();
+
+      if (psychData) return "psychologist";
+
+      // If not found by user_id, try checking by email
+      const userEmail = userData?.user?.email;
+      if (userEmail) {
+        const { data: psychByEmail } = await supabase
+          .from("psychologists")
+          .select("id, email")
+          .eq("email", userEmail)
+          .single();
+
+        if (psychByEmail) return "psychologist";
+      }
+
+      // Check if user is admin
+      const { data: adminData } = await supabase.auth.getUser();
+      if (adminData?.user?.user_metadata?.role === "admin") {
+        return "admin";
       }
 
       return null;
@@ -125,6 +149,10 @@ export const authService = {
           email,
           password,
           email_confirm: true,
+          user_metadata: {
+            name,
+            role,
+          },
         });
 
       if (authError) throw authError;
@@ -134,10 +162,10 @@ export const authService = {
         .from("psychologists")
         .insert([
           {
-            id: authData.user.id,
+            user_id: authData.user.id,
             name,
             email,
-            role,
+            is_active: true,
           },
         ]);
 
@@ -153,12 +181,10 @@ export const authService = {
   // Disable psychologist account (admin only)
   async disablePsychologist(userId) {
     try {
-      // In a real implementation, you would use Supabase admin functions
-      // For now, we'll just update the psychologists table
       const { error } = await supabase
         .from("psychologists")
         .update({ is_active: false })
-        .eq("id", userId);
+        .eq("user_id", userId);
 
       if (error) throw error;
       return true;

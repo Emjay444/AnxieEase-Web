@@ -14,6 +14,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import ForgotPasswordPage from "./components/ForgotPasswordPage";
 import ResetPasswordPage from "./components/ResetPasswordPage";
 import NewPasswordPage from "./components/NewPasswordPage";
+import PsychologistSetupPage from "./components/PsychologistSetupPage";
 import "./App.css";
 
 function App() {
@@ -27,6 +28,14 @@ function App() {
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="/new-password" element={<NewPasswordPage />} />
+            <Route
+              path="/psychologist-setup/:email/:inviteCode"
+              element={<PsychologistSetupPage />}
+            />
+            <Route
+              path="/psychologist-setup"
+              element={<PsychologistSetupPage />}
+            />
             <Route path="/" element={<Navigate to="/login" replace />} />
 
             {/* Protected routes for all authenticated users */}
