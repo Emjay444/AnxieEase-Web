@@ -1145,7 +1145,7 @@ const AdminPanel = () => {
                       <tr key={p.id}>
                         <td className="d-flex align-items-center gap-2">
                           <img
-                            src={getAvatar(idx)}
+                            src={p.avatar_url || getAvatar(idx)}
                             alt="avatar"
                             style={{
                               width: 36,
@@ -1707,10 +1707,12 @@ const AdminPanel = () => {
             <div className="modal-header psychologist-header">
               <div className="d-flex align-items-center gap-3">
                 <div className="position-relative">
-                  <img src={getAvatar(0)} alt="avatar" className="avatar-lg" />
-                  {selectedPsychologist.is_active && (
-                    <span className="status-dot active" title="Active"></span>
-                  )}
+                  <img
+                    src={selectedPsychologist.avatar_url || getAvatar(0)}
+                    alt="avatar"
+                    className="avatar-lg"
+                  />
+                  {/* Removed the online status indicator */}
                 </div>
                 <div>
                   <h4 className="modal-title mb-0">
@@ -1906,7 +1908,7 @@ const AdminPanel = () => {
                               <td>
                                 <div className="d-flex align-items-center gap-2">
                                   <img
-                                    src={getAvatar(0)}
+                                    src={patient.avatar_url || getAvatar(0)}
                                     alt="avatar"
                                     className="avatar-sm"
                                   />

@@ -9,7 +9,7 @@ const mockPatients = [
     created_at: new Date(Date.now() - 86400000).toISOString(),
     is_active: true,
     assigned_psychologist_id: "mock-psych-1",
-    psychologists: { name: "Dr. Jane Doe" },
+    psychologists: { name: "Jane Doe" },
   },
   {
     id: "mock-patient-2",
@@ -53,8 +53,9 @@ export const patientService = {
   async getPatientsByPsychologist(psychologistId) {
     try {
       const { data, error } = await supabase
-        .from("patients")
+        .from("users")
         .select("*")
+        .eq("role", "patient")
         .eq("assigned_psychologist_id", psychologistId);
 
       if (error) {
@@ -63,7 +64,39 @@ export const patientService = {
           (p) => p.assigned_psychologist_id === psychologistId
         );
       }
-      return data || [];
+
+      // Format the data to match expected structure
+      return (
+        data.map((user) => {
+          // Calculate age if birthdate is available
+          let age = null;
+          if (user.birthdate) {
+            const birthDate = new Date(user.birthdate);
+            const ageDifMs = Date.now() - birthDate.getTime();
+            const ageDate = new Date(ageDifMs);
+            age = Math.abs(ageDate.getUTCFullYear() - 1970);
+          }
+
+          return {
+            id: user.id,
+            name: user.full_name || user.email.split("@")[0],
+            email: user.email,
+            assigned_psychologist_id: psychologistId,
+            is_active: user.is_email_verified,
+            created_at: user.created_at,
+            date_added: new Date(user.created_at).toLocaleDateString("en-GB"),
+            time_added: new Date(user.created_at).toLocaleTimeString("en-US", {
+              hour: "numeric",
+              minute: "2-digit",
+              hour12: true,
+            }),
+            // Add additional fields for dashboard display
+            gender: user.gender || null,
+            age: age,
+            avatar: user.avatar_url || null,
+          };
+        }) || []
+      );
     } catch (error) {
       console.error("Get patients error:", error.message);
       return mockPatients.filter(
@@ -76,8 +109,9 @@ export const patientService = {
   async getAllPatients() {
     try {
       const { data, error } = await supabase
-        .from("patients")
-        .select("*, psychologists(name)");
+        .from("users")
+        .select("*, psychologists(name)")
+        .eq("role", "patient");
 
       if (error) {
         console.log("Using mock patients data due to error:", error.message);
@@ -94,9 +128,10 @@ export const patientService = {
   async getPatientById(patientId) {
     try {
       const { data, error } = await supabase
-        .from("patients")
+        .from("users")
         .select("*")
         .eq("id", patientId)
+        .eq("role", "patient")
         .single();
 
       if (error) {
@@ -250,9 +285,10 @@ export const patientService = {
   async assignPatientToPsychologist(patientId, psychologistId) {
     try {
       const { data, error } = await supabase
-        .from("patients")
+        .from("users")
         .update({ assigned_psychologist_id: psychologistId })
         .eq("id", patientId)
+        .eq("role", "patient")
         .select();
 
       if (error) {
@@ -283,9 +319,10 @@ export const patientService = {
   async unassignPatientFromPsychologist(patientId) {
     try {
       const { data, error } = await supabase
-        .from("patients")
+        .from("users")
         .update({ assigned_psychologist_id: null })
         .eq("id", patientId)
+        .eq("role", "patient")
         .select();
 
       if (error) {

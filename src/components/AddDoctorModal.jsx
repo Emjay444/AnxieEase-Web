@@ -185,11 +185,16 @@ const AddDoctorModal = memo(({ show, onClose, onSave }) => {
         age--;
       }
 
+      // Construct the full name consistently with how we'll parse it in the profile view
       const fullData = {
         ...formData,
         name: `${formData.firstName}${
           formData.middleName ? " " + formData.middleName : ""
         } ${formData.lastName}`.trim(),
+        // Store the individual name components to make it easier to display correctly in profile
+        firstName: formData.firstName,
+        middleName: formData.middleName,
+        lastName: formData.lastName,
         age: age,
         licenseNumber: formData.licenseNumber,
       };
