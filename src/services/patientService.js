@@ -271,13 +271,183 @@ export const patientService = {
         .order("session_date", { ascending: false });
 
       if (error) {
-        console.log("Using mock session logs due to error:", error.message);
+        console.log(
+          "Using mock session logs data due to error:",
+          error.message
+        );
         return mockSessionLogs.filter((s) => s.patient_id === patientId);
       }
       return data || [];
     } catch (error) {
-      console.error("Get session logs error:", error.message);
+      console.error("Get patient session logs error:", error.message);
       return mockSessionLogs.filter((s) => s.patient_id === patientId);
+    }
+  },
+
+  // Get patient mood logs
+  async getPatientMoodLogs(patientId) {
+    // Create mock mood logs data function to avoid code duplication
+    const createMockMoodLogs = (patientId) => {
+      const mockMoodLogs = [];
+      const today = new Date();
+
+      // Generate 15 days of mock data
+      for (let i = 0; i < 15; i++) {
+        const date = new Date(today);
+        date.setDate(date.getDate() - i);
+        const dateStr = date.toISOString().split("T")[0]; // Format as YYYY-MM-DD
+
+        // Randomly select mood, stress level, and symptoms
+        const moods = ["Happy", "Anxious", "Neutral", "Sad", "Calm"];
+        const stressLevels = ["Low", "Medium", "High"];
+        const stressLevelValues = [2, 5, 8]; // Corresponding numeric values
+        const symptomsList = [
+          ["None"],
+          ["Mild anxiety", "Trouble sleeping"],
+          ["Restlessness", "Racing thoughts"],
+          ["Panic attack", "Shortness of breath"],
+          ["Fatigue", "Loss of appetite"],
+          ["Low energy"],
+        ];
+
+        const moodIndex = Math.floor(Math.random() * moods.length);
+        const stressIndex = Math.floor(Math.random() * stressLevels.length);
+        const mood = moods[moodIndex];
+        const stressLevel = stressLevels[stressIndex];
+        const stressLevelValue = stressLevelValues[stressIndex]; // Get numeric value
+        const symptoms =
+          symptomsList[Math.floor(Math.random() * symptomsList.length)];
+
+        mockMoodLogs.push({
+          id: `mock-mood-${i}`,
+          patient_id: patientId,
+          log_date: dateStr,
+          mood: mood,
+          stress_level: stressLevel,
+          stress_level_value: stressLevelValue, // Include numeric value
+          symptoms: symptoms,
+          created_at: date.toISOString(),
+        });
+      }
+
+      return mockMoodLogs;
+    };
+
+    try {
+      console.log("Fetching mood logs for patient ID:", patientId);
+
+      // First try to fetch from the database
+      try {
+        // First try to get logs from the wellness_logs table (since anxiety_logs is returning 404)
+        const { data: wellnessData, error: wellnessError } = await supabase
+          .from("wellness_logs")
+          .select("*")
+          .eq("user_id", patientId)
+          .order("date", { ascending: false });
+
+        // If wellness_logs data exists and no error, format it to match expected structure
+        if (!wellnessError && wellnessData && wellnessData.length > 0) {
+          console.log("Found wellness logs data:", wellnessData);
+
+          // Map the wellness_logs data to the expected format
+          return wellnessData.map((log) => {
+            // Convert numeric stress level to text and preserve original value
+            let stressLevelText = "Low";
+            let stressLevelValue = log.stress_level || 1;
+
+            if (typeof stressLevelValue !== "number") {
+              // Try to convert to number if it's not already
+              stressLevelValue = parseInt(stressLevelValue) || 1;
+            }
+
+            if (stressLevelValue > 3 && stressLevelValue <= 6) {
+              stressLevelText = "Medium";
+            } else if (stressLevelValue > 6) {
+              stressLevelText = "High";
+            }
+
+            // Extract mood from feelings array if it exists
+            let mood = "Neutral";
+            if (log.feelings && log.feelings.length > 0) {
+              // Handle feelings data whether it's an array or string representation
+              try {
+                const feelingsArray =
+                  typeof log.feelings === "string"
+                    ? JSON.parse(log.feelings.replace(/'/g, '"'))
+                    : log.feelings;
+
+                mood =
+                  Array.isArray(feelingsArray) && feelingsArray.length > 0
+                    ? feelingsArray[0]
+                    : "Neutral";
+              } catch (e) {
+                console.error("Error parsing feelings:", e);
+              }
+            }
+
+            // Extract symptoms
+            let symptoms = ["None"];
+            if (log.symptoms) {
+              // Handle symptoms data whether it's an array or string representation
+              try {
+                symptoms =
+                  typeof log.symptoms === "string"
+                    ? JSON.parse(log.symptoms.replace(/'/g, '"'))
+                    : log.symptoms;
+
+                // Ensure symptoms is an array
+                if (!Array.isArray(symptoms)) {
+                  symptoms = [String(symptoms)];
+                }
+              } catch (e) {
+                console.error("Error parsing symptoms:", e);
+                symptoms = ["None"];
+              }
+            }
+
+            return {
+              id: log.id,
+              patient_id: log.user_id,
+              log_date: log.date,
+              mood: mood,
+              stress_level: stressLevelText,
+              stress_level_value: stressLevelValue, // Include numeric value
+              symptoms: symptoms,
+              notes: log.journal || "",
+              created_at: log.created_at,
+            };
+          });
+        }
+
+        // Try mood_logs table as fallback (no need to try anxiety_logs since it's 404)
+        const { data, error } = await supabase
+          .from("mood_logs")
+          .select("*")
+          .eq("patient_id", patientId)
+          .order("log_date", { ascending: false });
+
+        // If no error, return the data or empty array
+        if (!error) {
+          return data || [];
+        }
+
+        // If table doesn't exist, return mock data silently
+        if (error.message.includes("does not exist")) {
+          return createMockMoodLogs(patientId);
+        }
+
+        // For other errors, log once and return mock data
+        console.log("Using mock mood logs data due to error:", error.message);
+        return createMockMoodLogs(patientId);
+      } catch (innerError) {
+        console.error("Inner error fetching mood logs:", innerError);
+        // For unexpected errors, return mock data
+        return createMockMoodLogs(patientId);
+      }
+    } catch (error) {
+      // This is a fallback for any other unexpected errors
+      console.error("Get patient mood logs error:", error.message);
+      return createMockMoodLogs(patientId);
     }
   },
 

@@ -19,6 +19,7 @@ export const PatientProvider = ({ children }) => {
   const [currentPatient, setCurrentPatient] = useState(null);
   const [patientNotes, setPatientNotes] = useState([]);
   const [sessionLogs, setSessionLogs] = useState([]);
+  const [moodLogs, setMoodLogs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -35,19 +36,48 @@ export const PatientProvider = ({ children }) => {
       } else {
         // For psychologists, we need to get their actual psychologist ID from the psychologists table
         // because patients are assigned to psychologist IDs, not auth user IDs
-        const { data: psychData, error: psychError } = await supabase
-          .from("psychologists")
-          .select("id")
-          .eq("user_id", user.id)
-          .single();
+        try {
+          // First try to find by user_id
+          const { data: psychData, error: psychError } = await supabase
+            .from("psychologists")
+            .select("id")
+            .eq("user_id", user.id);
 
-        if (psychError) {
-          console.error("Error fetching psychologist ID:", psychError.message);
-          throw new Error("Could not find your psychologist profile");
+          if (psychError || !psychData || psychData.length === 0) {
+            // If not found by user_id, try with email
+            const { data: psychByEmail, error: emailError } = await supabase
+              .from("psychologists")
+              .select("id")
+              .eq("email", user.email);
+
+            if (emailError || !psychByEmail || psychByEmail.length === 0) {
+              // If still not found, return empty array instead of throwing error
+              console.warn(
+                "No psychologist profile found. Showing empty patient list."
+              );
+              setPatients([]);
+              return [];
+            }
+
+            // Use the first psychologist record found by email
+            data = await patientService.getPatientsByPsychologist(
+              psychByEmail[0].id
+            );
+          } else {
+            // Use the first psychologist record found by user_id
+            data = await patientService.getPatientsByPsychologist(
+              psychData[0].id
+            );
+          }
+        } catch (psychErr) {
+          console.error(
+            "Error finding psychologist profile:",
+            psychErr.message
+          );
+          // Return empty array instead of throwing error
+          setPatients([]);
+          return [];
         }
-
-        // Use the psychologist ID from the psychologists table
-        data = await patientService.getPatientsByPsychologist(psychData.id);
       }
 
       setPatients(data);
@@ -55,7 +85,9 @@ export const PatientProvider = ({ children }) => {
     } catch (err) {
       console.error("Load patients error:", err.message);
       setError(err.message);
-      throw err;
+      // Return empty array instead of throwing error
+      setPatients([]);
+      return [];
     } finally {
       setLoading(false);
     }
@@ -73,6 +105,7 @@ export const PatientProvider = ({ children }) => {
       // Load patient notes and session logs
       await loadPatientNotes(patientId);
       await loadSessionLogs(patientId);
+      await loadMoodLogs(patientId);
 
       return data;
     } catch (err) {
@@ -104,6 +137,23 @@ export const PatientProvider = ({ children }) => {
       return data;
     } catch (err) {
       console.error("Load session logs error:", err.message);
+      throw err;
+    }
+  };
+
+  // Load mood logs
+  const loadMoodLogs = async (patientId) => {
+    try {
+      console.log(
+        "PatientContext: Loading mood logs for patient ID:",
+        patientId
+      );
+      const data = await patientService.getPatientMoodLogs(patientId);
+      console.log("PatientContext: Received mood logs data:", data);
+      setMoodLogs(data);
+      return data;
+    } catch (err) {
+      console.error("Load mood logs error:", err.message);
       throw err;
     }
   };
@@ -217,12 +267,14 @@ export const PatientProvider = ({ children }) => {
     currentPatient,
     patientNotes,
     sessionLogs,
+    moodLogs,
     loading,
     error,
     loadPatients,
     loadPatient,
     loadPatientNotes,
     loadSessionLogs,
+    loadMoodLogs,
     addNote,
     updateNote,
     deleteNote,

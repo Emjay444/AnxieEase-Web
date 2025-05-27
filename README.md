@@ -99,6 +99,13 @@ AnxieEase is a web application designed to help manage the relationship between 
 1. In your `.env` file, update the Supabase URL and anon key
 2. Restart your application and log in with the admin credentials
 
+### Step 6: Create the Mood Logs Table (Optional)
+
+1. Navigate to the SQL Editor in your Supabase dashboard
+2. Copy the SQL from `create_mood_logs_table.sql` in this repository
+3. Run the SQL to create the mood_logs table and its security policies
+4. This enables the patient mood tracking feature in the application
+
 ## Database Structure
 
 ### Tables
@@ -155,6 +162,17 @@ AnxieEase is a web application designed to help manage the relationship between 
    - notes (TEXT): Session notes
    - created_at (TIMESTAMPTZ): Creation timestamp
 
+7. **mood_logs** (new)
+   - id (UUID): Log entry ID
+   - patient_id (TEXT): Patient reference
+   - log_date (DATE): Date of the mood log
+   - mood (TEXT): Recorded mood (e.g., "Happy", "Anxious", "Neutral")
+   - stress_level (TEXT): Stress level (e.g., "Low", "Medium", "High")
+   - symptoms (TEXT[]): Array of symptoms experienced
+   - notes (TEXT): Additional notes
+   - created_at (TIMESTAMPTZ): Creation timestamp
+   - updated_at (TIMESTAMPTZ): Last update timestamp
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
@@ -174,3 +192,37 @@ If you encounter a "permission denied for table users" error when adding a psych
    - Toggle it off and then back on
 
 This solution addresses a common issue with Supabase permissions, particularly after project pause/resume cycles.
+
+### "Could not find your psychologist profile" Error
+
+If you see this error when logging in as a psychologist, it means your user account exists but doesn't have a corresponding record in the psychologists table:
+
+1. Go to the Supabase dashboard and navigate to the SQL Editor
+2. Create a new query
+3. Copy and paste the contents of the `create_psychologist_profile.sql` file
+4. Replace the placeholder values with your actual user information:
+   - `YOUR_USER_ID_HERE`: Your auth.uid (can be found in the auth.users table)
+   - `YOUR_PSYCHOLOGIST_NAME_HERE`: Your full name
+   - `YOUR_EMAIL_HERE`: Your email address
+   - `YOUR_CONTACT_NUMBER_HERE`: Your contact number
+5. Run the SQL script to create your psychologist profile
+6. Log out and log back in to the application
+
+This will create a psychologist profile for your user account and set your role to 'psychologist'.
+
+### Patient Logs Not Showing in Psychologist Dashboard
+
+If you can see anxiety/mood logs in your database but they're not appearing in the psychologist dashboard, it's likely due to a patient ID mismatch. The logs might be associated with the auth user ID instead of the patient ID:
+
+1. Go to the Supabase dashboard and navigate to the SQL Editor
+2. Create a new query
+3. Copy and paste the contents of the `fix_patient_logs_association.sql` file
+4. Run the first few queries to analyze your data structure and identify the issue
+5. Modify and uncomment the update statement (Step 5) with the correct values:
+   - `USER_EMAIL_HERE`: The email of the user whose logs need fixing
+   - `PATIENT_ID_HERE`: The correct patient ID from the patients table
+6. Run the update statement to fix the association
+7. Run the final queries to create a view and verify the fix worked
+8. Refresh your application and check if the logs now appear correctly
+
+This solution helps when logs are stored with auth user IDs instead of patient IDs in your database.

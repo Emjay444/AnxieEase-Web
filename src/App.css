@@ -1181,6 +1181,11 @@ canvas {
   color: var(--danger-color);
 }
 
+.status-badge.completed {
+  background-color: #bbf7d0;
+  color: #16a34a;
+}
+
 .request-details {
   display: flex;
   gap: 1.25rem;
@@ -1401,6 +1406,27 @@ canvas {
 
 .approve-button:hover {
   background-color: #15803d;
+}
+
+.complete-button {
+  background-color: #16a34a;
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  padding: 0.75rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.complete-button:hover {
+  background-color: #15803d;
+}
+
+.appointment-request-card.completed {
+  border-left: 4px solid #16a34a;
+  background-color: #f0fdf4;
 }
 
 @media (max-width: 768px) {
@@ -2260,6 +2286,11 @@ body.dark-theme .note-tag {
 .status-badge.declined {
   background: var(--danger-light);
   color: var(--danger-dark);
+}
+
+.status-badge.completed {
+  background-color: #bbf7d0;
+  color: #16a34a;
 }
 
 .request-details {
@@ -3693,4 +3724,67 @@ input#verificationCode::placeholder {
 
 .dark-theme input#verificationCode::placeholder {
   color: #666;
+}
+
+/* Stress badge styles */
+.stress-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.stress-value {
+  font-size: 0.75rem;
+  opacity: 0.8;
+  margin-left: 2px;
+}
+
+.low {
+  background-color: #e6f9ed;
+  color: #22c55e;
+}
+
+/* Add the stress level value style from Dashboard edits */
+.stress-value {
+  font-size: 0.75rem;
+  opacity: 0.8;
+  margin-left: 2px;
+}
+
+.low {
+  background-color: #e6f9ed;
+  color: #22c55e;
+}
+
+/* Loading state styles for appointments */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  text-align: center;
+  color: var(--text-light);
+}
+
+.spinner-container {
+  margin-bottom: 1rem;
+}
+
+.spinner {
+  width: 30px;
+  height: 30px;
+  border: 3px solid rgba(0, 0, 0, 0.1);
+  border-top-color: var(--primary-color);
+  border-radius: 50%;
+  animation: spinner 1s ease-in-out infinite;
+}
+
+@keyframes spinner {
+  to {
+    transform: rotate(360deg);
+  }
 }

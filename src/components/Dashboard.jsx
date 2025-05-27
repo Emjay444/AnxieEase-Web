@@ -13,8 +13,10 @@ import {
   Title,
   Tooltip,
   Legend,
+  Filler,
 } from "chart.js";
 import { supabase } from "../services/supabaseClient";
+import { appointmentService } from "../services/appointmentService";
 
 ChartJS.register(
   CategoryScale,
@@ -23,7 +25,8 @@ ChartJS.register(
   LineElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
+  Filler
 );
 
 const patients = [
@@ -53,12 +56,6 @@ const patients = [
   },
 ];
 
-const stats = [
-  { label: "Average Attacks", value: "1.1", sub: "Per week", status: "Normal" },
-  { label: "Total Attacks", value: "8", sub: "This Month", status: "Normal" },
-  { label: "Patient logs", value: "5", sub: "This Month", status: "Normal" },
-];
-
 // Function to get all dates in current month
 const getDatesInMonth = () => {
   const now = new Date();
@@ -74,13 +71,48 @@ const getDatesInMonth = () => {
 
 // Helper function to format display date
 const formatDisplayDate = (dateString) => {
-  const [year, month, day] = dateString.split("-");
-  const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-  return date.toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
+  if (!dateString) return "Unknown date";
+
+  try {
+    // Check if the date is already a valid date object
+    let date;
+    if (dateString instanceof Date) {
+      date = dateString;
+    } else {
+      // Handle different date string formats
+      // First, try to split by dash (YYYY-MM-DD)
+      if (dateString.includes("-")) {
+        const [year, month, day] = dateString.split("-");
+        date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+      } else if (dateString.includes("/")) {
+        // Try to split by slash (MM/DD/YYYY)
+        const [month, day, year] = dateString.split("/");
+        date = new Date(
+          parseInt(year || new Date().getFullYear()),
+          parseInt(month) - 1,
+          parseInt(day)
+        );
+      } else {
+        // Attempt to parse the date directly
+        date = new Date(dateString);
+      }
+    }
+
+    // Check if the date is valid
+    if (isNaN(date.getTime())) {
+      console.warn("Invalid date format:", dateString);
+      return "Invalid date";
+    }
+
+    return date.toLocaleDateString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+    });
+  } catch (err) {
+    console.error("Error formatting date:", err, dateString);
+    return "Date error";
+  }
 };
 
 // Sample mood logs data - using Map for easier date lookup
@@ -2199,6 +2231,8 @@ const Dashboard = () => {
     loadPatients,
     searchPatients,
     filterPatients,
+    moodLogs,
+    loadMoodLogs,
   } = usePatient();
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -2209,6 +2243,7 @@ const Dashboard = () => {
     stress: "",
     symptoms: "",
   });
+  const [completionNotes, setCompletionNotes] = useState("");
   const [filteredPatients, setFilteredPatients] = useState([]);
   const navigate = useNavigate();
   const [selectedPatientId, setSelectedPatientId] = useState("");
@@ -2218,8 +2253,14 @@ const Dashboard = () => {
   const [showAppointments, setShowAppointments] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [responseNote, setResponseNote] = useState("");
-  const [appointmentList, setAppointmentList] = useState(appointmentRequests);
+  const [appointmentList, setAppointmentList] = useState([]);
+  const [loadingAppointments, setLoadingAppointments] = useState(false);
   const [activeTab, setActiveTab] = useState("all");
+  const [viewedNotifications, setViewedNotifications] = useState({
+    pending: false,
+    approved: false,
+    completed: false,
+  });
 
   const [showNotesForm, setShowNotesForm] = useState(false);
   const [currentNotes, setCurrentNotes] = useState([]);
@@ -2240,6 +2281,66 @@ const Dashboard = () => {
     loadPatients();
     // eslint-disable-next-line
   }, []);
+
+  // Load appointments for the psychologist
+  React.useEffect(() => {
+    const fetchAppointments = async () => {
+      if (user && user.id) {
+        setLoadingAppointments(true);
+        try {
+          console.log("Fetching appointments for psychologist:", user.id);
+          const appointments =
+            await appointmentService.getAppointmentsByPsychologist(user.id);
+          console.log("Fetched appointments:", appointments);
+
+          // Compare with previous appointments to see if there are new ones
+          const previousAppointments = appointmentList || [];
+          const hasNewAppointments = appointments.some(
+            (appointment) =>
+              !previousAppointments.some(
+                (prevApp) => prevApp.id === appointment.id
+              )
+          );
+
+          // Reset viewed notifications if there are new appointments
+          if (hasNewAppointments) {
+            setViewedNotifications({
+              pending: false,
+              approved: false,
+              completed: false,
+            });
+          }
+
+          setAppointmentList(appointments);
+        } catch (error) {
+          console.error("Error fetching appointments:", error);
+        } finally {
+          setLoadingAppointments(false);
+        }
+      }
+    };
+
+    fetchAppointments();
+  }, [user]);
+
+  // Load mood logs for selected patient
+  React.useEffect(() => {
+    if (selectedPatientId) {
+      console.log(
+        "Dashboard: Loading mood logs for patient:",
+        selectedPatientId
+      );
+      loadMoodLogs(selectedPatientId)
+        .then((data) => {
+          console.log(
+            `Dashboard: Successfully loaded ${data.length} mood logs`
+          );
+        })
+        .catch((err) => {
+          console.error("Dashboard: Error loading mood logs:", err);
+        });
+    }
+  }, [selectedPatientId]); // Removed loadMoodLogs from dependencies
 
   // Update filtered patients when search term or filters change
   React.useEffect(() => {
@@ -2428,11 +2529,12 @@ const Dashboard = () => {
   // Filter appointments based on status
   const filteredAppointments = appointmentList.filter((req) => {
     if (activeTab === "all") return true;
+    if (activeTab === "completed") return req.status === "completed";
     return req.status === activeTab;
   });
 
   // Handle appointment response (approve/decline)
-  const handleAppointmentResponse = (requestId, status) => {
+  const handleAppointmentResponse = async (requestId, status) => {
     if (!responseNote.trim() && status === "declined") {
       alert(
         "Please provide a note explaining why the appointment was declined"
@@ -2440,16 +2542,28 @@ const Dashboard = () => {
       return;
     }
 
-    setAppointmentList((prev) =>
-      prev.map((req) =>
-        req.id === requestId
-          ? { ...req, status, notes: responseNote || undefined }
-          : req
-      )
+    // Update the appointment in the database
+    const success = await appointmentService.updateAppointmentStatus(
+      requestId,
+      status,
+      responseNote || undefined
     );
 
-    setResponseNote("");
-    setSelectedRequest(null);
+    if (success) {
+      // Update the local state only if database update was successful
+      setAppointmentList((prev) =>
+        prev.map((req) =>
+          req.id === requestId
+            ? { ...req, status, responseMessage: responseNote || undefined }
+            : req
+        )
+      );
+
+      setResponseNote("");
+      setSelectedRequest(null);
+    } else {
+      alert("Failed to update appointment. Please try again.");
+    }
   };
 
   // Handle creating a new note
@@ -2525,12 +2639,46 @@ const Dashboard = () => {
 
   const handleAppointmentsClick = () => {
     setShowAppointments(true);
+    // Reset viewed notifications when opening appointments modal
+    // This is intentionally not clearing them so you can see which tabs have notifications
   };
 
   const handleCloseAppointments = () => {
     setShowAppointments(false);
     setSelectedRequest(null);
     setResponseNote("");
+    setCompletionNotes("");
+  };
+
+  // Handle marking an appointment as completed
+  const handleMarkAppointmentCompleted = async (appointmentId) => {
+    if (!completionNotes.trim()) {
+      alert("Please provide completion notes before marking as completed");
+      return;
+    }
+
+    // Update the appointment in the database
+    const success = await appointmentService.markAppointmentCompleted(
+      appointmentId,
+      completionNotes
+    );
+
+    if (success) {
+      // Update the local state only if database update was successful
+      setAppointmentList((prev) =>
+        prev.map((req) =>
+          req.id === appointmentId ? { ...req, status: "completed" } : req
+        )
+      );
+
+      setCompletionNotes("");
+      setSelectedRequest(null);
+
+      // Show a success message
+      alert("Appointment marked as completed successfully!");
+    } else {
+      alert("Failed to mark appointment as completed. Please try again.");
+    }
   };
 
   const handleClosePatientLogs = () => {
@@ -2587,6 +2735,36 @@ const Dashboard = () => {
     }
     return null;
   };
+
+  // Calculate stats dynamically
+  const patientStats = useMemo(() => {
+    const logsCount = moodLogs && Array.isArray(moodLogs) ? moodLogs.length : 0;
+    console.log(
+      "Dashboard: Calculating patient stats. Mood logs count:",
+      logsCount
+    );
+
+    return [
+      {
+        label: "Average Attacks",
+        value: "1.1",
+        sub: "Per week",
+        status: "Normal",
+      },
+      {
+        label: "Total Attacks",
+        value: "8",
+        sub: "This Month",
+        status: "Normal",
+      },
+      {
+        label: "Patient logs",
+        value: logsCount.toString(),
+        sub: "This Month",
+        status: "Normal",
+      },
+    ];
+  }, [moodLogs]);
 
   if (loading) {
     return (
@@ -2685,13 +2863,34 @@ const Dashboard = () => {
               <line x1="3" y1="10" x2="21" y2="10"></line>
             </svg>
             Appointment Requests
-            {appointmentList.filter((req) => req.status === "pending").length >
+            {/* Only show badge for notifications that haven't been viewed */}
+            {(viewedNotifications.pending
+              ? 0
+              : appointmentList.filter((req) => req.status === "pending")
+                  .length) +
+              (viewedNotifications.approved
+                ? 0
+                : appointmentList.filter((req) => req.status === "approved")
+                    .length) +
+              (viewedNotifications.completed
+                ? 0
+                : appointmentList.filter((req) => req.status === "completed")
+                    .length) >
               0 && (
               <span className="badge">
-                {
-                  appointmentList.filter((req) => req.status === "pending")
-                    .length
-                }
+                {(viewedNotifications.pending
+                  ? 0
+                  : appointmentList.filter((req) => req.status === "pending")
+                      .length) +
+                  (viewedNotifications.approved
+                    ? 0
+                    : appointmentList.filter((req) => req.status === "approved")
+                        .length) +
+                  (viewedNotifications.completed
+                    ? 0
+                    : appointmentList.filter(
+                        (req) => req.status === "completed"
+                      ).length)}
               </span>
             )}
           </button>
@@ -2791,7 +2990,15 @@ const Dashboard = () => {
                     className={`tab-button ${
                       activeTab === "all" ? "active" : ""
                     }`}
-                    onClick={() => setActiveTab("all")}
+                    onClick={() => {
+                      setActiveTab("all");
+                      // Mark all tabs as viewed when clicking "All"
+                      setViewedNotifications({
+                        pending: true,
+                        approved: true,
+                        completed: true,
+                      });
+                    }}
                   >
                     All
                   </button>
@@ -2799,27 +3006,83 @@ const Dashboard = () => {
                     className={`tab-button ${
                       activeTab === "pending" ? "active" : ""
                     }`}
-                    onClick={() => setActiveTab("pending")}
+                    onClick={() => {
+                      setActiveTab("pending");
+                      // Mark pending notifications as viewed
+                      setViewedNotifications((prev) => ({
+                        ...prev,
+                        pending: true,
+                      }));
+                    }}
                   >
                     Pending
-                    {appointmentList.filter((req) => req.status === "pending")
-                      .length > 0 && (
-                      <span className="badge">
-                        {
-                          appointmentList.filter(
-                            (req) => req.status === "pending"
-                          ).length
-                        }
-                      </span>
-                    )}
+                    {activeTab !== "pending" &&
+                      !viewedNotifications.pending &&
+                      appointmentList.filter((req) => req.status === "pending")
+                        .length > 0 && (
+                        <span className="badge">
+                          {
+                            appointmentList.filter(
+                              (req) => req.status === "pending"
+                            ).length
+                          }
+                        </span>
+                      )}
                   </button>
                   <button
                     className={`tab-button ${
                       activeTab === "approved" ? "active" : ""
                     }`}
-                    onClick={() => setActiveTab("approved")}
+                    onClick={() => {
+                      setActiveTab("approved");
+                      // Mark approved notifications as viewed
+                      setViewedNotifications((prev) => ({
+                        ...prev,
+                        approved: true,
+                      }));
+                    }}
                   >
                     Approved
+                    {activeTab !== "approved" &&
+                      !viewedNotifications.approved &&
+                      appointmentList.filter((req) => req.status === "approved")
+                        .length > 0 && (
+                        <span className="badge">
+                          {
+                            appointmentList.filter(
+                              (req) => req.status === "approved"
+                            ).length
+                          }
+                        </span>
+                      )}
+                  </button>
+                  <button
+                    className={`tab-button ${
+                      activeTab === "completed" ? "active" : ""
+                    }`}
+                    onClick={() => {
+                      setActiveTab("completed");
+                      // Mark completed notifications as viewed
+                      setViewedNotifications((prev) => ({
+                        ...prev,
+                        completed: true,
+                      }));
+                    }}
+                  >
+                    Completed
+                    {activeTab !== "completed" &&
+                      !viewedNotifications.completed &&
+                      appointmentList.filter(
+                        (req) => req.status === "completed"
+                      ).length > 0 && (
+                        <span className="badge">
+                          {
+                            appointmentList.filter(
+                              (req) => req.status === "completed"
+                            ).length
+                          }
+                        </span>
+                      )}
                   </button>
                   <button
                     className={`tab-button ${
@@ -2831,7 +3094,14 @@ const Dashboard = () => {
                   </button>
                 </div>
 
-                {selectedRequest ? (
+                {loadingAppointments ? (
+                  <div className="loading-state">
+                    <div className="spinner-container">
+                      <div className="spinner"></div>
+                    </div>
+                    <p>Loading appointment requests...</p>
+                  </div>
+                ) : selectedRequest ? (
                   <div className="request-detail-card">
                     <div className="card-header">
                       <h3>Appointment Details</h3>
@@ -2852,13 +3122,24 @@ const Dashboard = () => {
                       <div className="info-row">
                         <div className="info-label">Requested Date</div>
                         <div className="info-value">
-                          {selectedRequest.requestedDate}
+                          {selectedRequest.requestedDate
+                            ? new Date(
+                                selectedRequest.requestedDate
+                              ).toLocaleDateString()
+                            : "Not specified"}
                         </div>
                       </div>
                       <div className="info-row">
                         <div className="info-label">Requested Time</div>
                         <div className="info-value">
-                          {selectedRequest.requestedTime}
+                          {selectedRequest.requestedDate
+                            ? new Date(
+                                selectedRequest.requestedDate
+                              ).toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })
+                            : selectedRequest.requestedTime}
                         </div>
                       </div>
                       <div className="info-row">
@@ -2880,12 +3161,12 @@ const Dashboard = () => {
                           </div>
                         </div>
                       </div>
-                      {selectedRequest.notes && (
+                      {selectedRequest.responseMessage && (
                         <div className="info-row">
                           <div className="info-label">Notes</div>
                           <div className="info-value">
                             <div className="notes-text">
-                              {selectedRequest.notes}
+                              {selectedRequest.responseMessage}
                             </div>
                           </div>
                         </div>
@@ -2929,36 +3210,110 @@ const Dashboard = () => {
                           </div>
                         </div>
                       )}
+
+                      {selectedRequest.status === "approved" && (
+                        <div className="response-section">
+                          <label htmlFor="completionNotes">
+                            Completion Notes (Required)
+                          </label>
+                          <textarea
+                            id="completionNotes"
+                            value={completionNotes}
+                            onChange={(e) => setCompletionNotes(e.target.value)}
+                            placeholder="Add notes about the completed appointment (e.g., summary, follow-up plans)..."
+                            rows={4}
+                          />
+                          <div className="action-buttons">
+                            <button
+                              className="complete-button"
+                              onClick={() =>
+                                handleMarkAppointmentCompleted(
+                                  selectedRequest.id
+                                )
+                              }
+                            >
+                              Mark as Completed
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ) : (
                   <div className="appointment-list">
-                    {filteredAppointments.map((request) => (
-                      <div
-                        key={request.id}
-                        className={`appointment-request-card ${request.status}`}
-                        onClick={() => setSelectedRequest(request)}
-                      >
-                        <div className="request-header">
-                          <h3>{request.patientName}</h3>
-                          <span className={`status-badge ${request.status}`}>
-                            {request.status.charAt(0).toUpperCase() +
-                              request.status.slice(1)}
-                          </span>
+                    {filteredAppointments.length > 0 ? (
+                      filteredAppointments.map((request) => (
+                        <div
+                          key={request.id}
+                          className={`appointment-request-card ${request.status}`}
+                          onClick={() => setSelectedRequest(request)}
+                        >
+                          <div className="request-header">
+                            <h3>{request.patientName}</h3>
+                            <span className={`status-badge ${request.status}`}>
+                              {request.status.charAt(0).toUpperCase() +
+                                request.status.slice(1)}
+                            </span>
+                          </div>
+                          <div className="request-details">
+                            <p>
+                              <strong>Date:</strong>{" "}
+                              {request.requestedDate
+                                ? new Date(
+                                    request.requestedDate
+                                  ).toLocaleDateString()
+                                : "Not specified"}
+                            </p>
+                            <p>
+                              <strong>Time:</strong>{" "}
+                              {request.requestedDate
+                                ? new Date(
+                                    request.requestedDate
+                                  ).toLocaleTimeString([], {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })
+                                : request.requestedTime}
+                            </p>
+                            <p>
+                              <strong>Reason:</strong> {request.reason}
+                            </p>
+                          </div>
                         </div>
-                        <div className="request-details">
-                          <p>
-                            <strong>Date:</strong> {request.requestedDate}
-                          </p>
-                          <p>
-                            <strong>Time:</strong> {request.requestedTime}
-                          </p>
-                          <p>
-                            <strong>Reason:</strong> {request.reason}
-                          </p>
-                        </div>
+                      ))
+                    ) : (
+                      <div className="empty-state">
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="48"
+                          height="48"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <rect
+                            x="3"
+                            y="4"
+                            width="18"
+                            height="18"
+                            rx="2"
+                            ry="2"
+                          ></rect>
+                          <line x1="16" y1="2" x2="16" y2="6"></line>
+                          <line x1="8" y1="2" x2="8" y2="6"></line>
+                          <line x1="3" y1="10" x2="21" y2="10"></line>
+                        </svg>
+                        <h4>No appointment requests found</h4>
+                        <p>
+                          {activeTab !== "all"
+                            ? `No ${activeTab} appointments at this time`
+                            : "You don't have any appointment requests yet"}
+                        </p>
                       </div>
-                    ))}
+                    )}
                   </div>
                 )}
               </div>
@@ -3250,7 +3605,7 @@ const Dashboard = () => {
             <PatientDetailCard patient={selectedPatient} />
 
             <div className="stats-grid">
-              {stats.map((stat, index) => (
+              {patientStats.map((stat, index) => (
                 <div
                   key={index}
                   className="stat-card"
@@ -3313,53 +3668,108 @@ const Dashboard = () => {
                   </div>
                   <div className="modal-body">
                     <div className="logs-container">
-                      {Array.from(moodLogsData.entries()).map(([date, log]) => (
-                        <div key={date} className="log-entry">
-                          <div className="log-date">
-                            <div className="date-circle">
-                              {formatDisplayDate(date).split(" ")[0]}
-                            </div>
-                            <div className="full-date">
-                              {formatDisplayDate(date)}
-                            </div>
-                          </div>
-                          <div className="log-details">
-                            <div className="log-row">
-                              <div className="log-item">
-                                <span className="log-label">Mood</span>
-                                <span
-                                  className={`mood-badge ${log.mood.toLowerCase()}`}
-                                >
-                                  {log.mood}
-                                </span>
+                      {console.log("Rendering modal with moodLogs:", moodLogs)}
+                      {moodLogs && moodLogs.length > 0 ? (
+                        moodLogs.map((log) => {
+                          console.log("Rendering log:", log);
+
+                          // Safely access properties with checks
+                          const mood = log.mood || "Neutral";
+                          const stressLevel = log.stress_level || "Low";
+                          const symptoms = Array.isArray(log.symptoms)
+                            ? log.symptoms
+                            : ["None"];
+                          const notes = log.notes || "";
+                          console.log("Log date format:", log.log_date);
+
+                          return (
+                            <div key={log.id} className="log-entry">
+                              <div className="log-date">
+                                <div className="date-circle">
+                                  {log.log_date
+                                    ? formatDisplayDate(log.log_date).split(
+                                        " "
+                                      )[0]
+                                    : formatDisplayDate(log.date || "").split(
+                                        " "
+                                      )[0]}
+                                </div>
+                                <div className="full-date">
+                                  {log.log_date
+                                    ? formatDisplayDate(log.log_date)
+                                    : formatDisplayDate(log.date || "")}
+                                </div>
                               </div>
-                              <div className="log-item">
-                                <span className="log-label">Stress Level</span>
-                                <span
-                                  className={`stress-badge ${log.stressLevel.toLowerCase()}`}
-                                >
-                                  {log.stressLevel}
-                                </span>
+                              <div className="log-details">
+                                <div className="log-row">
+                                  <div className="log-item">
+                                    <span className="log-label">Mood</span>
+                                    <span
+                                      className={`mood-badge ${mood.toLowerCase()}`}
+                                    >
+                                      {mood}
+                                    </span>
+                                  </div>
+                                  <div className="log-item">
+                                    <span className="log-label">
+                                      Stress Level
+                                    </span>
+                                    <span
+                                      className={`stress-badge ${stressLevel.toLowerCase()}`}
+                                    >
+                                      {stressLevel}
+                                      {log.stress_level_value && (
+                                        <span className="stress-value">
+                                          {" "}
+                                          ({log.stress_level_value})
+                                        </span>
+                                      )}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="log-item symptoms-section">
+                                  <span className="log-label">Symptoms</span>
+                                  <div className="symptoms-container">
+                                    {symptoms.length > 0 ? (
+                                      symptoms.map((symptom, index) => (
+                                        <span
+                                          key={index}
+                                          className={`symptom-tag ${
+                                            symptom === "None"
+                                              ? "no-symptoms"
+                                              : ""
+                                          }`}
+                                        >
+                                          {symptom}
+                                        </span>
+                                      ))
+                                    ) : (
+                                      <span className="symptom-tag no-symptoms">
+                                        None recorded
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                {notes && (
+                                  <div className="log-item notes-section">
+                                    <span className="log-label">Notes</span>
+                                    <div className="notes-content">{notes}</div>
+                                  </div>
+                                )}
                               </div>
                             </div>
-                            <div className="log-item symptoms-section">
-                              <span className="log-label">Symptoms</span>
-                              <div className="symptoms-container">
-                                {log.symptoms.map((symptom, index) => (
-                                  <span
-                                    key={index}
-                                    className={`symptom-tag ${
-                                      symptom === "None" ? "no-symptoms" : ""
-                                    }`}
-                                  >
-                                    {symptom}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
+                          );
+                        })
+                      ) : (
+                        <div className="empty-logs">
+                          <p>No mood logs found for this patient.</p>
+                          <p className="help-text">
+                            {moodLogs === undefined
+                              ? "Logs data is undefined. There might be a data loading issue."
+                              : "The patient hasn't recorded any mood logs yet."}
+                          </p>
                         </div>
-                      ))}
+                      )}
                     </div>
                   </div>
                 </div>
