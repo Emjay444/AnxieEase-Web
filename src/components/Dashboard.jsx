@@ -17,6 +17,7 @@ import {
 } from "chart.js";
 import { supabase } from "../services/supabaseClient";
 import { appointmentService } from "../services/appointmentService";
+import { anxietyService } from "../services/anxietyService";
 
 ChartJS.register(
   CategoryScale,
@@ -333,6 +334,14 @@ const AnxietyChart = memo(({ chartData, chartOptions }) => {
   );
 });
 
+// Add this before any component definitions
+const initialNoteState = {
+  title: "",
+  content: "",
+  note_content: "",
+  tags: [],
+};
+
 // Create a memoized patient notes component
 const PatientNotes = memo(
   ({
@@ -349,6 +358,7 @@ const PatientNotes = memo(
     handleAddNote,
     handleUpdateNote,
     handleDeleteNote,
+    initialNoteState,
   }) => {
     return (
       <div className="patient-notes-section">
@@ -385,19 +395,6 @@ const PatientNotes = memo(
                   rows="6"
                   className="note-content-input"
                 ></textarea>
-                <input
-                  type="text"
-                  placeholder="Tags (comma separated)"
-                  value={
-                    typeof editingNote.tags === "string"
-                      ? editingNote.tags
-                      : editingNote.tags.join(", ")
-                  }
-                  onChange={(e) =>
-                    setEditingNote({ ...editingNote, tags: e.target.value })
-                  }
-                  className="note-tags-input"
-                />
                 <div className="note-actions">
                   <button
                     className="cancel-button"
@@ -416,7 +413,7 @@ const PatientNotes = memo(
                 <input
                   type="text"
                   placeholder="Note title"
-                  value={newNote.title}
+                  value={newNote.title || ""}
                   onChange={(e) =>
                     setNewNote({ ...newNote, title: e.target.value })
                   }
@@ -424,22 +421,13 @@ const PatientNotes = memo(
                 />
                 <textarea
                   placeholder="Note content..."
-                  value={newNote.content}
+                  value={newNote.content || ""}
                   onChange={(e) =>
                     setNewNote({ ...newNote, content: e.target.value })
                   }
                   rows="6"
                   className="note-content-input"
                 ></textarea>
-                <input
-                  type="text"
-                  placeholder="Tags (comma separated)"
-                  value={newNote.tags}
-                  onChange={(e) =>
-                    setNewNote({ ...newNote, tags: e.target.value })
-                  }
-                  className="note-tags-input"
-                />
                 <button className="create-note-button" onClick={handleAddNote}>
                   Add Note
                 </button>
@@ -468,7 +456,7 @@ const PatientNotes = memo(
                   <div className="note-date">{note.date}</div>
                 </div>
                 <div className="note-content">
-                  <p>{note.content}</p>
+                  <p>{note.note_content}</p>
                 </div>
                 {note.tags && note.tags.length > 0 && (
                   <div className="note-tags">
@@ -483,7 +471,27 @@ const PatientNotes = memo(
                   <button
                     className="edit-button"
                     onClick={() => {
-                      setEditingNote({ ...note });
+                      // Parse note_content to get title and content if they don't exist
+                      let title = note.title;
+                      let content = note.content;
+
+                      // If we only have note_content, try to split it into title and content
+                      if (!title && !content && note.note_content) {
+                        const parts = note.note_content.split("\n\n");
+                        title = parts[0] || "";
+                        content = parts.slice(1).join("\n\n") || "";
+                      }
+
+                      const noteForEdit = {
+                        ...initialNoteState,
+                        ...note,
+                        title: title || "",
+                        content: content || "",
+                        note_content: note.note_content || "",
+                      };
+
+                      setEditingNote(noteForEdit);
+                      setNewNote(noteForEdit);
                       setShowNotesForm(true);
                     }}
                   >
@@ -1181,12 +1189,29 @@ const AddDoctorModal = memo(({ show, onClose, onSave }) => {
 
 // Create a helper component for patient details that can handle both mock and real data
 const PatientDetailCard = ({ patient }) => {
-  // Default emergency contact if not available
-  const emergencyContact = patient.emergencyContact || {
-    name: "Not provided",
-    relationship: "",
-    phone: "",
-  };
+  const [userDetails, setUserDetails] = useState(null);
+
+  useEffect(() => {
+    async function fetchUserDetails() {
+      if (!patient?.id) return;
+      const { data, error } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", patient.id)
+        .single();
+      if (!error && data) setUserDetails(data);
+    }
+    fetchUserDetails();
+  }, [patient?.id]);
+
+  // Helper to calculate age from birth_date
+  function calculateAge(birthDate) {
+    if (!birthDate) return null;
+    const dob = new Date(birthDate);
+    const diff = Date.now() - dob.getTime();
+    const ageDt = new Date(diff);
+    return Math.abs(ageDt.getUTCFullYear() - 1970);
+  }
 
   return (
     <div className="patient-detail-card">
@@ -1196,10 +1221,20 @@ const PatientDetailCard = ({ patient }) => {
             patient.avatar ||
             `https://cdn-icons-png.flaticon.com/512/2922/2922510.png`
           }
-          alt={patient.name}
+          alt={
+            userDetails
+              ? `${userDetails.first_name} ${userDetails.last_name}`
+              : patient.name
+          }
         />
         <div>
-          <div className="patient-name">{patient.name}</div>
+          <div className="patient-name">
+            {userDetails
+              ? `${userDetails.first_name || ""} ${
+                  userDetails.last_name || ""
+                }`.trim() || patient.name
+              : patient.name}
+          </div>
           <div className="patient-id">Patient ID: {patient.id}</div>
         </div>
       </div>
@@ -1207,28 +1242,29 @@ const PatientDetailCard = ({ patient }) => {
       <div className="patient-info-grid">
         <div className="info-item">
           <div className="label">Age</div>
-          <div className="value">{patient.age || "Not available"}</div>
+          <div className="value">
+            {userDetails?.birth_date
+              ? calculateAge(userDetails.birth_date)
+              : "Not available"}
+          </div>
         </div>
 
         <div className="info-item">
           <div className="label">Gender</div>
-          <div className="value">{patient.gender || "Not specified"}</div>
+          <div className="value">{userDetails?.gender || "Not specified"}</div>
+        </div>
+
+        <div className="info-item">
+          <div className="label">Contact Number</div>
+          <div className="value">
+            {userDetails?.contact_number || "Not available"}
+          </div>
         </div>
 
         <div className="info-item">
           <div className="label">Emergency Contact</div>
           <div className="value">
-            {emergencyContact.name}
-            {emergencyContact.relationship && (
-              <div style={{ fontSize: "0.75rem", color: "var(--text-light)" }}>
-                {emergencyContact.relationship}
-              </div>
-            )}
-            {emergencyContact.phone && (
-              <div style={{ fontSize: "0.75rem", color: "var(--text-light)" }}>
-                {emergencyContact.phone}
-              </div>
-            )}
+            {userDetails?.emergency_contact || "Not provided"}
           </div>
         </div>
       </div>
@@ -2223,17 +2259,150 @@ const PsychologistProfile = memo(({ user, onClose }) => {
 });
 
 const Dashboard = () => {
-  const { user, userRole } = useAuth();
+  const { currentUser } = useAuth();
+  const navigate = useNavigate();
+
+  // Add missing state variables
+  const [selectedPatientId, setSelectedPatientId] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [anxietyRecords, setAnxietyRecords] = useState([]);
+  const [anxietyStats, setAnxietyStats] = useState({
+    averageAttacksPerWeek: 0,
+    totalAttacksThisMonth: 0,
+    patientLogsThisMonth: 0,
+  });
+
+  // Initialize state with initialNoteState
+  const [newNote, setNewNote] = useState(initialNoteState);
+  const [editingNote, setEditingNote] = useState(null);
+
+  // Other state variables...
   const {
     patients: apiPatients,
-    loading,
-    error,
+    loading: apiLoading,
+    error: apiError,
     loadPatients,
     searchPatients,
     filterPatients,
     moodLogs,
     loadMoodLogs,
+    addNote,
+    updateNote,
+    deleteNote,
+    loadPatientNotes, // Add this
   } = usePatient();
+
+  // Effect for fetching anxiety data when a patient is selected
+  useEffect(() => {
+    const fetchPatientData = async () => {
+      if (!selectedPatientId) {
+        setAnxietyRecords([]);
+        setAnxietyStats({
+          averageAttacksPerWeek: 0,
+          totalAttacksThisMonth: 0,
+          patientLogsThisMonth: 0,
+        });
+        setCurrentNotes([]);
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      console.log("Fetching data for patient:", selectedPatientId);
+
+      try {
+        // Fetch anxiety records
+        const records = await anxietyService.getAnxietyRecords(
+          selectedPatientId
+        );
+        console.log("Fetched records:", records);
+        setAnxietyRecords(records);
+
+        // Fetch anxiety stats
+        const stats = await anxietyService.getAnxietyStats(selectedPatientId);
+        console.log("Fetched stats:", stats);
+        setAnxietyStats(stats);
+
+        // Fetch patient notes
+        const { data: notes, error: notesError } = await supabase
+          .from("patient_notes")
+          .select("*")
+          .eq("patient_id", selectedPatientId)
+          .order("created_at", { ascending: false });
+
+        console.log("Fetched notes:", notes);
+        if (notesError) {
+          console.error("Error fetching notes:", notesError);
+        } else {
+          setCurrentNotes(notes || []);
+        }
+      } catch (error) {
+        console.error("Error fetching patient data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPatientData();
+  }, [selectedPatientId]); // Only re-run when selectedPatientId changes
+
+  // Handle patient selection
+  const handlePatientSelect = (patientId) => {
+    setSelectedPatientId(patientId);
+  };
+
+  // Update the patient click handler
+  const handlePatientClick = (patientId) => {
+    setSelectedPatientId(patientId);
+  };
+
+  // Memoized chart data using real anxiety records
+  const chartData = useMemo(() => {
+    if (!anxietyRecords.length) {
+      return {
+        labels: [],
+        datasets: [
+          {
+            label: "Anxiety Attacks",
+            data: [],
+            borderColor: "#3cba92",
+            backgroundColor: "rgba(60, 186, 146, 0.2)",
+            tension: 0.4,
+            fill: true,
+          },
+        ],
+      };
+    }
+
+    // Group records by date and count occurrences
+    const recordsByDate = anxietyRecords.reduce((acc, record) => {
+      const date = new Date(record.timestamp);
+      const dateStr = `${date.getMonth() + 1}/${date.getDate()}`;
+      acc[dateStr] = (acc[dateStr] || 0) + 1;
+      return acc;
+    }, {});
+
+    // Get unique dates and sort them
+    const dates = Object.keys(recordsByDate).sort((a, b) => {
+      const [aMonth, aDay] = a.split("/").map(Number);
+      const [bMonth, bDay] = b.split("/").map(Number);
+      return aMonth === bMonth ? aDay - bDay : aMonth - bMonth;
+    });
+
+    return {
+      labels: dates,
+      datasets: [
+        {
+          label: "Anxiety Attacks",
+          data: dates.map((date) => recordsByDate[date]),
+          borderColor: "#3cba92",
+          backgroundColor: "rgba(60, 186, 146, 0.2)",
+          tension: 0.4,
+          fill: true,
+        },
+      ],
+    };
+  }, [anxietyRecords]);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [searchId, setSearchId] = useState("");
@@ -2245,11 +2414,6 @@ const Dashboard = () => {
   });
   const [completionNotes, setCompletionNotes] = useState("");
   const [filteredPatients, setFilteredPatients] = useState([]);
-  const navigate = useNavigate();
-  const [selectedPatientId, setSelectedPatientId] = useState("");
-  const selectedPatient =
-    apiPatients.find((p) => p.id === selectedPatientId) || null;
-
   const [showAppointments, setShowAppointments] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [responseNote, setResponseNote] = useState("");
@@ -2264,8 +2428,6 @@ const Dashboard = () => {
 
   const [showNotesForm, setShowNotesForm] = useState(false);
   const [currentNotes, setCurrentNotes] = useState([]);
-  const [editingNote, setEditingNote] = useState(null);
-  const [newNote, setNewNote] = useState({ title: "", content: "", tags: "" });
   const [searchNotes, setSearchNotes] = useState("");
 
   const [showSettings, setShowSettings] = useState(false);
@@ -2285,12 +2447,17 @@ const Dashboard = () => {
   // Load appointments for the psychologist
   React.useEffect(() => {
     const fetchAppointments = async () => {
-      if (user && user.id) {
+      if (currentUser && currentUser.id) {
         setLoadingAppointments(true);
         try {
-          console.log("Fetching appointments for psychologist:", user.id);
+          console.log(
+            "Fetching appointments for psychologist:",
+            currentUser.id
+          );
           const appointments =
-            await appointmentService.getAppointmentsByPsychologist(user.id);
+            await appointmentService.getAppointmentsByPsychologist(
+              currentUser.id
+            );
           console.log("Fetched appointments:", appointments);
 
           // Compare with previous appointments to see if there are new ones
@@ -2321,7 +2488,7 @@ const Dashboard = () => {
     };
 
     fetchAppointments();
-  }, [user]);
+  }, [currentUser]);
 
   // Load mood logs for selected patient
   React.useEffect(() => {
@@ -2398,10 +2565,6 @@ const Dashboard = () => {
     setDarkMode((prevMode) => !prevMode);
   };
 
-  const handlePatientClick = (patientId) => {
-    navigate(`/patient/${patientId}`);
-  };
-
   const handleSearchChange = (e) => {
     setSearchTerm(e.target.value);
   };
@@ -2429,23 +2592,6 @@ const Dashboard = () => {
   };
 
   // Memoized chart data and options to prevent recalculations
-  const chartData = useMemo(
-    () => ({
-      labels: getDatesForCurrentMonth(),
-      datasets: [
-        {
-          label: "Anxiety Attacks",
-          data: generateRandomData(30, 0, 3),
-          borderColor: "#3cba92",
-          backgroundColor: "rgba(60, 186, 146, 0.2)",
-          tension: 0.4,
-          fill: true,
-        },
-      ],
-    }),
-    []
-  );
-
   const chartOptions = useMemo(
     () => ({
       responsive: true,
@@ -2567,56 +2713,193 @@ const Dashboard = () => {
   };
 
   // Handle creating a new note
-  const handleAddNote = () => {
-    if (!newNote.title.trim() || !newNote.content.trim()) {
-      alert("Please provide both a title and content for the note");
+  const handleAddNote = async () => {
+    // Check if either title or content is empty
+    if (!newNote.title?.trim()) {
+      alert("Please provide a title for the note");
       return;
     }
 
-    const note = {
-      id: `note${Date.now()}`,
-      date: new Date().toISOString().split("T")[0],
-      title: newNote.title,
-      content: newNote.content,
-      tags: newNote.tags
-        ? newNote.tags.split(",").map((tag) => tag.trim())
-        : [],
-    };
+    if (!newNote.content?.trim()) {
+      alert("Please provide content for the note");
+      return;
+    }
 
-    // In a real app, you would save this to the backend
-    setCurrentNotes((prev) => [note, ...prev]);
-    setNewNote({ title: "", content: "", tags: "" });
-    setEditingNote(null);
+    try {
+      console.log("Adding note:", newNote);
+      // Combine title and content into note_content for database
+      const noteContent = `${newNote.title}\n\n${newNote.content}`;
+      await addNote(selectedPatientId, noteContent);
+      console.log("Note successfully added!");
+
+      // Reset form state
+      setNewNote({ ...initialNoteState });
+      setEditingNote(null);
+      setShowNotesForm(false);
+
+      // Refresh notes list
+      const { data: updatedNotes } = await supabase
+        .from("patient_notes")
+        .select("*")
+        .eq("patient_id", selectedPatientId)
+        .order("created_at", { ascending: false });
+
+      if (updatedNotes) {
+        setCurrentNotes(updatedNotes);
+      }
+    } catch (error) {
+      console.error("Add note error:", error);
+      alert("Failed to add note. Please try again.");
+    }
   };
 
   // Handle updating an existing note
-  const handleUpdateNote = () => {
-    if (!editingNote.title.trim() || !editingNote.content.trim()) {
-      alert("Please provide both a title and content for the note");
+  const handleUpdateNote = async () => {
+    if (!editingNote?.id) {
+      alert("No note selected for editing");
       return;
     }
 
-    // Process tags if they're a string
-    if (typeof editingNote.tags === "string") {
-      editingNote.tags = editingNote.tags.split(",").map((tag) => tag.trim());
+    if (!newNote.title?.trim() || !newNote.content?.trim()) {
+      alert("Please provide both title and content for the note");
+      return;
     }
 
-    // In a real app, you would save this to the backend
-    setCurrentNotes((prev) =>
-      prev.map((note) =>
-        note.id === editingNote.id
-          ? { ...editingNote, date: new Date().toISOString().split("T")[0] }
-          : note
-      )
-    );
-    setEditingNote(null);
+    try {
+      console.log("Updating note:", editingNote.id);
+
+      // Combine title and content for the database
+      const noteContent = `${newNote.title}\n\n${newNote.content}`;
+
+      // Update in Supabase
+      const { data, error } = await supabase
+        .from("patient_notes")
+        .update({
+          note_content: noteContent,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", editingNote.id)
+        .select();
+
+      if (error) throw error;
+
+      console.log("Note successfully updated in database:", data);
+
+      // Update the local state with the new data
+      setCurrentNotes((prevNotes) =>
+        prevNotes.map((note) =>
+          note.id === editingNote.id
+            ? {
+                ...note,
+                note_content: noteContent,
+                updated_at: new Date().toISOString(),
+              }
+            : note
+        )
+      );
+
+      // Reset form state
+      setNewNote({ ...initialNoteState });
+      setEditingNote(null);
+      setShowNotesForm(false);
+
+      // Fetch updated notes to ensure UI is in sync with database
+      const { data: updatedNotes, error: fetchError } = await supabase
+        .from("patient_notes")
+        .select("*")
+        .eq("patient_id", selectedPatientId)
+        .order("created_at", { ascending: false });
+
+      if (fetchError) throw fetchError;
+
+      if (updatedNotes) {
+        setCurrentNotes(updatedNotes);
+      }
+    } catch (error) {
+      console.error("Error updating note:", error);
+      alert("Failed to update note. Please try again.");
+    }
   };
 
-  // Handle deleting a note
-  const handleDeleteNote = (noteId) => {
+  // Update the note form to match the validation fields
+  const renderNoteForm = () => (
+    <div className="create-note-card">
+      <h3>{editingNote ? "Edit Note" : "Create New Note"}</h3>
+      <textarea
+        placeholder="Note content..."
+        value={newNote.note_content || ""} // Ensure it's never undefined
+        onChange={(e) => setNewNote({ note_content: e.target.value })}
+        rows="6"
+        className="note-content-input"
+      ></textarea>
+      <div className="note-form-buttons">
+        <button
+          className="cancel-button"
+          onClick={() => {
+            setEditingNote(null);
+            setNewNote({ note_content: "" }); // Reset to initial state
+            setShowNotesForm(false);
+          }}
+        >
+          Cancel
+        </button>
+        <button
+          className="create-note-button"
+          onClick={editingNote ? handleUpdateNote : handleAddNote}
+        >
+          {editingNote ? "Update Note" : "Add Note"}
+        </button>
+      </div>
+    </div>
+  );
+
+  // Add some CSS for the buttons
+  const styles = {
+    // ... existing styles ...
+    noteFormButtons: {
+      display: "flex",
+      gap: "10px",
+      justifyContent: "flex-end",
+      marginTop: "10px",
+    },
+    cancelButton: {
+      padding: "8px 16px",
+      border: "1px solid #ddd",
+      borderRadius: "4px",
+      backgroundColor: "#fff",
+      cursor: "pointer",
+    },
+    createNoteButton: {
+      padding: "8px 16px",
+      backgroundColor: "#4CAF50",
+      color: "white",
+      border: "none",
+      borderRadius: "4px",
+      cursor: "pointer",
+    },
+  };
+
+  // Update handleDeleteNote to handle database deletion
+  const handleDeleteNote = async (noteId) => {
     if (window.confirm("Are you sure you want to delete this note?")) {
-      // In a real app, you would delete this from the backend
-      setCurrentNotes((prev) => prev.filter((note) => note.id !== noteId));
+      try {
+        // Delete from Supabase database
+        const { error } = await supabase
+          .from("patient_notes")
+          .delete()
+          .eq("id", noteId);
+
+        if (error) {
+          throw error;
+        }
+
+        // If deletion was successful, update local state
+        setCurrentNotes((prev) => prev.filter((note) => note.id !== noteId));
+        console.log("Note successfully deleted!");
+      } catch (error) {
+        console.error("Error deleting note:", error);
+        alert("Failed to delete note. Please try again.");
+      }
     }
   };
 
@@ -2711,16 +2994,16 @@ const Dashboard = () => {
 
   // Add psychologist-specific welcome message
   const renderPsychologistHeader = () => {
-    if (userRole === "psychologist") {
+    if (currentUser?.userRole === "psychologist") {
       return (
         <div className="dashboard-section mb-4">
           <div className="card shadow-sm">
             <div className="card-body">
               <h4 className="text-success mb-3">Your Assigned Patients</h4>
               <p className="mb-0">
-                Welcome {user?.name || user?.email?.split("@")[0]}. This
-                dashboard shows only patients assigned to you.
-                {loading
+                Welcome {currentUser?.name || currentUser?.email?.split("@")[0]}
+                . This dashboard shows only patients assigned to you.
+                {apiLoading
                   ? " Loading patient data..."
                   : apiPatients.length === 0
                   ? " You currently have no assigned patients."
@@ -2738,35 +3021,52 @@ const Dashboard = () => {
 
   // Calculate stats dynamically
   const patientStats = useMemo(() => {
-    const logsCount = moodLogs && Array.isArray(moodLogs) ? moodLogs.length : 0;
-    console.log(
-      "Dashboard: Calculating patient stats. Mood logs count:",
-      logsCount
-    );
+    if (loading) {
+      return [
+        {
+          label: "Average Attacks",
+          value: "...",
+          sub: "Per week",
+          status: "Loading",
+        },
+        {
+          label: "Total Attacks",
+          value: "...",
+          sub: "This Month",
+          status: "Loading",
+        },
+        {
+          label: "Patient logs",
+          value: "...",
+          sub: "This Month",
+          status: "Loading",
+        },
+      ];
+    }
 
     return [
       {
         label: "Average Attacks",
-        value: "1.1",
+        value: anxietyStats.averageAttacksPerWeek.toString(),
         sub: "Per week",
         status: "Normal",
       },
       {
         label: "Total Attacks",
-        value: "8",
+        value: anxietyStats.totalAttacksThisMonth.toString(),
         sub: "This Month",
         status: "Normal",
       },
       {
         label: "Patient logs",
-        value: logsCount.toString(),
+        value: anxietyStats.patientLogsThisMonth.toString(),
         sub: "This Month",
         status: "Normal",
       },
     ];
-  }, [moodLogs]);
+  }, [loading, anxietyStats]);
 
-  if (loading) {
+  if (apiLoading) {
     return (
       <div className="d-flex justify-content-center align-items-center min-vh-100">
         <div className="text-center">
@@ -2822,7 +3122,7 @@ const Dashboard = () => {
                 className={`patient-item ${
                   selectedPatientId === patient.id ? "active" : ""
                 }`}
-                onClick={() => setSelectedPatientId(patient.id)}
+                onClick={() => handlePatientSelect(patient.id)}
               >
                 <img
                   src={
@@ -2837,7 +3137,7 @@ const Dashboard = () => {
                 </div>
               </div>
             ))
-          ) : loading ? (
+          ) : apiLoading ? (
             <div className="empty-state">Loading patients...</div>
           ) : (
             <div className="empty-state">No patients found</div>
@@ -2915,27 +3215,6 @@ const Dashboard = () => {
             </svg>
             Profile
           </button>
-
-          <button
-            className="action-button settings-button"
-            onClick={() => setShowSettings(true)}
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <circle cx="12" cy="12" r="3"></circle>
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-            </svg>
-            Settings
-          </button>
         </div>
 
         <LogoutButton />
@@ -2944,10 +3223,10 @@ const Dashboard = () => {
       {/* Main Content */}
       <main className="dashboard-main">
         {/* Add the psychologist header here */}
-        {!selectedPatient && renderPsychologistHeader()}
+        {!selectedPatientId && renderPsychologistHeader()}
 
         {/* Admin's Add Doctor Button - Only visible for admins and only on the dashboard view */}
-        {userRole === "admin" && !selectedPatient && (
+        {currentUser?.userRole === "admin" && !selectedPatientId && (
           <div className="admin-controls">
             <button
               className="add-doctor-button"
@@ -3321,10 +3600,13 @@ const Dashboard = () => {
           </div>
         )}
 
-        {!selectedPatient ? (
+        {!selectedPatientId && (
           <div className="dashboard-welcome">
             <div className="welcome-header">
-              <h2>Welcome, {user?.name || user?.email?.split("@")[0]}</h2>
+              <h2>
+                Welcome,{" "}
+                {currentUser?.name || currentUser?.email?.split("@")[0]}
+              </h2>
               <p>Your patient dashboard overview</p>
             </div>
 
@@ -3458,7 +3740,7 @@ const Dashboard = () => {
                         <div className="activity-cell">
                           <button
                             className="view-button"
-                            onClick={() => setSelectedPatientId(patient.id)}
+                            onClick={() => handlePatientSelect(patient.id)}
                           >
                             View Details
                           </button>
@@ -3578,7 +3860,9 @@ const Dashboard = () => {
               </div>
             </div>
           </div>
-        ) : (
+        )}
+
+        {selectedPatientId && (
           <>
             <div className="back-to-dashboard">
               <button
@@ -3602,7 +3886,11 @@ const Dashboard = () => {
                 Back to Dashboard
               </button>
             </div>
-            <PatientDetailCard patient={selectedPatient} />
+            <PatientDetailCard
+              patient={
+                apiPatients.find((p) => p.id === selectedPatientId) || null
+              }
+            />
 
             <div className="stats-grid">
               {patientStats.map((stat, index) => (
@@ -3632,7 +3920,9 @@ const Dashboard = () => {
 
             {/* Use memoized notes component */}
             <PatientNotes
-              selectedPatient={selectedPatient}
+              selectedPatient={
+                apiPatients.find((p) => p.id === selectedPatientId) || null
+              }
               filteredNotes={filteredNotes}
               searchNotes={searchNotes}
               setSearchNotes={setSearchNotes}
@@ -3645,6 +3935,7 @@ const Dashboard = () => {
               handleAddNote={handleAddNote}
               handleUpdateNote={handleUpdateNote}
               handleDeleteNote={handleDeleteNote}
+              initialNoteState={initialNoteState}
             />
 
             {/* Patient Logs Modal */}
@@ -3656,7 +3947,10 @@ const Dashboard = () => {
                       <h2>Patient Activity Logs</h2>
                       <p className="modal-subtitle">
                         Daily mood and symptom tracking for{" "}
-                        {selectedPatient.name}
+                        {
+                          apiPatients.find((p) => p.id === selectedPatientId)
+                            ?.name
+                        }
                       </p>
                     </div>
                     <button
@@ -3785,7 +4079,7 @@ const Dashboard = () => {
             closeSettings={() => setShowSettings(false)}
             darkMode={darkMode}
             toggleDarkMode={toggleDarkMode}
-            user={user}
+            user={currentUser}
           />
         )}
 
@@ -3800,7 +4094,7 @@ const Dashboard = () => {
         {/* Psychologist Profile Modal */}
         {showProfile && (
           <PsychologistProfile
-            user={user}
+            user={currentUser}
             onClose={() => setShowProfile(false)}
           />
         )}
