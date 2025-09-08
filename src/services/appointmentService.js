@@ -4,76 +4,302 @@ export const appointmentService = {
   // Get appointments for a psychologist or a user
   async getAppointmentsByPsychologist(userId) {
     try {
-      console.log("Fetching appointments for user ID:", userId);
+      console.log("Fetching appointments for psychologist ID:", userId);
 
-      // First try to get all appointments to check what's available
-      const { data: allAppointments, error: allError } = await supabase
-        .from("appointments")
-        .select("*")
-        .limit(20);
-
-      if (allError) {
-        console.error("Error fetching all appointments:", allError.message);
-      } else {
-        console.log("Sample of all appointments:", allAppointments);
-
-        // Log the structure of the first appointment to understand available fields
-        if (allAppointments && allAppointments.length > 0) {
-          console.log(
-            "First appointment structure:",
-            Object.keys(allAppointments[0])
-          );
-          console.log("First appointment data:", allAppointments[0]);
-        }
-      }
-
-      // Now try to get all appointments
+      // Get appointments from your existing appointments table
       const { data: appointments, error } = await supabase
         .from("appointments")
-        .select("*");
+        .select("*")
+        .eq("psychologist_id", userId)
+        .order("created_at", { ascending: false });
 
       if (error) {
         console.error("Error fetching appointments:", error.message);
         return [];
       }
 
-      // Filter appointments - show any appointment where the current user is involved
-      // (either as a patient or as a psychologist)
-      let filteredAppointments = appointments.filter(
-        (appt) => appt.user_id === userId || appt.psychologist_id === userId
-      );
+  console.log("Found appointments:", appointments);
 
-      console.log("Filtered appointments:", filteredAppointments);
+  // Auto-update past scheduled appointments to completed, and past pending to expired
+  const afterComplete = await this.updatePastAppointmentsToCompleted(appointments);
+  const updatedAppointments = await this.updatePastPendingAppointmentsToExpired(afterComplete);
 
-      // Format the data
-      return filteredAppointments.map((appt) => {
-        // Determine if the current user is the patient or the psychologist
-        const isCurrentUserPatient = appt.user_id === userId;
+      // Get patient names from user_profiles
+      const patientIds = updatedAppointments
+        .map((appt) => appt.user_id)
+        .filter(Boolean);
+      let patientNames = {};
+
+      if (patientIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from("user_profiles")
+          .select("id, first_name, last_name")
+          .in("id", patientIds);
+
+        profiles?.forEach((profile) => {
+          const fullName = [profile.first_name, profile.last_name]
+            .filter(Boolean)
+            .join(" ");
+          patientNames[profile.id] = fullName || "Patient";
+        });
+      }
+
+      // Format the data (normalized for UI expectations)
+      return updatedAppointments.map((appt) => {
+        const rawStatus = (appt.status || "pending").toLowerCase();        
+        const status = rawStatus === "canceled" ? "cancelled" : rawStatus;
+        const patientName = patientNames[appt.user_id] || "Patient";
 
         return {
           id: appt.id,
           patientId: appt.user_id,
           psychologistId: appt.psychologist_id,
+          // Keep the raw datetime for compatibility with components using appointment_date
+          appointment_date: appt.appointment_date,
           requestDate: appt.created_at,
           requestedDate: appt.appointment_date,
-          requestedTime:
-            new Date(appt.appointment_date).toLocaleTimeString() ||
-            "Not specified",
+          requestedTime: appt.appointment_date
+            ? new Date(appt.appointment_date).toLocaleTimeString()
+            : "Not specified",
           reason: appt.reason || "No reason provided",
-          status: appt.status || "pending",
-          urgency: appt.urgency || "medium",
-          notes: appt.notes,
-          responseMessage: appt.response_message,
+          status,
+          urgency: "medium",
+          notes: appt.completion_notes || "",
+          responseMessage: appt.response_message || "",
           completed: appt.completed || false,
-          // If the current user is the patient, show "Me" as patient name
-          patientName: isCurrentUserPatient ? "Me" : "Patient",
-          // If the current user is the psychologist, show "Me" as psychologist name
-          psychologistName: !isCurrentUserPatient ? "Me" : "Dr. Smith",
+          // Commonly referenced fields by UI
+          patient_name: patientName,
+          appointment_type: "Consultation",
+          patientName: patientName,
+          psychologistName: "Me",
         };
       });
     } catch (error) {
       console.error("Get appointments error:", error.message);
       return [];
+    }
+  },
+
+  // Helper method to update past scheduled appointments to completed
+  async updatePastAppointmentsToCompleted(appointments) {
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Start of today
+      console.log("Today's date (start of day):", today.toISOString());
+      
+      // Debug: Log all appointments with their status and date
+      appointments.forEach(appt => {
+        console.log(`Appointment ${appt.id}: status="${appt.status}", date="${appt.appointment_date}"`);
+      });
+      // Treat legacy equivalents of scheduled as scheduled too
+      const scheduledLike = new Set(["scheduled", "approved", "accept", "accepted", "confirm", "confirmed"]);
+      
+      const pastScheduledAppointments = appointments.filter(appt => {
+        if (!appt.appointment_date) {
+          console.log(`Skipping appointment ${appt.id}: no appointment_date`);
+          return false;
+        }
+        
+        const status = (appt.status || "").toLowerCase().trim();
+        if (!scheduledLike.has(status)) {
+          console.log(`Skipping appointment ${appt.id}: status is "${status}" not scheduled-like`);
+          return false;
+        }
+        
+        const appointmentDate = new Date(appt.appointment_date);
+        appointmentDate.setHours(0, 0, 0, 0);
+        console.log(`Appointment ${appt.id}: date=${appointmentDate.toISOString()}, isPast=${appointmentDate < today}`);
+        
+        return appointmentDate < today;
+      });
+
+      console.log(`Found ${pastScheduledAppointments.length} past scheduled appointments to complete:`, 
+        pastScheduledAppointments.map(a => ({ id: a.id, date: a.appointment_date, status: a.status })));
+
+      if (pastScheduledAppointments.length > 0) {
+        console.log(`Auto-completing ${pastScheduledAppointments.length} past appointments`);
+        
+        const updatePromises = pastScheduledAppointments.map(appt =>
+          supabase
+            .from("appointments")
+            .update({
+              status: "completed",
+              completion_notes: "Auto-completed past appointment",
+              updated_at: new Date().toISOString()
+            })
+            .eq("id", appt.id)
+        );
+
+        const results = await Promise.all(updatePromises);
+        console.log("Update results:", results);
+        
+  // Return updated appointments with new status
+  return appointments.map(appt => {
+          const isPastScheduled = pastScheduledAppointments.find(p => p.id === appt.id);
+          if (isPastScheduled) {
+            console.log(`Marking appointment ${appt.id} as completed`);
+            return { ...appt, status: "completed" };
+          }
+          return appt;
+        });
+      }
+      
+      return appointments;
+    } catch (error) {
+      console.error("Error updating past appointments:", error);
+      return appointments; // Return original if update fails
+    }
+  },
+
+  // Helper method to update past pending/requested appointments to expired
+  async updatePastPendingAppointmentsToExpired(appointments) {
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const pendingLike = new Set(["pending", "requested", "request"]);
+
+      const pastPending = appointments.filter((appt) => {
+        if (!appt.appointment_date) return false;
+        const status = (appt.status || "").toLowerCase().trim();
+        if (!pendingLike.has(status)) return false;
+        const d = new Date(appt.appointment_date);
+        d.setHours(0, 0, 0, 0);
+        return d < today;
+      });
+
+      if (pastPending.length > 0) {
+        console.log(`Auto-expiring ${pastPending.length} past pending appointments`);
+        const updatePromises = pastPending.map((appt) =>
+          supabase
+            .from("appointments")
+            .update({
+              status: "expired",
+              response_message: "Auto-expired pending request past date",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", appt.id)
+        );
+        await Promise.all(updatePromises);
+
+        // Reflect updates locally as well
+        return appointments.map((appt) =>
+          pastPending.find((p) => p.id === appt.id)
+            ? { ...appt, status: "expired" }
+            : appt
+        );
+      }
+
+      return appointments;
+    } catch (error) {
+      console.error("Error expiring past pending appointments:", error);
+      return appointments;
+    }
+  },
+
+  // Get pending appointment requests for a psychologist
+  async getPendingRequestsByPsychologist(psychologistId) {
+    try {
+      // Fetch all appointments for this psychologist; we'll filter in JS to be case-agnostic
+      const { data, error } = await supabase
+        .from("appointments")
+        .select("*")
+        .eq("psychologist_id", psychologistId)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("Error fetching pending requests:", error.message);
+        return [];
+      }
+
+      // Only show as "requests" when status is pending/requested
+      const requestRows = (data || []).filter((appt) => {
+        const status = (appt.status || "").toString().toLowerCase();
+        return (
+          status === "pending" || status === "requested" || status === "request"
+        );
+      });
+
+      // Get patient names
+      const patientIds = requestRows
+        .map((appt) => appt.user_id)
+        .filter(Boolean);
+      let patientNames = {};
+
+      if (patientIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from("user_profiles")
+          .select("id, first_name, last_name")
+          .in("id", patientIds);
+
+        profiles?.forEach((profile) => {
+          const fullName = [profile.first_name, profile.last_name]
+            .filter(Boolean)
+            .join(" ");
+          patientNames[profile.id] = fullName || "Patient";
+        });
+      }
+
+      return requestRows.map((appt) => {
+        // Show the explicit requested appointment date/time if provided
+        const d = appt.appointment_date
+          ? new Date(appt.appointment_date)
+          : null;
+        const requestedDate = d
+          ? d.toLocaleDateString("en-PH", {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+              timeZone: "Asia/Manila",
+            })
+          : "";
+        const requestedTime = d
+          ? d.toLocaleTimeString("en-PH", {
+              hour: "numeric",
+              minute: "2-digit",
+              hour12: true,
+              timeZone: "Asia/Manila",
+            })
+          : "";
+
+        const normStatus = (appt.status || "pending").toString().toLowerCase();
+        const status = normStatus === "canceled" ? "cancelled" : normStatus;
+        return {
+          id: appt.id,
+          patientId: appt.user_id,
+          patientName: patientNames[appt.user_id] || "Patient",
+          requestedDate,
+          requestedTime,
+          message: appt.reason || "Appointment request",
+          status,
+        };
+      });
+    } catch (err) {
+      console.error("getPendingRequestsByPsychologist error:", err.message);
+      return [];
+    }
+  }, // Set/Update appointment date-time (and optionally status)
+  async setAppointmentSchedule(appointmentId, datetimeISO, status = null) {
+    try {
+      const payload = {
+        appointment_date: datetimeISO,
+        updated_at: new Date().toISOString(),
+      };
+      if (status) payload.status = status;
+
+      const { data, error } = await supabase
+        .from("appointments")
+        .update(payload)
+        .eq("id", appointmentId)
+        .select();
+
+      if (error) {
+        console.error("Error updating appointment schedule:", error.message);
+        return false;
+      }
+      return data?.[0] || true;
+    } catch (err) {
+      console.error("setAppointmentSchedule error:", err.message);
+      return false;
     }
   },
 
@@ -147,9 +373,32 @@ export const appointmentService = {
   // Create a new appointment (for patients)
   async createAppointment(appointmentData) {
     try {
+      const payload = {
+        status: "requested",
+        ...appointmentData,
+      };
+
+      // Normalize appointment_date to UTC if provided without timezone info.
+      if (
+        payload.appointment_date &&
+        typeof payload.appointment_date === "string"
+      ) {
+        const s = payload.appointment_date;
+        const hasTZ = /[zZ]|[\+\-]\d{2}:?\d{2}$/.test(s);
+        // If no timezone is present, assume Asia/Manila local time and convert to UTC ISO
+        if (!hasTZ) {
+          // Accept formats like "YYYY-MM-DD HH:mm" or "YYYY-MM-DDTHH:mm" (optionally with :ss)
+          const normalized = s.trim().replace(" ", "T");
+          // Append Asia/Manila offset
+          const iso = new Date(
+            `${normalized}${normalized.includes(":") ? "" : "T00:00"}+08:00`
+          ).toISOString();
+          payload.appointment_date = iso;
+        }
+      }
       const { data, error } = await supabase
         .from("appointments")
-        .insert([appointmentData])
+        .insert([payload])
         .select();
 
       if (error) {
@@ -166,7 +415,36 @@ export const appointmentService = {
 
   // Get appointments for a patient
   async getAppointmentsByPatient(patientId) {
-    // We can reuse the same function since we've made it work for both roles
-    return this.getAppointmentsByPsychologist(patientId);
+    try {
+      const { data, error } = await supabase
+        .from("appointments")
+        .select("*")
+        .eq("user_id", patientId)
+        .order("appointment_date", { ascending: false });
+
+      if (error) {
+        console.error("Error fetching patient appointments:", error.message);
+        return [];
+      }
+
+      return (data || []).map((appt) => {
+        const rawStatus = (appt.status || "pending").toLowerCase();
+        const status = rawStatus === "canceled" ? "cancelled" : rawStatus;
+        return {
+          id: appt.id,
+          appointment_date: appt.appointment_date,
+          reason: appt.reason || "No reason provided",
+          status,
+          completion_notes: appt.completion_notes || "",
+          response_message: appt.response_message || "",
+          created_at: appt.created_at,
+        };
+      });
+    } catch (error) {
+      console.error("Get patient appointments error:", error.message);
+      return [];
+    }
   },
+
+  // Note: updateAppointmentStatus with notes is already defined above. Remove duplicate minimal version.
 };

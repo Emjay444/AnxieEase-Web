@@ -49,7 +49,7 @@ export const psychologistService = {
   async getPsychologistPatients(psychologistId) {
     try {
       const { data, error } = await supabase
-        .from("users")
+        .from("user_profiles")
         .select("*")
         .eq("role", "patient")
         .eq("assigned_psychologist_id", psychologistId);
@@ -57,20 +57,40 @@ export const psychologistService = {
       if (error) throw error;
 
       // Format the data for display
-      return data.map((user) => ({
-        id: user.id,
-        name: user.full_name || user.email.split("@")[0],
-        email: user.email,
-        assigned_psychologist_id: psychologistId,
-        is_active: user.is_email_verified,
-        created_at: user.created_at,
-        date_added: new Date(user.created_at).toLocaleDateString("en-GB"),
-        time_added: new Date(user.created_at).toLocaleTimeString("en-US", {
-          hour: "numeric",
-          minute: "2-digit",
-          hour12: true,
-        }),
-      }));
+      return data.map((user) => {
+        const fullName = [user.first_name, user.middle_name, user.last_name]
+          .filter(Boolean)
+          .join(" ");
+
+        // Calculate age if birth_date is available
+        let age = null;
+        if (user.birth_date) {
+          const birthDate = new Date(user.birth_date);
+          const ageDifMs = Date.now() - birthDate.getTime();
+          const ageDate = new Date(ageDifMs);
+          age = Math.abs(ageDate.getUTCFullYear() - 1970);
+        }
+
+        return {
+          id: user.id,
+          name: fullName || `Patient ${user.id.slice(0, 8)}`,
+          email: user.email || "No email",
+          contact_number: user.contact_number || null,
+          emergency_contact: user.emergency_contact || null,
+          gender: user.gender || null,
+          birth_date: user.birth_date || null,
+          age: age,
+          assigned_psychologist_id: psychologistId,
+          is_active: user.is_email_verified || true,
+          created_at: user.created_at,
+          date_added: new Date(user.created_at).toLocaleDateString("en-GB"),
+          time_added: new Date(user.created_at).toLocaleTimeString("en-US", {
+            hour: "numeric",
+            minute: "2-digit",
+            hour12: true,
+          }),
+        };
+      });
     } catch (error) {
       console.error("Get psychologist patients error:", error.message);
       return [];
@@ -94,7 +114,10 @@ export const psychologistService = {
             contact: psychologistData.contact,
             license_number: psychologistData.licenseNumber,
             sex: psychologistData.sex,
-            is_active: true,
+            is_active:
+              psychologistData.is_active !== undefined
+                ? psychologistData.is_active
+                : false, // Default to false for email verification
           },
         ])
         .select();
@@ -109,7 +132,7 @@ export const psychologistService = {
         email: psychologistData.email,
         options: {
           emailRedirectTo: `${
-            window.location.origin
+            import.meta.env.VITE_APP_URL || window.location.origin
           }/psychologist-setup/${encodeURIComponent(
             psychologistData.email
           )}/${psychologistId}`,
@@ -179,6 +202,36 @@ export const psychologistService = {
   // Deactivate a psychologist (set is_active to false)
   async deactivatePsychologist(id) {
     try {
+      // First, check if psychologist has any assigned patients
+      const { data: assignedPatients, error: patientsError } = await supabase
+        .from("user_profiles")
+        .select("id, first_name, last_name")
+        .eq("role", "patient")
+        .eq("assigned_psychologist_id", id);
+
+      if (patientsError) {
+        console.error(
+          "Error checking assigned patients:",
+          patientsError.message
+        );
+        throw patientsError;
+      }
+
+      // If psychologist has assigned patients, prevent deactivation
+      if (assignedPatients && assignedPatients.length > 0) {
+        const patientNames = assignedPatients
+          .map((p) => {
+            const fullName = [p.first_name, p.last_name]
+              .filter(Boolean)
+              .join(" ");
+            return fullName || `Patient ${p.id.slice(0, 8)}`;
+          })
+          .join(", ");
+        throw new Error(
+          `Cannot deactivate psychologist. They have ${assignedPatients.length} assigned patient(s): ${patientNames}. Please reassign these patients to another psychologist first.`
+        );
+      }
+
       // Get the psychologist details first for the activity log
       const { data: psychologist, error: fetchError } = await supabase
         .from("psychologists")
@@ -281,12 +334,12 @@ export const psychologistService = {
         }, 100);
       }
 
-      // Update the patient record in the users table
+      // Update the patient record in the user_profiles table
       const { data, error } = await supabase
-        .from("users")
+        .from("user_profiles")
         .update({ assigned_psychologist_id: psychologistId })
         .eq("id", patientId)
-        .select();
+        .select("first_name, last_name");
 
       if (error) throw error;
 
@@ -297,7 +350,10 @@ export const psychologistService = {
       try {
         // Try to get patient name from patient record we already have
         if (data && data[0]) {
-          patientName = data[0].full_name || data[0].email || patientId;
+          const fullName = [data[0].first_name, data[0].last_name]
+            .filter(Boolean)
+            .join(" ");
+          patientName = fullName || `Patient ${patientId.slice(0, 8)}`;
         }
 
         // Try to get psychologist name from the psychologists table
@@ -356,15 +412,18 @@ export const psychologistService = {
       let psychologistId = null;
 
       try {
-        // Try to get patient data from the users table
+        // Try to get patient data from the user_profiles table
         const { data: userData, error: userError } = await supabase
-          .from("users")
-          .select("full_name, email, assigned_psychologist_id")
+          .from("user_profiles")
+          .select("first_name, last_name, assigned_psychologist_id")
           .eq("id", patientId)
           .single();
 
         if (!userError && userData) {
-          patientName = userData.full_name || userData.email || patientId;
+          const fullName = [userData.first_name, userData.last_name]
+            .filter(Boolean)
+            .join(" ");
+          patientName = fullName || `Patient ${patientId.slice(0, 8)}`;
           psychologistId = userData.assigned_psychologist_id;
 
           // Only fetch psychologist name if we have an ID
@@ -385,9 +444,9 @@ export const psychologistService = {
         // Continue with IDs if we couldn't get names
       }
 
-      // Clear the psychologist reference in the users table
+      // Clear the psychologist reference in the user_profiles table
       const { data, error } = await supabase
-        .from("users")
+        .from("user_profiles")
         .update({ assigned_psychologist_id: null })
         .eq("id", patientId)
         .select();
@@ -431,6 +490,64 @@ export const psychologistService = {
       return { success: true };
     } catch (error) {
       console.error("Update psychologist user_id error:", error.message);
+      throw error;
+    }
+  },
+
+  // Send password reset email to psychologist
+  async sendResetEmail(psychologistId) {
+    try {
+      // Get psychologist details
+      const { data: psychologist, error: fetchError } = await supabase
+        .from("psychologists")
+        .select("name, email")
+        .eq("id", psychologistId)
+        .single();
+
+      if (fetchError) {
+        console.error("Error fetching psychologist:", fetchError.message);
+        throw fetchError;
+      }
+
+      if (!psychologist) {
+        throw new Error("Psychologist not found");
+      }
+
+      // Send password reset email using Supabase Auth
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+        psychologist.email,
+        {
+          redirectTo: `${
+            import.meta.env.VITE_APP_URL || window.location.origin
+          }/reset-password`,
+        }
+      );
+
+      if (resetError) {
+        console.error("Reset email error:", resetError.message);
+        throw resetError;
+      }
+
+      // Log the reset email activity
+      try {
+        const { adminService } = await import("./adminService");
+        await adminService.logActivity(
+          null, // No specific user ID for admin actions
+          "Password Reset Email Sent",
+          `Reset password email sent to psychologist ${psychologist.name} (${psychologist.email})`
+        );
+      } catch (logError) {
+        console.error("Error logging reset email activity:", logError.message);
+        // Continue even if logging fails
+      }
+
+      return {
+        success: true,
+        message: `Password reset email sent to ${psychologist.email}`,
+        psychologist: psychologist,
+      };
+    } catch (error) {
+      console.error("Send reset email error:", error.message);
       throw error;
     }
   },

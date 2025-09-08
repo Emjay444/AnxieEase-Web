@@ -5,20 +5,36 @@ const mockPatients = [
   {
     id: "mock-patient-1",
     name: "John Smith",
+    first_name: "John",
+    last_name: "Smith",
     email: "john.smith@example.com",
+    contact_number: "+1234567890",
+    emergency_contact: "+1987654321",
+    gender: "Male",
+    birth_date: "1990-05-15",
     created_at: new Date(Date.now() - 86400000).toISOString(),
     is_active: true,
+    is_email_verified: true,
     assigned_psychologist_id: "mock-psych-1",
     psychologists: { name: "Jane Doe" },
+    date_added: new Date(Date.now() - 86400000).toLocaleDateString("en-GB"),
   },
   {
     id: "mock-patient-2",
     name: "Jane Doe",
+    first_name: "Jane",
+    last_name: "Doe",
     email: "jane.doe@example.com",
+    contact_number: "+1555666777",
+    emergency_contact: "+1444555666",
+    gender: "Female",
+    birth_date: "1985-08-22",
     created_at: new Date(Date.now() - 172800000).toISOString(),
     is_active: true,
+    is_email_verified: true,
     assigned_psychologist_id: null,
     psychologists: null,
+    date_added: new Date(Date.now() - 172800000).toLocaleDateString("en-GB"),
   },
 ];
 
@@ -26,15 +42,27 @@ const mockNotes = [
   {
     id: "mock-note-1",
     patient_id: "mock-patient-1",
+    psychologist_id: "mock-psych-1",
     note_content:
       "Initial consultation completed. Patient shows signs of anxiety.",
     created_at: new Date(Date.now() - 43200000).toISOString(),
+    psychologists: {
+      id: "mock-psych-1",
+      name: "Dr. Jane Smith",
+      email: "jane.smith@clinic.com",
+    },
   },
   {
     id: "mock-note-2",
     patient_id: "mock-patient-1",
+    psychologist_id: "mock-psych-1",
     note_content: "Follow-up session scheduled for next week.",
     created_at: new Date(Date.now() - 21600000).toISOString(),
+    psychologists: {
+      id: "mock-psych-1",
+      name: "Dr. Jane Smith",
+      email: "jane.smith@clinic.com",
+    },
   },
 ];
 
@@ -53,8 +81,17 @@ export const patientService = {
   async getPatientsByPsychologist(psychologistId) {
     try {
       const { data, error } = await supabase
-        .from("users")
-        .select("*")
+        .from("user_profiles")
+        .select(
+          `
+          *,
+          psychologists:assigned_psychologist_id (
+            id,
+            name,
+            email
+          )
+        `
+        )
         .eq("role", "patient")
         .eq("assigned_psychologist_id", psychologistId);
 
@@ -70,8 +107,8 @@ export const patientService = {
         data.map((user) => {
           // Calculate age if birthdate is available
           let age = null;
-          if (user.birthdate) {
-            const birthDate = new Date(user.birthdate);
+          if (user.birth_date) {
+            const birthDate = new Date(user.birth_date);
             const ageDifMs = Date.now() - birthDate.getTime();
             const ageDate = new Date(ageDifMs);
             age = Math.abs(ageDate.getUTCFullYear() - 1970);
@@ -79,10 +116,13 @@ export const patientService = {
 
           return {
             id: user.id,
-            name: user.full_name || user.email.split("@")[0],
+            name:
+              `${user.first_name || ""} ${user.middle_name || ""} ${
+                user.last_name || ""
+              }`.trim() || user.email?.split("@")[0],
             email: user.email,
             assigned_psychologist_id: psychologistId,
-            is_active: user.is_email_verified,
+            is_active: user.is_email_verified || true,
             created_at: user.created_at,
             date_added: new Date(user.created_at).toLocaleDateString("en-GB"),
             time_added: new Date(user.created_at).toLocaleTimeString("en-US", {
@@ -92,8 +132,10 @@ export const patientService = {
             }),
             // Add additional fields for dashboard display
             gender: user.gender || null,
+            contact_number: user.contact_number || null,
+            emergency_contact: user.emergency_contact || null,
+            birth_date: user.birth_date || null,
             age: age,
-            avatar: user.avatar_url || null,
           };
         }) || []
       );
@@ -128,8 +170,17 @@ export const patientService = {
   async getPatientById(patientId) {
     try {
       const { data, error } = await supabase
-        .from("users")
-        .select("*")
+        .from("user_profiles")
+        .select(
+          `
+          *,
+          psychologists:assigned_psychologist_id (
+            id,
+            name,
+            email
+          )
+        `
+        )
         .eq("id", patientId)
         .eq("role", "patient")
         .single();
@@ -138,7 +189,24 @@ export const patientService = {
         console.log("Using mock patient data due to error:", error.message);
         return mockPatients.find((p) => p.id === patientId) || mockPatients[0];
       }
-      return data;
+
+      // Format the data to match expected structure
+      const formattedData = {
+        ...data,
+        name:
+          `${data.first_name || ""} ${data.middle_name || ""} ${
+            data.last_name || ""
+          }`.trim() || data.email?.split("@")[0],
+        date_added: new Date(data.created_at).toLocaleDateString("en-GB"),
+        time_added: new Date(data.created_at).toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+        }),
+        is_active: data.is_email_verified || true,
+      };
+
+      return formattedData;
     } catch (error) {
       console.error("Get patient error:", error.message);
       return mockPatients.find((p) => p.id === patientId) || mockPatients[0];
@@ -150,7 +218,16 @@ export const patientService = {
     try {
       const { data, error } = await supabase
         .from("patient_notes")
-        .select("*")
+        .select(
+          `
+          *,
+          psychologists:psychologist_id (
+            id,
+            name,
+            email
+          )
+        `
+        )
         .eq("patient_id", patientId)
         .order("created_at", { ascending: false });
 
@@ -166,13 +243,33 @@ export const patientService = {
   },
 
   // Add a note to a patient
-  async addPatientNote(patientId, noteContent) {
+  async addPatientNote(patientId, noteContent, psychologistId = null) {
     try {
+      // Get current user if psychologistId not provided
+      if (!psychologistId) {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (user) {
+          // Try to get psychologist record for this user
+          const { data: psychologist } = await supabase
+            .from("psychologists")
+            .select("id")
+            .eq("user_id", user.id)
+            .single();
+
+          if (psychologist) {
+            psychologistId = psychologist.id;
+          }
+        }
+      }
+
       const { data, error } = await supabase
         .from("patient_notes")
         .insert([
           {
             patient_id: patientId,
+            psychologist_id: psychologistId,
             note_content: noteContent,
             created_at: new Date().toISOString(),
           },
@@ -184,6 +281,7 @@ export const patientService = {
         const newNote = {
           id: `mock-note-${mockNotes.length + 1}`,
           patient_id: patientId,
+          psychologist_id: psychologistId,
           note_content: noteContent,
           created_at: new Date().toISOString(),
         };
@@ -196,6 +294,7 @@ export const patientService = {
       const newNote = {
         id: `mock-note-${mockNotes.length + 1}`,
         patient_id: patientId,
+        psychologist_id: psychologistId,
         note_content: noteContent,
         created_at: new Date().toISOString(),
       };

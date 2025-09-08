@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { psychologistAuthService } from "../services/psychologistAuthService";
 import { psychologistService } from "../services/psychologistService";
 import { supabase } from "../services/supabaseClient";
+import { Brain } from "lucide-react";
 
 const PsychologistSetupPage = () => {
   const { email, inviteCode } = useParams();
@@ -141,188 +142,128 @@ const PsychologistSetupPage = () => {
 
   if (loading) {
     return (
-      <div className="setup-page-container">
-        <div className="setup-card">
-          <div className="setup-header">
-            <h2>Loading...</h2>
+      <div className="min-h-screen bg-app flex items-center justify-center">
+        <div className="w-full max-w-md glass rounded-2xl shadow-xl border border-white/40 p-8 text-center">
+          <div className="inline-flex items-center justify-center h-12 w-12 rounded-xl bg-emerald-100 text-emerald-700 mb-3">
+            ⏳
           </div>
+          <h2 className="text-gray-800 font-semibold">Loading...</h2>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="setup-page-container">
-      <div className="setup-card">
-        <div className="setup-header">
-          <h2>Complete Your Account Setup</h2>
-          <p>Please create a password to complete your account setup</p>
+    <div className="min-h-screen bg-app flex items-center justify-center relative overflow-hidden px-4">
+      <div className="blob -top-10 -left-10 w-72 h-72 bg-emerald-200/40 rounded-full"></div>
+      <div className="blob -bottom-16 -right-10 w-80 h-80 bg-teal-200/40 rounded-full"></div>
+      <div className="w-full max-w-lg glass rounded-2xl shadow-xl border border-white/40 p-8 relative">
+        <div className="text-center mb-6">
+          <div className="inline-flex items-center justify-center h-12 w-12 rounded-xl bg-emerald-100 text-emerald-700 mb-3">
+            <Brain className="h-5 w-5" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900">
+            Complete Your Account Setup
+          </h2>
+          <p className="text-gray-600 mt-1">
+            Create a password to finish setting up your account
+          </p>
         </div>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} className="space-y-4">
           {errors.general && (
-            <div className="alert alert-danger" role="alert">
+            <div className="rounded-lg border border-red-200 bg-red-50 text-red-700 p-3 text-sm">
               {errors.general}
             </div>
           )}
 
-          <div className="form-group">
-            <label htmlFor="email">Email</label>
+          <div>
+            <label
+              htmlFor="email"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              Email
+            </label>
             <input
               type="email"
               id="email"
               name="email"
               value={formData.email}
-              className="form-control"
               disabled
+              className="w-full px-4 py-2.5 rounded-lg border border-gray-300 bg-gray-100 text-gray-600"
             />
           </div>
 
-          <div className="form-group">
-            <label htmlFor="password">Create Password</label>
-            <div className="password-input-wrapper">
+          <div>
+            <label
+              htmlFor="password"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              Create Password
+            </label>
+            <div className="relative">
               <input
                 type={showPassword ? "text" : "password"}
                 id="password"
                 name="password"
                 value={formData.password}
                 onChange={handleInputChange}
-                className={`form-control ${
-                  errors.password ? "is-invalid" : ""
+                aria-label="Create password"
+                className={`w-full px-4 py-2.5 rounded-lg border bg-white/70 focus:outline-none focus:ring-2 focus:border-transparent ${
+                  errors.password
+                    ? "border-red-300 focus:ring-red-300"
+                    : "border-gray-300 focus:ring-emerald-300"
                 }`}
-                placeholder="Create a secure password"
               />
               <button
                 type="button"
-                className="password-toggle"
+                className="absolute inset-y-0 right-0 px-3 text-sm text-gray-600 hover:text-gray-900"
                 onClick={togglePasswordVisibility}
               >
                 {showPassword ? "Hide" : "Show"}
               </button>
             </div>
             {errors.password && (
-              <div className="invalid-feedback">{errors.password}</div>
+              <div className="mt-2 text-sm text-red-600">{errors.password}</div>
             )}
           </div>
 
-          <div className="form-group">
-            <label htmlFor="confirmPassword">Confirm Password</label>
+          <div>
+            <label
+              htmlFor="confirmPassword"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              Confirm Password
+            </label>
             <input
               type={showPassword ? "text" : "password"}
               id="confirmPassword"
               name="confirmPassword"
               value={formData.confirmPassword}
               onChange={handleInputChange}
-              className={`form-control ${
-                errors.confirmPassword ? "is-invalid" : ""
+              aria-label="Confirm password"
+              className={`w-full px-4 py-2.5 rounded-lg border bg-white/70 focus:outline-none focus:ring-2 focus:border-transparent ${
+                errors.confirmPassword
+                  ? "border-red-300 focus:ring-red-300"
+                  : "border-gray-300 focus:ring-emerald-300"
               }`}
-              placeholder="Confirm your password"
             />
             {errors.confirmPassword && (
-              <div className="invalid-feedback">{errors.confirmPassword}</div>
+              <div className="mt-2 text-sm text-red-600">
+                {errors.confirmPassword}
+              </div>
             )}
           </div>
 
           <button
             type="submit"
-            className="btn btn-primary btn-block setup-button"
+            className="w-full py-2.5 rounded-lg text-white font-medium shadow-sm btn-gradient hover:opacity-95 active:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
             disabled={loading}
           >
             {loading ? "Setting up..." : "Complete Setup"}
           </button>
         </form>
       </div>
-
-      <style>{`
-        .setup-page-container {
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          min-height: 100vh;
-          background-color: #f8f9fa;
-        }
-
-        .setup-card {
-          width: 100%;
-          max-width: 500px;
-          padding: 2rem;
-          background-color: white;
-          border-radius: 10px;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        }
-
-        .setup-header {
-          text-align: center;
-          margin-bottom: 2rem;
-        }
-
-        .setup-header h2 {
-          color: #333;
-          margin-bottom: 0.5rem;
-        }
-
-        .setup-header p {
-          color: #666;
-        }
-
-        .form-group {
-          margin-bottom: 1.5rem;
-        }
-
-        .form-control {
-          height: 48px;
-          border-radius: 8px;
-          font-size: 1rem;
-        }
-
-        .password-input-wrapper {
-          position: relative;
-        }
-
-        .password-toggle {
-          position: absolute;
-          right: 10px;
-          top: 50%;
-          transform: translateY(-50%);
-          background: none;
-          border: none;
-          color: #6c757d;
-          cursor: pointer;
-        }
-
-        .setup-button {
-          height: 48px;
-          font-size: 1rem;
-          font-weight: 500;
-          background-color: #28a745;
-          border-color: #28a745;
-          width: 100%;
-          margin-top: 1rem;
-        }
-
-        .setup-button:hover {
-          background-color: #218838;
-          border-color: #1e7e34;
-        }
-
-        .invalid-feedback {
-          display: block;
-          color: #dc3545;
-          margin-top: 0.25rem;
-        }
-
-        .alert {
-          padding: 1rem;
-          margin-bottom: 1rem;
-          border-radius: 8px;
-        }
-
-        .alert-danger {
-          background-color: #f8d7da;
-          border-color: #f5c6cb;
-          color: #721c24;
-        }
-      `}</style>
     </div>
   );
 };

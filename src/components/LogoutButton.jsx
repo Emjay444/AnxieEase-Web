@@ -22,18 +22,77 @@ const LogoutButton = () => {
 
   return (
     <button
-      className="btn btn-danger"
+      className="inline-flex items-center px-3 py-2 text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed rounded-lg"
       onClick={handleLogout}
       disabled={isLoggingOut}
       title="Logout"
     >
       {isLoggingOut ? (
         <>
-          <span
-            className="spinner-border spinner-border-sm me-2"
-            role="status"
-            aria-hidden="true"
-          ></span>
+          <svg
+            className="animate-spin mr-2"
+            width="16"
+            height="16"
+            viewBox="0 0 20 20"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M10 3.75V6.25"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+            <path
+              opacity="0.5"
+              d="M13.75 5L12.5 7.5"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+            <path
+              opacity="0.25"
+              d="M15 10H12.5"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+            <path
+              opacity="0.15"
+              d="M13.75 15L12.5 12.5"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+            <path
+              opacity="0.35"
+              d="M10 16.25V13.75"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+            <path
+              opacity="0.5"
+              d="M6.25 15L7.5 12.5"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+            <path
+              opacity="0.65"
+              d="M5 10H7.5"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+            <path
+              opacity="0.8"
+              d="M6.25 5L7.5 7.5"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+          </svg>
           Logging out...
         </>
       ) : (
@@ -43,7 +102,7 @@ const LogoutButton = () => {
             width="16"
             height="16"
             fill="currentColor"
-            className="bi bi-box-arrow-right me-2"
+            className="mr-2"
             viewBox="0 0 16 16"
           >
             <path

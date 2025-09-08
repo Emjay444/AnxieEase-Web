@@ -14,7 +14,7 @@ export const usePatient = () => {
 };
 
 export const PatientProvider = ({ children }) => {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, isPsychologist } = useAuth();
   const [patients, setPatients] = useState([]);
   const [currentPatient, setCurrentPatient] = useState(null);
   const [patientNotes, setPatientNotes] = useState([]);
@@ -31,27 +31,48 @@ export const PatientProvider = ({ children }) => {
 
       let data;
       if (isAdmin()) {
-        // Admin can see all patients
+        // Admin can see all patients - no psychologist lookup needed
+        console.log(
+          "⚠️ PatientContext: Admin detected - loading all patients without psychologist lookup"
+        );
         data = await patientService.getAllPatients();
-      } else {
+        setPatients(data);
+        return data;
+      } else if (isPsychologist() && user) {
         // For psychologists, we need to get their actual psychologist ID from the psychologists table
         // because patients are assigned to psychologist IDs, not auth user IDs
         try {
-          // First try to find by user_id
+          // First try to find by user_id (use limit(1) to avoid 406 when no rows)
           const { data: psychData, error: psychError } = await supabase
             .from("psychologists")
             .select("id")
-            .eq("user_id", user.id);
+            .eq("user_id", user.id)
+            .limit(1);
 
-          if (psychError || !psychData || psychData.length === 0) {
-            // If not found by user_id, try with email
+          if (psychError) {
+            console.error(
+              "Error querying psychologists by user_id:",
+              psychError
+            );
+            // Try with email as fallback
             const { data: psychByEmail, error: emailError } = await supabase
               .from("psychologists")
               .select("id")
-              .eq("email", user.email);
+              .eq("email", user.email)
+              .limit(1);
 
-            if (emailError || !psychByEmail || psychByEmail.length === 0) {
-              // If still not found, return empty array instead of throwing error
+            if (emailError) {
+              console.error(
+                "Error querying psychologists by email:",
+                emailError
+              );
+              // If still error, return empty array
+              setPatients([]);
+              return [];
+            }
+
+            if (!psychByEmail || psychByEmail.length === 0) {
+              // If no psychologist found by email either, return empty array
               console.warn(
                 "No psychologist profile found. Showing empty patient list."
               );
@@ -59,15 +80,42 @@ export const PatientProvider = ({ children }) => {
               return [];
             }
 
-            // Use the first psychologist record found by email
-            data = await patientService.getPatientsByPsychologist(
-              psychByEmail[0].id
-            );
+            // Use the psychologist record found by email
+            const psychId = psychByEmail?.[0]?.id;
+            data = await patientService.getPatientsByPsychologist(psychId);
+          } else if (!psychData || psychData.length === 0) {
+            // No psychologist found by user_id, try with email
+            const { data: psychByEmail, error: emailError } = await supabase
+              .from("psychologists")
+              .select("id")
+              .eq("email", user.email)
+              .limit(1);
+
+            if (emailError) {
+              console.error(
+                "Error querying psychologists by email:",
+                emailError
+              );
+              setPatients([]);
+              return [];
+            }
+
+            if (!psychByEmail || psychByEmail.length === 0) {
+              // If still not found, return empty array
+              console.warn(
+                "No psychologist profile found. Showing empty patient list."
+              );
+              setPatients([]);
+              return [];
+            }
+
+            // Use the psychologist record found by email
+            const psychId = psychByEmail?.[0]?.id;
+            data = await patientService.getPatientsByPsychologist(psychId);
           } else {
-            // Use the first psychologist record found by user_id
-            data = await patientService.getPatientsByPsychologist(
-              psychData[0].id
-            );
+            // Use the psychologist record found by user_id
+            const psychId = psychData?.[0]?.id;
+            data = await patientService.getPatientsByPsychologist(psychId);
           }
         } catch (psychErr) {
           console.error(
@@ -78,6 +126,10 @@ export const PatientProvider = ({ children }) => {
           setPatients([]);
           return [];
         }
+      } else {
+        // Patients/others: show empty list
+        setPatients([]);
+        return [];
       }
 
       setPatients(data);

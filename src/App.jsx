@@ -1,60 +1,109 @@
 import {
-  BrowserRouter as Router,
-  Routes,
-  Route,
+  createBrowserRouter,
+  RouterProvider,
   Navigate,
+  Outlet,
 } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { PatientProvider } from "./contexts/PatientContext";
-import LoginPage from "./components/LoginPage";
-import Dashboard from "./components/Dashboard";
+import LoginPageNew from "./components/LoginPageNew";
+import DashboardNew from "./components/DashboardNew";
 import PatientProfile from "./components/PatientProfile";
-import AdminPanel from "./components/AdminPanel";
+import AdminPanelNew from "./components/AdminPanelNew";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ForgotPasswordPage from "./components/ForgotPasswordPage";
 import ResetPasswordPage from "./components/ResetPasswordPage";
 import NewPasswordPage from "./components/NewPasswordPage";
 import PsychologistSetupPage from "./components/PsychologistSetupPage";
-import "./App.css";
+
+// Define the route structure using the data router format
+const router = createBrowserRouter(
+  [
+    // Public routes
+    {
+      path: "/login",
+      element: <LoginPageNew />,
+    },
+    {
+      path: "/forgot-password",
+      element: <ForgotPasswordPage />,
+    },
+    {
+      path: "/reset-password",
+      element: <ResetPasswordPage />,
+    },
+    {
+      path: "/new-password",
+      element: <NewPasswordPage />,
+    },
+    {
+      path: "/psychologist-setup/:email/:inviteCode",
+      element: <PsychologistSetupPage />,
+    },
+    {
+      path: "/psychologist-setup",
+      element: <PsychologistSetupPage />,
+    },
+    {
+      path: "/",
+      element: <Navigate to="/login" replace />,
+    },
+
+    // Protected routes for all authenticated users (wrapped with PatientProvider)
+    {
+      element: <ProtectedRoute />,
+      children: [
+        {
+          element: (
+            <PatientProvider>
+              <Outlet />
+            </PatientProvider>
+          ),
+          children: [
+            {
+              path: "/dashboard",
+              element: <DashboardNew />,
+            },
+            {
+              path: "/patient/:patientId",
+              element: <PatientProfile />,
+            },
+          ],
+        },
+      ],
+    },
+
+    // Protected routes for admin only
+    {
+      element: <ProtectedRoute requireAdmin={true} />,
+      children: [
+        {
+          path: "/admin",
+          element: <AdminPanelNew />,
+        },
+      ],
+    },
+
+    // Fallback route
+    {
+      path: "*",
+      element: <Navigate to="/login" replace />,
+    },
+  ],
+  {
+    // Enable future flags to address deprecation warnings
+    future: {
+      v7_startTransition: true,
+      v7_relativeSplatPath: true,
+    },
+  }
+);
 
 function App() {
   return (
-    <Router>
-      <AuthProvider>
-        <PatientProvider>
-          <Routes>
-            {/* Public routes */}
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-            <Route path="/reset-password" element={<ResetPasswordPage />} />
-            <Route path="/new-password" element={<NewPasswordPage />} />
-            <Route
-              path="/psychologist-setup/:email/:inviteCode"
-              element={<PsychologistSetupPage />}
-            />
-            <Route
-              path="/psychologist-setup"
-              element={<PsychologistSetupPage />}
-            />
-            <Route path="/" element={<Navigate to="/login" replace />} />
-
-            {/* Protected routes for all authenticated users */}
-            <Route element={<ProtectedRoute />}>
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/patient/:patientId" element={<PatientProfile />} />
-            </Route>
-
-            {/* Protected routes for admin only */}
-            <Route element={<ProtectedRoute requireAdmin={true} />}>
-              <Route path="/admin" element={<AdminPanel />} />
-            </Route>
-
-            {/* Fallback route */}
-            <Route path="*" element={<Navigate to="/login" replace />} />
-          </Routes>
-        </PatientProvider>
-      </AuthProvider>
-    </Router>
+    <AuthProvider>
+      <RouterProvider router={router} />
+    </AuthProvider>
   );
 }
 

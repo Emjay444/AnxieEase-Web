@@ -74,6 +74,17 @@ export const authService = {
     }
   },
 
+  // Get current session
+  async getSession() {
+    try {
+      const { data, error } = await supabase.auth.getSession();
+      return { data, error };
+    } catch (error) {
+      console.error("Get session error:", error.message);
+      return { data: null, error };
+    }
+  },
+
   // Get current user
   async getCurrentUser() {
     try {
@@ -90,43 +101,45 @@ export const authService = {
     try {
       if (!userId) return null;
 
-      // First check user metadata
-      const { data: userData } = await supabase.auth.getUser();
-      if (userData?.user?.user_metadata?.role) {
-        return userData.user.user_metadata.role;
-      }
+      console.log("Getting role for user ID:", userId);
 
-      // Then check psychologists table by user_id
-      const { data: psychData } = await supabase
+      // First, check user metadata for explicit role
+      const { data: userData } = await supabase.auth.getUser();
+      const metaRole = userData?.user?.user_metadata?.role;
+
+      console.log("User metadata role:", metaRole);
+
+      // Prefer explicit role from metadata first, and short-circuit admin
+      if (metaRole === "admin") return "admin";
+      if (metaRole === "psychologist") return "psychologist";
+      if (metaRole) return metaRole;
+
+      // If no metadata role, check if user exists in psychologists table
+      console.log("Checking psychologists table for user:", userId);
+      const { data: psychologist, error } = await supabase
         .from("psychologists")
-        .select("id, email")
+        .select("id")
         .eq("user_id", userId)
         .single();
 
-      if (psychData) return "psychologist";
-
-      // If not found by user_id, try checking by email
-      const userEmail = userData?.user?.email;
-      if (userEmail) {
-        const { data: psychByEmail } = await supabase
-          .from("psychologists")
-          .select("id, email")
-          .eq("email", userEmail)
-          .single();
-
-        if (psychByEmail) return "psychologist";
+      if (error) {
+        console.log("Psychologist lookup error:", error.message);
+        // If it's a "not found" error, we cannot conclude admin; return null
+        return null;
       }
 
-      // Check if user is admin
-      const { data: adminData } = await supabase.auth.getUser();
-      if (adminData?.user?.user_metadata?.role === "admin") {
-        return "admin";
+      // If found in psychologists table, they're a psychologist
+      if (psychologist) {
+        console.log("User found in psychologists table");
+        return "psychologist";
       }
 
-      return null;
+  // Default fallback: unknown
+  console.log("No role found in metadata or psychologists table");
+  return null;
     } catch (error) {
       console.error("Get user role error:", error.message);
-      return null;
+  return null;
     }
   },
 

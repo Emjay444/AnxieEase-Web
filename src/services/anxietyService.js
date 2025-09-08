@@ -115,4 +115,102 @@ export const anxietyService = {
       };
     }
   },
+
+  // Robust fetch: support both 'anxiety_records' and 'anxiety_record' table names and timestamp/date columns
+  async getAnxietyRecordsRobust(patientId) {
+    // Try plural first
+    let records = [];
+    try {
+      const { data, error } = await supabase
+        .from("anxiety_records")
+        .select("*")
+        .eq("user_id", patientId)
+        .order("timestamp", { ascending: true });
+      if (!error && data) records = data;
+    } catch (_) {}
+
+    // If still empty, try singular table
+    if (!records || records.length === 0) {
+      try {
+        // Try ordering by timestamp first, then date
+        let resp = await supabase
+          .from("anxiety_record")
+          .select("*")
+          .eq("user_id", patientId)
+          .order("timestamp", { ascending: true });
+        if (resp.error) {
+          resp = await supabase
+            .from("anxiety_record")
+            .select("*")
+            .eq("user_id", patientId)
+            .order("date", { ascending: true });
+        }
+        if (!resp.error && resp.data) records = resp.data;
+      } catch (_) {}
+    }
+
+    // Normalize to include a Date value in 'ts'
+    const normalized = (records || [])
+      .map((r) => {
+        const iso = r.timestamp || r.date || r.created_at;
+        const ts = iso ? new Date(iso) : null;
+        return { ...r, ts };
+      })
+      .filter((r) => r.ts && !isNaN(r.ts.getTime()));
+
+    // Ensure ascending order
+    normalized.sort((a, b) => a.ts - b.ts);
+    return normalized;
+  },
+
+  // Build a daily time series for the last N days
+  async getAnxietyTimeSeries(patientId, days = 30) {
+    const records = await this.getAnxietyRecordsRobust(patientId);
+    const end = new Date();
+    const start = new Date(end);
+    start.setDate(end.getDate() - (days - 1));
+
+    // Initialize map with zero counts
+    const map = new Map();
+    for (let i = 0; i < days; i++) {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      const key = d.toISOString().slice(0, 10); // YYYY-MM-DD
+      map.set(key, 0);
+    }
+
+    // Count records per day
+    records.forEach((r) => {
+      const key = r.ts.toISOString().slice(0, 10);
+      if (map.has(key)) map.set(key, (map.get(key) || 0) + 1);
+    });
+
+    // Build array for chart
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+    });
+    return Array.from(map.entries()).map(([key, count]) => ({
+      date: formatter.format(new Date(key)),
+      count,
+    }));
+  },
+
+  // Summary stats
+  async getAnxietySummary(patientId) {
+    const records = await this.getAnxietyRecordsRobust(patientId);
+    const totalAllTime = records.length;
+    const now = new Date();
+    const last30Start = new Date();
+    last30Start.setDate(now.getDate() - 29);
+    const inLast30 = records.filter(
+      (r) => r.ts >= last30Start && r.ts <= now
+    ).length;
+    const ratePerWeek = inLast30 / 4; // approx per week over last 30 days
+    return {
+      totalAllTime,
+      attacksLast30: inLast30,
+      ratePerWeek: Number(ratePerWeek.toFixed(1)),
+    };
+  },
 };

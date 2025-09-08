@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import "./Login.css";
+import { KeyRound } from "lucide-react";
 
 const NewPasswordPage = () => {
   const [password, setPassword] = useState("");
@@ -12,7 +12,7 @@ const NewPasswordPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
-  
+
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -21,12 +21,14 @@ const NewPasswordPage = () => {
     const queryParams = new URLSearchParams(location.search);
     const tokenFromUrl = queryParams.get("token");
     const emailFromUrl = queryParams.get("email");
-    
+
     if (tokenFromUrl && emailFromUrl) {
       setToken(tokenFromUrl);
       setEmail(emailFromUrl);
     } else {
-      setError("Invalid or missing reset information. Please try the reset password process again.");
+      setError(
+        "Invalid or missing reset information. Please try the reset password process again."
+      );
     }
   }, [location]);
 
@@ -43,50 +45,49 @@ const NewPasswordPage = () => {
   const validatePassword = () => {
     // Reset errors
     setError("");
-    
+
     // Check for empty password
     if (!password) {
       setError("Password is required");
       return false;
     }
-    
+
     // Check password length
     if (password.length < 6) {
       setError("Password must be at least 6 characters");
       return false;
     }
-    
+
     // Check if passwords match
     if (password !== confirmPassword) {
       setError("Passwords do not match");
       return false;
     }
-    
+
     return true;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     // Validate form
     if (!validatePassword()) {
       return;
     }
-    
+
     try {
       setIsSubmitting(true);
-      
+
       // Simulate API call to reset password
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
       // Simulate successful password reset
       setSuccess(true);
-      
+
       // Redirect to login page after a delay
       setTimeout(() => {
         navigate("/login");
       }, 3000);
-      
     } catch (error) {
       setError("Failed to reset password. Please try again.");
     } finally {
@@ -95,143 +96,253 @@ const NewPasswordPage = () => {
   };
 
   return (
-    <div className="login-container">
-      <div className="login-form-wrapper">
-        <div className="text-center mb-4">
-          <h1>
-            <span className="text-gradient">Anxie</span>Ease
-          </h1>
-          <h2>Create New Password</h2>
+    <div className="min-h-screen bg-app flex items-center justify-center relative overflow-hidden px-4">
+      <div className="blob -top-10 -left-10 w-72 h-72 bg-emerald-200/40 rounded-full"></div>
+      <div className="blob -bottom-16 -right-10 w-80 h-80 bg-teal-200/40 rounded-full"></div>
+      <div className="w-full max-w-md glass rounded-2xl shadow-xl border border-white/40 p-8 relative">
+        <div className="text-center mb-6">
+          <div className="inline-flex items-center justify-center h-12 w-12 rounded-xl bg-emerald-100 text-emerald-700 mb-3">
+            <KeyRound className="h-5 w-5" />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900">AnxieEase</h1>
+          <p className="text-gray-600 mt-1">Create New Password</p>
         </div>
 
         {!token && (
-          <div className="error-message">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M10 18C14.4183 18 18 14.4183 18 10C18 5.58172 14.4183 2 10 2C5.58172 2 2 5.58172 2 10C2 14.4183 5.58172 18 10 18Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M10 6V10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M10 14H10.01" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 text-red-700 p-3 flex items-start">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 20 20"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              className="mr-2 mt-0.5"
+            >
+              <path
+                d="M10 18C14.4183 18 18 14.4183 18 10C18 5.58172 14.4183 2 10 2C5.58172 2 2 5.58172 2 10C2 14.4183 5.58172 18 10 18Z"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M10 6V10"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M10 14H10.01"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             </svg>
-            Invalid or missing reset token.
+            <div>Invalid or missing reset token.</div>
           </div>
         )}
 
         {success ? (
           <div className="text-center">
-            <div className="success-message">
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M10 18C14.4183 18 18 14.4183 18 10C18 5.58172 14.4183 2 10 2C5.58172 2 2 5.58172 2 10C2 14.4183 5.58172 18 10 18Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M7 10L9 12L13 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            <div className="mb-2 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 p-3 inline-flex items-center">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 20 20"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                className="mr-2"
+              >
+                <path
+                  d="M10 18C14.4183 18 18 14.4183 18 10C18 5.58172 14.4183 2 10 2C5.58172 2 2 5.58172 2 10C2 14.4183 5.58172 18 10 18Z"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M7 10L9 12L13 8"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
               </svg>
-              Password reset successful!
+              Password update successful!
             </div>
-            <p className="mt-2 text-center">
+            <p className="text-gray-600">
               Your password has been updated. Redirecting to login page...
             </p>
           </div>
         ) : (
-          <form onSubmit={handleSubmit}>
-            <div className="form-group">
-              <div className="password-input-container">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                New Password
+              </label>
+              <div className="relative">
                 <input
                   type={showPassword ? "text" : "password"}
-                  className={error && !confirmPassword ? "error" : ""}
-                  placeholder="New Password"
+                  aria-label="New password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={isSubmitting || !token}
+                  className={`w-full px-4 py-2.5 rounded-lg border bg-white/70 focus:outline-none focus:ring-2 focus:border-transparent ${
+                    error && !confirmPassword
+                      ? "border-red-300 focus:ring-red-300"
+                      : "border-gray-300 focus:ring-emerald-300"
+                  }`}
                 />
                 <button
                   type="button"
-                  className="toggle-password"
                   onClick={togglePasswordVisibility}
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                  tabIndex={0}
+                  className="absolute inset-y-0 right-0 px-3 text-sm text-gray-600 hover:text-gray-900"
                   disabled={isSubmitting || !token}
                 >
-                  {showPassword ? (
-                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M2.5 10C2.5 10 5 4.16667 10 4.16667C15 4.16667 17.5 10 17.5 10C17.5 10 15 15.8333 10 15.8333C5 15.8333 2.5 10 2.5 10Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                      <path d="M10 12.5C11.3807 12.5 12.5 11.3807 12.5 10C12.5 8.61929 11.3807 7.5 10 7.5C8.61929 7.5 7.5 8.61929 7.5 10C7.5 11.3807 8.61929 12.5 10 12.5Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  ) : (
-                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M11.7678 11.7678C11.2989 12.2366 10.663 12.5 10 12.5C9.33696 12.5 8.70107 12.2366 8.23223 11.7678C7.76339 11.2989 7.5 10.663 7.5 10C7.5 9.33696 7.76339 8.70107 8.23223 8.23223C8.70107 7.76339 9.33696 7.5 10 7.5C10.663 7.5 11.2989 7.76339 11.7678 8.23223" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                      <path d="M2.04834 2.04834L17.9517 17.9517" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                      <path d="M8.11334 3.89667C8.72001 3.70334 9.35334 3.60834 10 3.60834C14.1667 3.60834 16.3917 8.33334 16.3917 8.33334C15.9367 9.215 15.3833 10.0233 14.7517 10.7433" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                      <path d="M5.24834 5.25C4.61668 5.97 4.06334 6.77834 3.60834 7.66C3.60834 7.66 5.83334 12.3917 10 12.3917C10.6467 12.3917 11.28 12.2967 11.8867 12.1033" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  )}
+                  {showPassword ? "Hide" : "Show"}
                 </button>
               </div>
             </div>
 
-            <div className="form-group">
-              <div className="password-input-container">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Confirm Password
+              </label>
+              <div className="relative">
                 <input
                   type={showConfirmPassword ? "text" : "password"}
-                  className={error && confirmPassword !== password ? "error" : ""}
-                  placeholder="Confirm Password"
+                  aria-label="Confirm new password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   disabled={isSubmitting || !token}
+                  className={`w-full px-4 py-2.5 rounded-lg border bg-white/70 focus:outline-none focus:ring-2 focus:border-transparent ${
+                    error && confirmPassword !== password
+                      ? "border-red-300 focus:ring-red-300"
+                      : "border-gray-300 focus:ring-emerald-300"
+                  }`}
                 />
                 <button
                   type="button"
-                  className="toggle-password"
                   onClick={toggleConfirmPasswordVisibility}
-                  aria-label={showConfirmPassword ? "Hide password" : "Show password"}
-                  tabIndex={0}
+                  className="absolute inset-y-0 right-0 px-3 text-sm text-gray-600 hover:text-gray-900"
                   disabled={isSubmitting || !token}
                 >
-                  {showConfirmPassword ? (
-                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M2.5 10C2.5 10 5 4.16667 10 4.16667C15 4.16667 17.5 10 17.5 10C17.5 10 15 15.8333 10 15.8333C5 15.8333 2.5 10 2.5 10Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                      <path d="M10 12.5C11.3807 12.5 12.5 11.3807 12.5 10C12.5 8.61929 11.3807 7.5 10 7.5C8.61929 7.5 7.5 8.61929 7.5 10C7.5 11.3807 8.61929 12.5 10 12.5Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  ) : (
-                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M11.7678 11.7678C11.2989 12.2366 10.663 12.5 10 12.5C9.33696 12.5 8.70107 12.2366 8.23223 11.7678C7.76339 11.2989 7.5 10.663 7.5 10C7.5 9.33696 7.76339 8.70107 8.23223 8.23223C8.70107 7.76339 9.33696 7.5 10 7.5C10.663 7.5 11.2989 7.76339 11.7678 8.23223" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                      <path d="M2.04834 2.04834L17.9517 17.9517" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                      <path d="M8.11334 3.89667C8.72001 3.70334 9.35334 3.60834 10 3.60834C14.1667 3.60834 16.3917 8.33334 16.3917 8.33334C15.9367 9.215 15.3833 10.0233 14.7517 10.7433" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                      <path d="M5.24834 5.25C4.61668 5.97 4.06334 6.77834 3.60834 7.66C3.60834 7.66 5.83334 12.3917 10 12.3917C10.6467 12.3917 11.28 12.2967 11.8867 12.1033" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  )}
+                  {showConfirmPassword ? "Hide" : "Show"}
                 </button>
               </div>
             </div>
-            
+
             {error && (
-              <div className="field-error">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M8 14C11.3137 14 14 11.3137 14 8C14 4.68629 11.3137 2 8 2C4.68629 2 2 4.68629 2 8C2 11.3137 4.68629 14 8 14Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M8 5V8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M8 11H8.01" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              <div className="rounded-lg border border-red-200 bg-red-50 text-red-700 p-3 text-sm flex items-start">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="mr-2 mt-0.5"
+                >
+                  <path
+                    d="M8 14C11.3137 14 14 11.3137 14 8C14 4.68629 11.3137 2 8 2C4.68629 2 2 4.68629 2 8C2 11.3137 4.68629 14 8 14Z"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M8 5V8"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M8 11H8.01"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
                 </svg>
                 {error}
               </div>
             )}
-            
-            <div className="mb-4"></div>
-            
+
             <button
               type="submit"
-              className="login-button"
+              className="w-full py-2.5 rounded-lg text-white font-medium shadow-sm btn-gradient hover:opacity-95 active:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
               disabled={isSubmitting || !token}
             >
               {isSubmitting ? (
-                <>
-                  <svg className="animate-spin -ml-1 mr-2" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M10 3.75V6.25" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                    <path opacity="0.5" d="M13.75 5L12.5 7.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                    <path opacity="0.25" d="M15 10H12.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                    <path opacity="0.15" d="M13.75 15L12.5 12.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                    <path opacity="0.35" d="M10 16.25V13.75" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                    <path opacity="0.5" d="M6.25 15L7.5 12.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                    <path opacity="0.65" d="M5 10H7.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                    <path opacity="0.8" d="M6.25 5L7.5 7.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                <span className="inline-flex items-center">
+                  <svg
+                    className="animate-spin -ml-1 mr-2"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 20 20"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M10 3.75V6.25"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    />
+                    <path
+                      opacity="0.5"
+                      d="M13.75 5L12.5 7.5"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    />
+                    <path
+                      opacity="0.25"
+                      d="M15 10H12.5"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    />
+                    <path
+                      opacity="0.15"
+                      d="M13.75 15L12.5 12.5"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    />
+                    <path
+                      opacity="0.35"
+                      d="M10 16.25V13.75"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    />
+                    <path
+                      opacity="0.5"
+                      d="M6.25 15L7.5 12.5"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    />
+                    <path
+                      opacity="0.65"
+                      d="M5 10H7.5"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    />
+                    <path
+                      opacity="0.8"
+                      d="M6.25 5L7.5 7.5"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    />
                   </svg>
                   Updating Password...
-                </>
+                </span>
               ) : (
                 "Update Password"
               )}
@@ -243,4 +354,4 @@ const NewPasswordPage = () => {
   );
 };
 
-export default NewPasswordPage; 
+export default NewPasswordPage;

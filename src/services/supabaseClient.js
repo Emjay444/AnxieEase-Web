@@ -47,14 +47,162 @@ const createMockClient = () => {
   };
 };
 
+/**
+ * Create a safer Supabase client that prevents 406 errors by intercepting .single() and .maybeSingle() calls
+ * @param {string} url - Supabase URL
+ * @param {string} key - Supabase API key
+ * @param {object} options - Client options
+ * @returns {object} Enhanced Supabase client
+ */
+function createSafeClient(url, key, options = {}) {
+  // Create the regular Supabase client
+  const originalClient = createClient(url, key, options);
+
+  // Create a proxy to intercept from() calls
+  return new Proxy(originalClient, {
+    get(target, prop) {
+      // Intercept the 'from' method to wrap its result
+      if (prop === "from") {
+        const originalFrom = target[prop];
+
+        // Return a wrapped version of from()
+        return function (table) {
+          const queryBuilder = originalFrom.call(target, table);
+
+          // Create a proxy for the query builder to intercept select()
+          return new Proxy(queryBuilder, {
+            get(qTarget, qProp) {
+              if (qProp === "select") {
+                const originalSelect = qTarget[qProp];
+
+                // Return a wrapped version of select()
+                return function (...args) {
+                  const selectBuilder = originalSelect.apply(qTarget, args);
+
+                  // Create a proxy for the select builder
+                  return new Proxy(selectBuilder, {
+                    get(sTarget, sProp) {
+                      // Intercept the single() and maybeSingle() methods
+                      if (sProp === "single" || sProp === "maybeSingle") {
+                        const originalMethod = sTarget[sProp];
+
+                        // Return a safer version of single/maybeSingle
+                        return async function () {
+                          try {
+                            // Get the current URL being called
+                            const urlObj = new URL(target.rest.url);
+                            const path = urlObj.pathname.split("/");
+                            const currentTable = path[path.length - 1];
+
+                            // Get a clean URL for logging by ensuring we don't duplicate the path
+                            const baseUrl = target.rest.url.replace(/\/+$/, ""); // Remove trailing slashes
+                            const requestPath = sTarget.url.pathname.replace(
+                              /^\/+/,
+                              ""
+                            ); // Remove leading slashes
+                            const cleanUrl = `${baseUrl}/${requestPath}${sTarget.url.search}`;
+
+                            // Only log in development mode and if DEBUG_SUPABASE is enabled
+                            if (
+                              import.meta?.env?.DEV &&
+                              import.meta?.env?.VITE_DEBUG_SUPABASE === "true"
+                            ) {
+                              console.log(
+                                `🔧 SafeSupabase: Making ${sProp}() safer:\nOriginal: ${cleanUrl}\nNow using limit(1)&return=array instead of ${sProp}()`
+                              );
+                            }
+
+                            // Use limit(1) and handle the array response safely
+                            const response = await sTarget.limit(1);
+
+                            // Handle the response as if single() was called
+                            if (response.error) {
+                              return { data: null, error: response.error };
+                            }
+
+                            if (response.data.length === 0) {
+                              // No data found
+                              if (sProp === "single") {
+                                // single() would throw an error for no results
+                                return {
+                                  data: null,
+                                  error: {
+                                    message: "No rows found",
+                                    details: "",
+                                    hint: "",
+                                    code: "PGRST116",
+                                  },
+                                };
+                              } else {
+                                // maybeSingle() returns null for no results
+                                return { data: null, error: null };
+                              }
+                            } else if (response.data.length === 1) {
+                              // Exactly one result - return the object directly
+                              return { data: response.data[0], error: null };
+                            } else {
+                              // Multiple results - single() would throw an error
+                              if (sProp === "single") {
+                                return {
+                                  data: null,
+                                  error: {
+                                    message: "Multiple rows returned",
+                                    details: "",
+                                    hint: "",
+                                    code: "PGRST102",
+                                  },
+                                };
+                              } else {
+                                // maybeSingle() returns the first result
+                                return { data: response.data[0], error: null };
+                              }
+                            }
+                          } catch (err) {
+                            console.error(
+                              "Error in safe single() implementation:",
+                              err
+                            );
+                            // Fall back to original method if our implementation fails
+                            return originalMethod.call(sTarget);
+                          }
+                        };
+                      }
+
+                      // Pass through all other properties
+                      return Reflect.get(sTarget, sProp);
+                    },
+                  });
+                };
+              }
+
+              // Pass through all other properties
+              return Reflect.get(qTarget, qProp);
+            },
+          });
+        };
+      }
+
+      // Pass through all other properties
+      return Reflect.get(target, prop);
+    },
+  });
+}
+
 // Create a Supabase client if credentials are available
 let supabase;
 
 try {
   if (supabaseUrl && supabaseAnonKey) {
-    // Create real Supabase client
-    supabase = createClient(supabaseUrl, supabaseAnonKey);
-    console.log("Supabase client initialized with provided credentials");
+    // Create safer Supabase client that prevents 406 errors
+    supabase = createSafeClient(supabaseUrl, supabaseAnonKey);
+
+    // Only log in development mode and if debugging is enabled
+    if (
+      import.meta?.env?.DEV &&
+      import.meta?.env?.VITE_DEBUG_SUPABASE === "true"
+    ) {
+      console.log("Supabase client initialized with provided credentials");
+    }
   } else {
     // Fallback to mock client if credentials are missing
     console.warn(
