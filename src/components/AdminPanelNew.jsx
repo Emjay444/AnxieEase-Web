@@ -707,9 +707,15 @@ const AdminPanelNew = () => {
         <div className="px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <h1 className="text-2xl font-bold text-gray-900">
-                AnxieEase Admin
-              </h1>
+              <img
+                src="/anxieease-logo.png"
+                alt="AnxieEase"
+                className="h-6 w-6 logo-breathe"
+                onError={(e) => {
+                  e.currentTarget.style.display = "none";
+                }}
+              />
+              <h1 className="text-2xl font-bold text-gray-900">AnxieEase Admin</h1>
               <span className="text-sm text-gray-500">Dashboard</span>
             </div>
 

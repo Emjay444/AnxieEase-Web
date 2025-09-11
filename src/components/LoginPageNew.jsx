@@ -64,7 +64,7 @@ const LoginPage = () => {
   }
 
   return (
-    <div className="min-h-screen animated-bg flex items-center justify-center p-4 relative">
+  <div className="min-h-screen animated-bg flex items-center justify-center p-4 relative">
       {/* Floating shapes for enhanced animation */}
       <div className="floating-shapes">
         <div className="shape"></div>
@@ -75,14 +75,19 @@ const LoginPage = () => {
       <div className="w-full max-w-md relative z-10">
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2 drop-shadow-lg">
-            Welcome Back!
+          <img 
+            src="/anxieease-logo.png" 
+            alt="AnxieEase" 
+            className="mx-auto mb-3 h-16 w-16 drop-shadow-lg logo-breathe" 
+          />
+          <h1 className="text-4xl font-extrabold text-white tracking-tight drop-shadow-lg">
+            Anxie<span className="text-emerald-300">Ease</span>
           </h1>
-          <p className="text-emerald-100 drop-shadow-sm">Sign in to continue</p>
+          <p className="mt-1 text-emerald-100/90 drop-shadow-sm">Breathe easy. You're in a safe space.</p>
         </div>
 
         {/* Login Form */}
-        <div className="glass rounded-2xl p-8 shadow-2xl">
+  <div className="glass rounded-2xl p-8 shadow-2xl">
           {error && (
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">
               <AlertCircle className="w-5 h-5 text-red-600" />

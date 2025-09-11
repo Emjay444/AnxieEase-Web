@@ -2,6 +2,21 @@
 @import "tailwindcss";
 @import "react-big-calendar/lib/css/react-big-calendar.css";
 
+/* AnxieEase Brand Utility Styles */
+.logo {
+  width: 100px;
+  height: auto;
+  margin-bottom: 20px;
+}
+.login-header {
+  text-align: center;
+  margin-bottom: 30px;
+}
+.tagline {
+  font-size: 1.2em;
+  color: #10B981;
+}
+
 /* Custom Calendar Styling */
 .rbc-calendar {
   font-family: "Inter", sans-serif;
@@ -305,5 +320,32 @@
   }
   to {
     transform: rotate(360deg);
+  }
+}
+
+/* Subtle breathing animation for the AnxieEase logo */
+.logo-breathe {
+  will-change: transform;
+  animation: breathe 6s ease-in-out infinite;
+}
+@keyframes breathe {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-2px) scale(1.035);
+  }
+}
+
+/* Brand accent: thin emerald gradient bar */
+.brand-accent-bar {
+  height: 3px;
+  background: linear-gradient(90deg, #10b981 0%, #059669 50%, #047857 100%);
+  opacity: 0.25;
+  border-radius: 9999px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .logo-breathe {
+    animation: none;
   }
 }

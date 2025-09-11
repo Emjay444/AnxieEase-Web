@@ -4,7 +4,6 @@ import {
   Calendar,
   Clock,
   ChevronRight,
-  Bell,
   LogOut,
   Search,
   Filter,
@@ -833,19 +832,19 @@ const DashboardNew = () => {
           <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
             <div className="px-6 py-4">
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4">
-                  <h1 className="text-2xl font-bold text-gray-900">
-                    Dashboard
-                  </h1>
-                  <span className="text-sm text-gray-500">
-                    Psychologist Portal
-                  </span>
+                <div className="flex items-center space-x-3">
+                  <img
+                    src="/anxieease-logo.png"
+                    alt="AnxieEase"
+                    className="h-6 w-6 logo-breathe"
+                  />
+                  <div className="flex items-baseline space-x-3">
+                    <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+                    <span className="text-sm text-gray-500">Psychologist Portal</span>
+                  </div>
                 </div>
 
                 <div className="flex items-center space-x-4">
-                  <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
-                    <Bell className="h-5 w-5" />
-                  </button>
 
                   <div className="flex items-center space-x-3">
                     <button
