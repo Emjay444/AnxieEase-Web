@@ -26,6 +26,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { psychologistService } from "../services/psychologistService";
 import { appointmentService } from "../services/appointmentService";
 import { supabase } from "../services/supabaseClient";
+import ProfilePicture from "./ProfilePicture";
 
 // Top-level, memoized Profile modal to avoid remounts on parent re-render
 const ProfileModal = React.memo(({
@@ -408,6 +409,7 @@ const DashboardNew = () => {
           psychologistId
         );
         console.log("Loaded patients:", patientsData);
+        console.log("Patient avatar URLs:", patientsData.map(p => ({ name: p.name, avatar_url: p.avatar_url })));
         setPatients(patientsData);
 
         // Load appointments
@@ -635,11 +637,11 @@ const DashboardNew = () => {
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
-          <div className="h-10 w-10 rounded-full bg-emerald-100 flex items-center justify-center">
-            <span className="text-emerald-600 font-medium">
-              {patient.name.charAt(0)}
-            </span>
-          </div>
+          <ProfilePicture 
+            patient={patient} 
+            size={40}
+            className=""
+          />
           <div>
             <h3 className="font-semibold text-gray-900">{patient.name}</h3>
             <p className="text-sm text-gray-600">{patient.email}</p>
@@ -1078,11 +1080,11 @@ const DashboardNew = () => {
                 </div>
                 <div className="space-y-4">
                   <div className="flex items-center space-x-3">
-                    <div className="h-16 w-16 rounded-full bg-emerald-100 flex items-center justify-center">
-                      <span className="text-emerald-600 font-medium text-xl">
-                        {selectedPatient.name.charAt(0)}
-                      </span>
-                    </div>
+                    <ProfilePicture 
+                      patient={selectedPatient} 
+                      size={64}
+                      className=""
+                    />
                     <div>
                       <h4 className="font-semibold text-gray-900">
                         {selectedPatient.name}

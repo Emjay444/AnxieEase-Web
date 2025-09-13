@@ -11,13 +11,37 @@ export const psychologistService = {
   // Get all psychologists (admin only)
   async getAllPsychologists() {
     try {
+      // Try to get psychologists from user_profiles table (which has avatar_url)
+      const { data: userProfiles, error: userProfilesError } = await supabase
+        .from("user_profiles")
+        .select("*")
+        .eq("role", "psychologist")
+        .order("created_at", { ascending: false });
+
+      if (!userProfilesError && userProfiles && userProfiles.length > 0) {
+        // Format user_profiles data to match expected psychologist structure
+        return userProfiles.map(user => ({
+          id: user.id,
+          user_id: user.id,
+          name: `${user.first_name || ""} ${user.middle_name || ""} ${user.last_name || ""}`.trim() || user.email?.split("@")[0] || "Psychologist",
+          email: user.email,
+          contact: user.contact_number,
+          specialization: user.specialization,
+          is_active: user.is_email_verified || true,
+          created_at: user.created_at,
+          updated_at: user.updated_at,
+          avatar_url: user.avatar_url || null, // Include avatar_url from user_profiles
+        }));
+      }
+
+      // Fallback to psychologists table
       const { data, error } = await supabase
         .from("psychologists")
         .select("*")
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      return data;
+      return data || [];
     } catch (error) {
       console.error("Get psychologists error:", error.message);
       throw error;
@@ -89,6 +113,7 @@ export const psychologistService = {
             minute: "2-digit",
             hour12: true,
           }),
+          avatar_url: user.avatar_url || null, // Include avatar_url in the returned data
         };
       });
     } catch (error) {

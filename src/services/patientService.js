@@ -18,6 +18,7 @@ const mockPatients = [
     assigned_psychologist_id: "mock-psych-1",
     psychologists: { name: "Jane Doe" },
     date_added: new Date(Date.now() - 86400000).toLocaleDateString("en-GB"),
+    avatar_url: null,
   },
   {
     id: "mock-patient-2",
@@ -35,6 +36,7 @@ const mockPatients = [
     assigned_psychologist_id: null,
     psychologists: null,
     date_added: new Date(Date.now() - 172800000).toLocaleDateString("en-GB"),
+    avatar_url: null,
   },
 ];
 
@@ -205,6 +207,10 @@ export const patientService = {
         }),
         is_active: data.is_email_verified || true,
       };
+
+      console.log('PatientService - Raw data from DB:', data);
+      console.log('PatientService - Formatted data:', formattedData);
+      console.log('PatientService - Avatar URL in formatted data:', formattedData.avatar_url);
 
       return formattedData;
     } catch (error) {

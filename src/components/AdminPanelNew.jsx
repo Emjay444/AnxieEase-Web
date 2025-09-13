@@ -3,6 +3,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { adminService } from "../services/adminService";
 import { psychologistService } from "../services/psychologistService";
 import AddDoctorModal from "./AddDoctorModal";
+import ProfilePicture from "./ProfilePicture";
 import {
   Users,
   UserPlus,
@@ -206,6 +207,8 @@ const AdminPanelNew = () => {
 
       // Load psychologists
       const psychologistsList = await psychologistService.getAllPsychologists();
+      console.log("Loaded psychologists:", psychologistsList);
+      console.log("Psychologist avatar URLs:", psychologistsList.map(p => ({ name: p.name, avatar_url: p.avatar_url })));
       setPsychologists(psychologistsList);
 
       // Load activity logs
@@ -554,15 +557,11 @@ const AdminPanelNew = () => {
     >
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center space-x-3">
-          <div
-            className={`h-12 w-12 rounded-full flex items-center justify-center ${
-              psychologist.is_active ? "bg-emerald-100" : "bg-gray-100"
-            }`}
-          >
-            <Users
-              className={`h-6 w-6 ${
-                psychologist.is_active ? "text-emerald-600" : "text-gray-400"
-              }`}
+          <div className={`${!psychologist.is_active ? "opacity-60" : ""}`}>
+            <ProfilePicture 
+              patient={psychologist} 
+              size={48}
+              className=""
             />
           </div>
           <div>
@@ -1553,9 +1552,11 @@ const AdminPanelNew = () => {
 
             <div className="space-y-6">
               <div className="flex items-center space-x-4">
-                <div className="h-16 w-16 rounded-full bg-emerald-100 flex items-center justify-center">
-                  <Users className="h-8 w-8 text-emerald-600" />
-                </div>
+                <ProfilePicture 
+                  patient={selectedPsychologist} 
+                  size={64}
+                  className=""
+                />
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900">
                     {selectedPsychologist.name}
@@ -1659,9 +1660,11 @@ const AdminPanelNew = () => {
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center space-x-3">
-                              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                                <User className="h-4 w-4 text-blue-600" />
-                              </div>
+                              <ProfilePicture 
+                                patient={patient} 
+                                size={32}
+                                className=""
+                              />
                               <div>
                                 <p className="font-medium text-blue-900">
                                   {patient.name ||
@@ -2366,9 +2369,13 @@ const AdminPanelNew = () => {
             <div className="p-6">
               {/* Patient Info Header */}
               <div className="flex items-center space-x-4 mb-6">
-                <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center">
-                  <User className="h-6 w-6 text-emerald-600" />
-                </div>
+                <ProfilePicture 
+                  userId={patientToAssign.user_id || patientToAssign.id} 
+                  name={patientToAssign.name || 
+                    `${patientToAssign.first_name || ""} ${patientToAssign.last_name || ""}`.trim() || 
+                    patientToAssign.email?.split("@")[0] || "Unknown Patient"} 
+                  size={48} 
+                />
                 <div>
                   <h3 className="text-lg font-medium text-gray-900">
                     {patientToAssign.name ||
@@ -2583,9 +2590,11 @@ const AdminPanelNew = () => {
             <div className="p-6">
               {/* Patient Info Header */}
               <div className="flex items-center space-x-4 mb-6">
-                <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center">
-                  <User className="h-6 w-6 text-emerald-600" />
-                </div>
+                <ProfilePicture 
+                  userId={pendingAssignment.patientId} 
+                  name={pendingAssignment.patientName} 
+                  size={48} 
+                />
                 <div>
                   <h3 className="text-lg font-medium text-gray-900">
                     {pendingAssignment.patientName}

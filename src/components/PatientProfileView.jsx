@@ -42,10 +42,12 @@ import { supabase } from "../services/supabaseClient";
 import { anxietyService } from "../services/anxietyService";
 import SuccessModal from "./SuccessModal";
 import ConfirmModal from "./ConfirmModal";
+import ProfilePicture from "./ProfilePicture";
 
 const PatientProfileView = ({ patient, onBack, psychologistId }) => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
+  const [patientData, setPatientData] = useState(patient); // Create state for patient data
   const [moodLogs, setMoodLogs] = useState([]);
   const [patientNotes, setPatientNotes] = useState([]);
   const [patientAppointments, setPatientAppointments] = useState([]);
@@ -128,6 +130,11 @@ const PatientProfileView = ({ patient, onBack, psychologistId }) => {
     loadPatientData();
   }, [patient.id]);
 
+  // Update patientData when the patient prop changes
+  useEffect(() => {
+    setPatientData(patient);
+  }, [patient]);
+
   const loadPatientData = async () => {
     try {
       setLoading(true);
@@ -135,8 +142,8 @@ const PatientProfileView = ({ patient, onBack, psychologistId }) => {
       // Load updated patient profile data
       const updatedPatient = await patientService.getPatientById(patient.id);
       if (updatedPatient) {
-        // Update the patient object with the latest data (for the component's display)
-        Object.assign(patient, updatedPatient);
+        // Update the patient data state to trigger re-render
+        setPatientData(updatedPatient);
       }
 
       // Load mood logs
@@ -456,6 +463,9 @@ const PatientProfileView = ({ patient, onBack, psychologistId }) => {
     );
   }
 
+  // Debug: Log patient data to see if avatar_url is included
+  // console.log('Patient data in PatientProfileView:', patientData);
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Success confirmation for adding a note */}
@@ -497,14 +507,14 @@ const PatientProfileView = ({ patient, onBack, psychologistId }) => {
                 <ArrowLeft className="h-5 w-5" />
               </button>
               <div className="flex items-center space-x-3">
-                <div className="h-12 w-12 rounded-full bg-emerald-50 ring-1 ring-emerald-200 flex items-center justify-center">
-                  <span className="text-emerald-600 font-medium text-lg">
-                    {patient.name.charAt(0)}
-                  </span>
-                </div>
+                <ProfilePicture 
+                  patient={patientData} 
+                  size={48}
+                  className=""
+                />
                 <div className="leading-tight">
                   <h1 className="text-xl font-bold text-gray-900">
-                    {patient.name}
+                    {patientData.name}
                   </h1>
                   <p className="text-sm text-gray-600">Patient Profile</p>
                 </div>
@@ -513,12 +523,12 @@ const PatientProfileView = ({ patient, onBack, psychologistId }) => {
             <div className="flex items-center space-x-2">
               <span
                 className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                  patient.is_active
+                  patientData.is_active
                     ? "bg-green-100 text-green-800"
                     : "bg-red-100 text-red-800"
                 }`}
               >
-                {patient.is_active ? "Active" : "Inactive"}
+                {patientData.is_active ? "Active" : "Inactive"}
               </span>
             </div>
           </div>
@@ -642,40 +652,40 @@ const PatientProfileView = ({ patient, onBack, psychologistId }) => {
                     <div className="space-y-3">
                       <div className="flex items-center text-sm">
                         <Mail className="h-4 w-4 text-gray-400 mr-2" />
-                        {patient.email}
+                        {patientData.email}
                       </div>
-                      {patient.contact_number && (
+                      {patientData.contact_number && (
                         <div className="flex items-center text-sm">
                           <Phone className="h-4 w-4 text-gray-400 mr-2" />
-                          {patient.contact_number}
+                          {patientData.contact_number}
                         </div>
                       )}
-                      {patient.emergency_contact && (
+                      {patientData.emergency_contact && (
                         <div className="flex items-center text-sm">
                           <Phone className="h-4 w-4 text-red-500 mr-2" />
                           <span className="text-red-700 font-medium">
                             Emergency:
                           </span>
                           <span className="ml-1">
-                            {patient.emergency_contact}
+                            {patientData.emergency_contact}
                           </span>
                         </div>
                       )}
-                      {patient.gender && (
+                      {patientData.gender && (
                         <div className="flex items-center text-sm">
                           <User className="h-4 w-4 text-gray-400 mr-2" />
                           <span className="capitalize">
-                            {patient.gender.toLowerCase()}
+                            {patientData.gender.toLowerCase()}
                           </span>
                         </div>
                       )}
                       <div className="flex items-center text-sm">
                         <Calendar className="h-4 w-4 text-gray-400 mr-2" />
-                        Joined: {patient.date_added}
+                        Joined: {patientData.date_added}
                       </div>
                       <div className="flex items-center text-sm">
                         <User className="h-4 w-4 text-gray-400 mr-2" />
-                        Status: {patient.is_active ? "Active" : "Inactive"}
+                        Status: {patientData.is_active ? "Active" : "Inactive"}
                       </div>
                     </div>
                   </div>

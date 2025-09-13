@@ -464,6 +464,7 @@ export const adminService = {
       // Process data to match expected format
       return data.map((patient) => ({
         id: patient.id,
+        avatar_url: patient.avatar_url || null,
         // Use the email field from user_profiles, with fallback to generated email
         email:
           patient.email ||
