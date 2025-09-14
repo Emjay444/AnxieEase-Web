@@ -1706,21 +1706,12 @@ const AdminPanelNew = () => {
                 })()}
               </div>
 
-              <div className="flex justify-end space-x-3 pt-4 border-t">
+              <div className="flex justify-end pt-4 border-t">
                 <button
                   onClick={() => setShowViewModal(false)}
                   className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
                 >
                   Close
-                </button>
-                <button
-                  onClick={() => {
-                    setShowViewModal(false);
-                    handleEditPsychologist(selectedPsychologist);
-                  }}
-                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
-                >
-                  Edit Details
                 </button>
               </div>
             </div>
@@ -2112,8 +2103,12 @@ const AdminPanelNew = () => {
             <div className="p-6">
               {/* Patient Name - Featured */}
               <div className="text-center mb-6 pb-4 border-b border-gray-200">
-                <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <Users className="h-8 w-8 text-emerald-600" />
+                <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-3 overflow-hidden ring-2 ring-white shadow-sm">
+                  <ProfilePicture
+                    patient={selectedPatient}
+                    size={64}
+                    className="h-16 w-16 block"
+                  />
                 </div>
                 <h2 className="text-xl font-bold text-gray-900">
                   {selectedPatient.name}
