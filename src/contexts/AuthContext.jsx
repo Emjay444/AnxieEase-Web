@@ -32,8 +32,11 @@ export const AuthProvider = ({ children }) => {
           }
         }, 5000);
         // Check for existing Supabase session
-        const { data: { session }, error } = await authService.getSession();
-        
+        const {
+          data: { session },
+          error,
+        } = await authService.getSession();
+
         if (error) {
           console.error("Session error:", error);
           setLoading(false);
@@ -45,9 +48,9 @@ export const AuthProvider = ({ children }) => {
           // Set user immediately so UI can proceed
           setUser(session.user);
           // Apply cached role immediately if present to preserve correct routing
-          const cachedRole = localStorage.getItem('userRole');
+          const cachedRole = localStorage.getItem("userRole");
           if (cachedRole) {
-            console.log('Using cached role:', cachedRole);
+            console.log("Using cached role:", cachedRole);
             setUserRole(cachedRole);
           }
           // Fetch role in background; don't block UI
@@ -57,7 +60,7 @@ export const AuthProvider = ({ children }) => {
               console.log("Initial role retrieved:", role);
               if (role) {
                 setUserRole(role);
-                localStorage.setItem('userRole', role);
+                localStorage.setItem("userRole", role);
               } else {
                 setUserRole(null);
               }
@@ -69,10 +72,10 @@ export const AuthProvider = ({ children }) => {
         } else {
           console.log("No existing session found");
         }
-        
-  setLoading(false);
-  safetyCleared = true;
-  clearTimeout(safetyTimer);
+
+        setLoading(false);
+        safetyCleared = true;
+        clearTimeout(safetyTimer);
       } catch (err) {
         console.error("Auth initialization error:", err.message);
         setError(err.message);
@@ -83,40 +86,40 @@ export const AuthProvider = ({ children }) => {
     initializeAuth();
 
     // Listen for auth state changes
-  const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log("Auth state changed:", event, session?.user?.email);
-        
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-          if (session?.user) {
-            // Set user immediately; don't block on role
-            setUser(session.user);
-            setLoading(false);
-            console.log("Getting user role for:", session.user.id);
-            (async () => {
-              try {
-                const role = await authService.getUserRole(session.user.id);
-                console.log("User role retrieved:", role);
-                if (role) {
-                  setUserRole(role);
-                  localStorage.setItem('userRole', role);
-                } else {
-                  setUserRole(null);
-                }
-              } catch (error) {
-                console.error("Error getting user role:", error);
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("Auth state changed:", event, session?.user?.email);
+
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+        if (session?.user) {
+          // Set user immediately; don't block on role
+          setUser(session.user);
+          setLoading(false);
+          console.log("Getting user role for:", session.user.id);
+          (async () => {
+            try {
+              const role = await authService.getUserRole(session.user.id);
+              console.log("User role retrieved:", role);
+              if (role) {
+                setUserRole(role);
+                localStorage.setItem("userRole", role);
+              } else {
                 setUserRole(null);
               }
-            })();
-          }
-        } else if (event === 'SIGNED_OUT') {
-          setUser(null);
-          setUserRole(null);
-          localStorage.removeItem('userRole');
-          setLoading(false);
+            } catch (error) {
+              console.error("Error getting user role:", error);
+              setUserRole(null);
+            }
+          })();
         }
+      } else if (event === "SIGNED_OUT") {
+        setUser(null);
+        setUserRole(null);
+        localStorage.removeItem("userRole");
+        setLoading(false);
       }
-    );
+    });
 
     // Cleanup subscription on unmount
     return () => {
@@ -154,6 +157,9 @@ export const AuthProvider = ({ children }) => {
       await authService.signOut();
       setUser(null);
       setUserRole(null);
+
+      // Clear user role from localStorage but preserve remember me settings
+      localStorage.removeItem("userRole");
     } catch (err) {
       console.error("Sign out error:", err.message);
       setError(err.message);

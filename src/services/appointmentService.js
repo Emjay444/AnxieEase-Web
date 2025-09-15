@@ -18,11 +18,14 @@ export const appointmentService = {
         return [];
       }
 
-  console.log("Found appointments:", appointments);
+      console.log("Found appointments:", appointments);
 
-  // Auto-update past scheduled appointments to completed, and past pending to expired
-  const afterComplete = await this.updatePastAppointmentsToCompleted(appointments);
-  const updatedAppointments = await this.updatePastPendingAppointmentsToExpired(afterComplete);
+      // Auto-update past scheduled appointments to completed, and past pending to expired
+      const afterComplete = await this.updatePastAppointmentsToCompleted(
+        appointments
+      );
+      const updatedAppointments =
+        await this.updatePastPendingAppointmentsToExpired(afterComplete);
 
       // Get patient names from user_profiles
       const patientIds = updatedAppointments
@@ -46,7 +49,7 @@ export const appointmentService = {
 
       // Format the data (normalized for UI expectations)
       return updatedAppointments.map((appt) => {
-        const rawStatus = (appt.status || "pending").toLowerCase();        
+        const rawStatus = (appt.status || "pending").toLowerCase();
         const status = rawStatus === "canceled" ? "cancelled" : rawStatus;
         const patientName = patientNames[appt.user_id] || "Patient";
 
@@ -86,56 +89,83 @@ export const appointmentService = {
       const today = new Date();
       today.setHours(0, 0, 0, 0); // Start of today
       console.log("Today's date (start of day):", today.toISOString());
-      
+
       // Debug: Log all appointments with their status and date
-      appointments.forEach(appt => {
-        console.log(`Appointment ${appt.id}: status="${appt.status}", date="${appt.appointment_date}"`);
+      appointments.forEach((appt) => {
+        console.log(
+          `Appointment ${appt.id}: status="${appt.status}", date="${appt.appointment_date}"`
+        );
       });
       // Treat legacy equivalents of scheduled as scheduled too
-      const scheduledLike = new Set(["scheduled", "approved", "accept", "accepted", "confirm", "confirmed"]);
-      
-      const pastScheduledAppointments = appointments.filter(appt => {
+      const scheduledLike = new Set([
+        "scheduled",
+        "approved",
+        "accept",
+        "accepted",
+        "confirm",
+        "confirmed",
+      ]);
+
+      const pastScheduledAppointments = appointments.filter((appt) => {
         if (!appt.appointment_date) {
           console.log(`Skipping appointment ${appt.id}: no appointment_date`);
           return false;
         }
-        
+
         const status = (appt.status || "").toLowerCase().trim();
         if (!scheduledLike.has(status)) {
-          console.log(`Skipping appointment ${appt.id}: status is "${status}" not scheduled-like`);
+          console.log(
+            `Skipping appointment ${appt.id}: status is "${status}" not scheduled-like`
+          );
           return false;
         }
-        
+
         const appointmentDate = new Date(appt.appointment_date);
         appointmentDate.setHours(0, 0, 0, 0);
-        console.log(`Appointment ${appt.id}: date=${appointmentDate.toISOString()}, isPast=${appointmentDate < today}`);
-        
+        console.log(
+          `Appointment ${
+            appt.id
+          }: date=${appointmentDate.toISOString()}, isPast=${
+            appointmentDate < today
+          }`
+        );
+
         return appointmentDate < today;
       });
 
-      console.log(`Found ${pastScheduledAppointments.length} past scheduled appointments to complete:`, 
-        pastScheduledAppointments.map(a => ({ id: a.id, date: a.appointment_date, status: a.status })));
+      console.log(
+        `Found ${pastScheduledAppointments.length} past scheduled appointments to complete:`,
+        pastScheduledAppointments.map((a) => ({
+          id: a.id,
+          date: a.appointment_date,
+          status: a.status,
+        }))
+      );
 
       if (pastScheduledAppointments.length > 0) {
-        console.log(`Auto-completing ${pastScheduledAppointments.length} past appointments`);
-        
-        const updatePromises = pastScheduledAppointments.map(appt =>
+        console.log(
+          `Auto-completing ${pastScheduledAppointments.length} past appointments`
+        );
+
+        const updatePromises = pastScheduledAppointments.map((appt) =>
           supabase
             .from("appointments")
             .update({
               status: "completed",
               completion_notes: "Auto-completed past appointment",
-              updated_at: new Date().toISOString()
+              updated_at: new Date().toISOString(),
             })
             .eq("id", appt.id)
         );
 
         const results = await Promise.all(updatePromises);
         console.log("Update results:", results);
-        
-  // Return updated appointments with new status
-  return appointments.map(appt => {
-          const isPastScheduled = pastScheduledAppointments.find(p => p.id === appt.id);
+
+        // Return updated appointments with new status
+        return appointments.map((appt) => {
+          const isPastScheduled = pastScheduledAppointments.find(
+            (p) => p.id === appt.id
+          );
           if (isPastScheduled) {
             console.log(`Marking appointment ${appt.id} as completed`);
             return { ...appt, status: "completed" };
@@ -143,7 +173,7 @@ export const appointmentService = {
           return appt;
         });
       }
-      
+
       return appointments;
     } catch (error) {
       console.error("Error updating past appointments:", error);
@@ -168,7 +198,9 @@ export const appointmentService = {
       });
 
       if (pastPending.length > 0) {
-        console.log(`Auto-expiring ${pastPending.length} past pending appointments`);
+        console.log(
+          `Auto-expiring ${pastPending.length} past pending appointments`
+        );
         const updatePromises = pastPending.map((appt) =>
           supabase
             .from("appointments")

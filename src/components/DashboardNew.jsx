@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import SuccessModal from "./SuccessModal";
 import {
   Users,
   Calendar,
   Clock,
   ChevronRight,
-  LogOut,
   Search,
-  Filter,
   Mail,
   Phone,
   CalendarDays,
@@ -27,307 +26,596 @@ import { psychologistService } from "../services/psychologistService";
 import { appointmentService } from "../services/appointmentService";
 import { supabase } from "../services/supabaseClient";
 import ProfilePicture from "./ProfilePicture";
+import LogoutButton from "./LogoutButton";
 
 // Top-level, memoized Profile modal to avoid remounts on parent re-render
-const ProfileModal = React.memo(({
-  isOpen,
-  onClose,
-  profileForm,
-  user,
-  handleProfilePictureChange,
-  handleProfileFormChange,
-  showCurrentPassword,
-  setShowCurrentPassword,
-  showNewPassword,
-  setShowNewPassword,
-  showConfirmPassword,
-  setShowConfirmPassword,
-  handleProfileUpdate,
-  profileUpdateLoading,
-}) => {
-  if (!isOpen) return null;
-  const fileInputRef = useRef(null);
+const ProfileModal = React.memo(
+  ({
+    isOpen,
+    onClose,
+    profileForm,
+    user,
+    handleProfilePictureChange,
+    handleProfileFormChange,
+    handleProfileUpdate,
+    profileUpdateLoading,
+    setShowChangePasswordModal,
+  }) => {
+    if (!isOpen) return null;
+    const fileInputRef = useRef(null);
 
-  return (
-    <div className="fixed inset-0 bg-transparent backdrop-blur-md flex items-center justify-center p-4 z-50">
-  <div className="bg-white rounded-xl p-6 md:p-8 max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-xl font-semibold text-gray-900">Profile Settings</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl">×</button>
-        </div>
-
-        <div className="space-y-6">
-          {/* Profile Picture Section */}
-          <div className="flex items-center space-x-4">
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="group relative h-20 w-20 rounded-full overflow-hidden border bg-emerald-50 flex items-center justify-center"
-                title="Change profile picture"
-              >
-                {profileForm.avatar_url ? (
-                  <img src={profileForm.avatar_url} alt="Profile" className="h-full w-full object-cover" />
-                ) : (
-                  <span className="text-emerald-600 font-medium text-2xl">
-                    {profileForm.first_name?.charAt(0) || user?.name?.charAt(0) || "D"}
-                  </span>
-                )}
-                <span className="absolute bottom-1 right-1 bg-emerald-500 text-white p-1.5 rounded-full shadow group-hover:scale-105 transition-transform">
-                  <Camera className="h-3 w-3" />
-                </span>
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleProfilePictureChange}
-                className="hidden"
-              />
-            </div>
-            <div>
-              <h4 className="font-medium text-gray-900">Profile Picture</h4>
-              <p className="text-sm text-gray-600">Click the camera icon to upload a new photo</p>
-            </div>
-          </div>
-
-          {/* Basic Information */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">First Name</label>
-              <input
-                type="text"
-                value={profileForm.first_name}
-                onChange={(e) => handleProfileFormChange("first_name", e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                placeholder="John"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Last Name</label>
-              <input
-                type="text"
-                value={profileForm.last_name}
-                onChange={(e) => handleProfileFormChange("last_name", e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                placeholder="Doe"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Middle Name (Optional)</label>
-              <input
-                type="text"
-                value={profileForm.middle_name}
-                onChange={(e) => handleProfileFormChange("middle_name", e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                placeholder="Michael"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Email Address <span className="text-xs text-gray-500 ml-1">(Read-only)</span></label>
-              <input type="email" value={profileForm.email} readOnly className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed" placeholder="doctor@hospital.com" />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
-              <input
-                type="tel"
-                value={profileForm.phone}
-                onChange={(e) => handleProfileFormChange("phone", e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                placeholder="+1 (555) 123-4567"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Gender <span className="text-xs text-gray-500 ml-1">(Read-only)</span></label>
-              <select value={profileForm.sex} disabled className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed">
-                <option value="">Select Gender</option>
-                <option value="male">Male</option>
-                <option value="female">Female</option>
-                <option value="other">Other</option>
-                <option value="prefer_not_to_say">Prefer not to say</option>
-              </select>
-            </div>
-          </div>
-
-          {/* License Number - Full Width */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">License Number</label>
-            <input
-              type="text"
-              value={profileForm.license_number}
-              onChange={(e) => handleProfileFormChange("license_number", e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-              placeholder="Enter your professional license number"
-            />
-          </div>
-
-          {/* Bio */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Professional Bio</label>
-            <textarea
-              value={profileForm.bio}
-              onChange={(e) => handleProfileFormChange("bio", e.target.value)}
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-              placeholder="Brief description of your experience and approach..."
-            />
-          </div>
-
-          {/* Password Change Section */}
-          <div className="border-t pt-6">
-            <h4 className="font-medium text-gray-900 mb-4 flex items-center"><Lock className="h-4 w-4 mr-2" />Change Password</h4>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Current Password</label>
-                <div className="relative">
-                  <input
-                    type={showCurrentPassword ? "text" : "password"}
-                    value={profileForm.currentPassword}
-                    onChange={(e) => handleProfileFormChange("currentPassword", e.target.value)}
-                    className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                    placeholder="Enter current password"
-                  />
-                  <button type="button" onClick={() => setShowCurrentPassword(!showCurrentPassword)} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                    {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">New Password</label>
-                  <div className="relative">
-                    <input
-                      type={showNewPassword ? "text" : "password"}
-                      value={profileForm.newPassword}
-                      onChange={(e) => handleProfileFormChange("newPassword", e.target.value)}
-                      className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                      placeholder="Enter new password"
-                    />
-                    <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                      {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Confirm New Password</label>
-                  <div className="relative">
-                    <input
-                      type={showConfirmPassword ? "text" : "password"}
-                      value={profileForm.confirmPassword}
-                      onChange={(e) => handleProfileFormChange("confirmPassword", e.target.value)}
-                      className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                      placeholder="Confirm new password"
-                    />
-                    <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex justify-end space-x-3 pt-6 border-t">
-            <button onClick={onClose} className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">Cancel</button>
-            <button onClick={handleProfileUpdate} disabled={profileUpdateLoading} className="px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors disabled:bg-emerald-300 flex items-center">
-              {profileUpdateLoading ? (<><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>Updating...</>) : (<><Save className="h-4 w-4 mr-2" />Save Changes</>)}
+    return (
+      <div className="fixed inset-0 bg-transparent backdrop-blur-md flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-xl p-6 md:p-8 max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-xl font-semibold text-gray-900">
+              Profile Settings
+            </h3>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 text-2xl"
+            >
+              ×
             </button>
+          </div>
+
+          <div className="space-y-6">
+            {/* Profile Picture Section */}
+            <div className="flex flex-col items-center space-y-3">
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="group relative h-32 w-32 rounded-full overflow-hidden border bg-emerald-50 flex items-center justify-center"
+                  title="Change profile picture"
+                >
+                  {profileForm.avatar_url ? (
+                    <img
+                      src={profileForm.avatar_url}
+                      alt="Profile"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-emerald-600 font-medium text-4xl">
+                      {profileForm.first_name?.charAt(0) ||
+                        user?.name?.charAt(0) ||
+                        "D"}
+                    </span>
+                  )}
+                  <span className="absolute bottom-2 right-2 bg-emerald-500 text-white p-2 rounded-full shadow group-hover:scale-105 transition-transform">
+                    <Camera className="h-4 w-4" />
+                  </span>
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleProfilePictureChange}
+                  className="hidden"
+                />
+              </div>
+              <div className="text-center">
+                <h4 className="font-medium text-gray-900">Profile Picture</h4>
+                <p className="text-sm text-gray-600">
+                  Click the camera icon to upload a new photo
+                </p>
+              </div>
+            </div>
+
+            {/* Basic Information */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  First Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={profileForm.first_name}
+                  onChange={(e) => {
+                    // Only allow letters, spaces, and common name characters
+                    const value = e.target.value.replace(/[^a-zA-Z\s'-]/g, "");
+                    handleProfileFormChange("first_name", value);
+                  }}
+                  onKeyPress={(e) => {
+                    // Prevent numbers and special characters from being typed
+                    if (
+                      !/[a-zA-Z\s'-]/.test(e.key) &&
+                      e.key !== "Backspace" &&
+                      e.key !== "Delete" &&
+                      e.key !== "Tab" &&
+                      e.key !== "Enter"
+                    ) {
+                      e.preventDefault();
+                    }
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  placeholder="Enter your first name (letters only, min 2 chars)"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Last Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={profileForm.last_name}
+                  onChange={(e) => {
+                    // Only allow letters, spaces, and common name characters
+                    const value = e.target.value.replace(/[^a-zA-Z\s'-]/g, "");
+                    handleProfileFormChange("last_name", value);
+                  }}
+                  onKeyPress={(e) => {
+                    // Prevent numbers and special characters from being typed
+                    if (
+                      !/[a-zA-Z\s'-]/.test(e.key) &&
+                      e.key !== "Backspace" &&
+                      e.key !== "Delete" &&
+                      e.key !== "Tab" &&
+                      e.key !== "Enter"
+                    ) {
+                      e.preventDefault();
+                    }
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  placeholder="Enter your last name (letters only, min 2 chars)"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Middle Name (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={profileForm.middle_name}
+                  onChange={(e) => {
+                    // Only allow letters, spaces, and common name characters
+                    const value = e.target.value.replace(/[^a-zA-Z\s'-]/g, "");
+                    handleProfileFormChange("middle_name", value);
+                  }}
+                  onKeyPress={(e) => {
+                    // Prevent numbers and special characters from being typed
+                    if (
+                      !/[a-zA-Z\s'-]/.test(e.key) &&
+                      e.key !== "Backspace" &&
+                      e.key !== "Delete" &&
+                      e.key !== "Tab" &&
+                      e.key !== "Enter"
+                    ) {
+                      e.preventDefault();
+                    }
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  placeholder="Enter your middle name (letters only, optional)"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  value={profileForm.email}
+                  readOnly
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed"
+                  placeholder="your.email@example.com"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Phone Number <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="tel"
+                  value={profileForm.phone}
+                  onChange={(e) => {
+                    // Only allow numbers and limit to 11 characters
+                    const value = e.target.value
+                      .replace(/[^0-9]/g, "")
+                      .slice(0, 11);
+                    handleProfileFormChange("phone", value);
+                  }}
+                  onKeyPress={(e) => {
+                    // Prevent non-numeric characters from being typed
+                    if (
+                      !/[0-9]/.test(e.key) &&
+                      e.key !== "Backspace" &&
+                      e.key !== "Delete" &&
+                      e.key !== "Tab" &&
+                      e.key !== "Enter"
+                    ) {
+                      e.preventDefault();
+                    }
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  placeholder="09123456789"
+                  maxLength="11"
+                  required
+                />
+                <div className="text-xs text-gray-500 mt-1">
+                  {profileForm.phone.length}/11 characters (numbers only)
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Gender
+                </label>
+                <select
+                  value={profileForm.sex}
+                  disabled
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed"
+                >
+                  <option value="">Select Gender</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Other">Other</option>
+                  <option value="Prefer not to say">Prefer not to say</option>
+                </select>
+              </div>
+            </div>
+
+            {/* License Number - Full Width */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                License Number <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={profileForm.license_number}
+                onChange={(e) =>
+                  handleProfileFormChange("license_number", e.target.value)
+                }
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                placeholder="Enter your professional license number"
+                required
+              />
+            </div>
+
+            {/* Bio */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Professional Bio
+              </label>
+              <textarea
+                value={profileForm.bio}
+                onChange={(e) => handleProfileFormChange("bio", e.target.value)}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                placeholder="Brief description of your experience and approach..."
+              />
+            </div>
+
+            {/* Password Change Button */}
+            <div className="border-t pt-6">
+              <button
+                onClick={() => setShowChangePasswordModal(true)}
+                className="w-full flex items-center justify-center space-x-2 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                <Lock className="h-4 w-4" />
+                <span>Change Password</span>
+              </button>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex justify-end space-x-3 pt-6 border-t">
+              <button
+                onClick={onClose}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleProfileUpdate}
+                disabled={profileUpdateLoading}
+                className="px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors disabled:bg-emerald-300 flex items-center"
+              >
+                {profileUpdateLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Updating...
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4 mr-2" />
+                    Save Changes
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  );
-});
+    );
+  }
+);
 
 // Top-level, memoized Profile overview modal to avoid remounts
-const ProfileOverview = React.memo(({ isOpen, onClose, profileForm, user, stats, onEdit, onSignOut }) => {
-  if (!isOpen) return null;
-  return (
-    <div className="fixed inset-0 bg-transparent backdrop-blur-md flex items-center justify-center p-4 z-50">
-  <div className="bg-white rounded-xl p-6 md:p-7 max-w-xl w-full shadow-2xl">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-semibold text-gray-900">Profile Overview</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl">×</button>
-        </div>
-
-        <div className="text-center space-y-4">
-          {/* Profile Picture */}
-          <div className="flex justify-center">
-            {profileForm.avatar_url ? (
-              <img src={profileForm.avatar_url} alt="Profile" className="h-20 w-20 rounded-full object-cover border" />
-            ) : (
-              <div className="h-20 w-20 rounded-full bg-emerald-100 flex items-center justify-center">
-                <span className="text-emerald-600 font-medium text-2xl">{profileForm.first_name?.charAt(0) || user?.name?.charAt(0) || "D"}</span>
-              </div>
-            )}
+const ProfileOverview = React.memo(
+  ({ isOpen, onClose, profileForm, user, stats, onEdit }) => {
+    if (!isOpen) return null;
+    return (
+      <div className="fixed inset-0 bg-transparent backdrop-blur-md flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-xl p-6 md:p-7 max-w-xl w-full shadow-2xl">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-semibold text-gray-900">
+              Profile Overview
+            </h3>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 text-2xl"
+            >
+              ×
+            </button>
           </div>
 
-          {/* User Info */}
-          <div className="space-y-3">
-            <h4 className="text-xl font-semibold text-gray-900">
-              Dr. {profileForm.last_name ? `${profileForm.last_name}, ${profileForm.first_name}${profileForm.middle_name ? ' ' + profileForm.middle_name.charAt(0) + '.' : ''}` : (user?.name || "Psychologist")}
-            </h4>
-            <p className="text-gray-600">{profileForm.email || user?.email}</p>
-
-            {/* Professional Info */}
-            {profileForm.license_number && (
-              <div className="bg-emerald-50 rounded-lg p-3">
-                <p className="text-sm font-medium text-emerald-800">License Number</p>
-                <p className="text-emerald-700">{profileForm.license_number}</p>
-              </div>
-            )}
-
-            {profileForm.phone && (
-              <div className="flex items-center justify-center text-sm text-gray-600">
-                <Phone className="h-4 w-4 mr-2" />
-                {profileForm.phone}
-              </div>
-            )}
-
-            {profileForm.bio && (
-              <div className="bg-gray-50 rounded-lg p-3 text-left">
-                <p className="text-sm font-medium text-gray-700 mb-1">About</p>
-                <p className="text-sm text-gray-600 line-clamp-3">{profileForm.bio}</p>
-              </div>
-            )}
-
-            {/* Stats */}
-            <div className="flex items-center justify-center space-x-6 text-sm text-gray-500 pt-2 border-t">
-              <span className="flex items-center"><Users className="h-4 w-4 mr-1" />{stats.totalPatients} Patients</span>
-              <span className="flex items-center"><Calendar className="h-4 w-4 mr-1" />{stats.todayAppointments} Today</span>
+          <div className="text-center space-y-4">
+            {/* Profile Picture */}
+            <div className="flex justify-center">
+              {profileForm.avatar_url ? (
+                <img
+                  src={profileForm.avatar_url}
+                  alt="Profile"
+                  className="h-32 w-32 rounded-full object-cover border"
+                />
+              ) : (
+                <div className="h-32 w-32 rounded-full bg-emerald-100 flex items-center justify-center">
+                  <span className="text-emerald-600 font-medium text-4xl">
+                    {profileForm.first_name?.charAt(0) ||
+                      user?.name?.charAt(0) ||
+                      "D"}
+                  </span>
+                </div>
+              )}
             </div>
-          </div>
 
-          {/* Quick Actions */}
-          <div className="pt-4 border-t space-y-3">
-            <button onClick={onEdit} className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors">
-              <Settings className="h-4 w-4" />
-              <span>Edit Profile Settings</span>
-            </button>
-            <button onClick={onSignOut} className="w-full flex items-center justify-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
-              <LogOut className="h-4 w-4" />
-              <span>Sign Out</span>
-            </button>
+            {/* User Info */}
+            <div className="space-y-3">
+              <h4 className="text-xl font-semibold text-gray-900">
+                Dr.{" "}
+                {profileForm.last_name
+                  ? `${profileForm.last_name}, ${profileForm.first_name}${
+                      profileForm.middle_name
+                        ? " " + profileForm.middle_name.charAt(0) + "."
+                        : ""
+                    }`
+                  : user?.name || "Psychologist"}
+              </h4>
+              <p className="text-gray-600">
+                {profileForm.email || user?.email}
+              </p>
+
+              {/* Professional Info */}
+              {profileForm.license_number && (
+                <div className="bg-emerald-50 rounded-lg p-3">
+                  <p className="text-sm font-medium text-emerald-800">
+                    License Number
+                  </p>
+                  <p className="text-emerald-700">
+                    {profileForm.license_number}
+                  </p>
+                </div>
+              )}
+
+              {profileForm.phone && (
+                <div className="flex items-center justify-center text-sm text-gray-600">
+                  <Phone className="h-4 w-4 mr-2" />
+                  {profileForm.phone}
+                </div>
+              )}
+
+              {profileForm.bio && (
+                <div className="bg-gray-50 rounded-lg p-3 text-left">
+                  <p className="text-sm font-medium text-gray-700 mb-1">
+                    About
+                  </p>
+                  <p className="text-sm text-gray-600 line-clamp-3">
+                    {profileForm.bio}
+                  </p>
+                </div>
+              )}
+
+              {/* Stats */}
+              <div className="flex items-center justify-center space-x-6 text-sm text-gray-500 pt-2 border-t">
+                <span className="flex items-center">
+                  <Users className="h-4 w-4 mr-1" />
+                  {stats.totalPatients} Patients
+                </span>
+                <span className="flex items-center">
+                  <Calendar className="h-4 w-4 mr-1" />
+                  {stats.todayAppointments} Today
+                </span>
+              </div>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="pt-4 border-t space-y-3">
+              <button
+                onClick={onEdit}
+                className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+              >
+                <Settings className="h-4 w-4" />
+                <span>Edit Profile Settings</span>
+              </button>
+              <LogoutButton
+                variant="button"
+                tone="outline"
+                label="Sign Out"
+                title="Sign out"
+                className="w-full justify-center"
+              />
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  );
-});
+    );
+  }
+);
+
+// Change Password Modal Component
+const ChangePasswordModal = React.memo(
+  ({
+    isOpen,
+    onClose,
+    passwordForm,
+    handlePasswordFormChange,
+    showCurrentPassword,
+    setShowCurrentPassword,
+    showNewPassword,
+    setShowNewPassword,
+    showConfirmPassword,
+    setShowConfirmPassword,
+    handlePasswordChange,
+    passwordUpdateLoading,
+  }) => {
+    if (!isOpen) return null;
+
+    return (
+      <div className="fixed inset-0 bg-transparent backdrop-blur-md flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-xl p-8 md:p-10 max-w-lg w-full shadow-2xl">
+          <div className="flex items-center justify-between mb-8">
+            <h3 className="text-xl font-semibold text-gray-900">
+              Change Password
+            </h3>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 text-2xl"
+            >
+              ×
+            </button>
+          </div>
+
+          <div className="space-y-6">
+            {/* Current Password */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Current Password
+              </label>
+              <div className="relative">
+                <input
+                  type={showCurrentPassword ? "text" : "password"}
+                  value={passwordForm.currentPassword}
+                  onChange={(e) =>
+                    handlePasswordFormChange("currentPassword", e.target.value)
+                  }
+                  className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  placeholder="Enter current password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  {showCurrentPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* New Password */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                New Password
+              </label>
+              <div className="relative">
+                <input
+                  type={showNewPassword ? "text" : "password"}
+                  value={passwordForm.newPassword}
+                  onChange={(e) =>
+                    handlePasswordFormChange("newPassword", e.target.value)
+                  }
+                  className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  placeholder="Enter new password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  {showNewPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Confirm New Password */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Confirm New Password
+              </label>
+              <div className="relative">
+                <input
+                  type={showConfirmPassword ? "text" : "password"}
+                  value={passwordForm.confirmPassword}
+                  onChange={(e) =>
+                    handlePasswordFormChange("confirmPassword", e.target.value)
+                  }
+                  className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  placeholder="Confirm new password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  {showConfirmPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex space-x-4 pt-8">
+              <button
+                onClick={onClose}
+                className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handlePasswordChange}
+                disabled={passwordUpdateLoading}
+                className="flex-1 px-6 py-3 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors disabled:bg-emerald-300 flex items-center justify-center font-medium"
+              >
+                {passwordUpdateLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Updating...
+                  </>
+                ) : (
+                  <>
+                    <Lock className="h-4 w-4 mr-2" />
+                    Update Password
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+);
+
 import FullCalendar from "./FullCalendar";
 import PatientProfileView from "./PatientProfileView";
 
 const DashboardNew = () => {
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [showPatientProfile, setShowPatientProfile] = useState(false);
@@ -351,7 +639,6 @@ const DashboardNew = () => {
   const [patients, setPatients] = useState([]);
   const [todayAppointments, setTodayAppointments] = useState([]);
   const [appointmentRequests, setAppointmentRequests] = useState([]);
-  
 
   // Profile form states
   const [profileForm, setProfileForm] = useState({
@@ -363,16 +650,33 @@ const DashboardNew = () => {
     license_number: "",
     bio: "",
     sex: "",
-  avatar_url: "",
-    currentPassword: "",
-    newPassword: "",
-    confirmPassword: "",
+    avatar_url: "",
     profilePicture: null,
   });
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [profileUpdateLoading, setProfileUpdateLoading] = useState(false);
+
+  // Change Password Modal states
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+  const [passwordUpdateLoading, setPasswordUpdateLoading] = useState(false);
+
+  // Notification modal states
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
+  const [notificationModal, setNotificationModal] = useState({
+    type: "success", // success, warning, error
+    title: "",
+    message: "",
+  });
+
+  // Search state
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Load real data
   useEffect(() => {
@@ -388,7 +692,9 @@ const DashboardNew = () => {
         // First, get the psychologist record using the auth user_id
         const { data: psychologist, error: psychError } = await supabase
           .from("psychologists")
-          .select("id, name, first_name, middle_name, last_name, email, contact, license_number, sex, avatar_url, bio")
+          .select(
+            "id, name, first_name, middle_name, last_name, email, contact, license_number, sex, avatar_url, bio"
+          )
           .eq("user_id", user.id)
           .single();
 
@@ -399,6 +705,10 @@ const DashboardNew = () => {
         }
 
         console.log("Found psychologist:", psychologist);
+        console.log("Psychologist first_name:", psychologist.first_name);
+        console.log("Psychologist last_name:", psychologist.last_name);
+        console.log("Psychologist name:", psychologist.name);
+        console.log("Psychologist gender (sex) value:", psychologist.sex);
 
         // Use the psychologist's ID to load their data
         const psychologistId = psychologist.id;
@@ -409,7 +719,10 @@ const DashboardNew = () => {
           psychologistId
         );
         console.log("Loaded patients:", patientsData);
-        console.log("Patient avatar URLs:", patientsData.map(p => ({ name: p.name, avatar_url: p.avatar_url })));
+        console.log(
+          "Patient avatar URLs:",
+          patientsData.map((p) => ({ name: p.name, avatar_url: p.avatar_url }))
+        );
         setPatients(patientsData);
 
         // Load appointments
@@ -440,11 +753,18 @@ const DashboardNew = () => {
         setCalendarReloadKey((prev) => prev + 1);
 
         // Update profile form with psychologist data
+        console.log("Setting profile form sex to:", psychologist.sex);
         setProfileForm((prev) => ({
           ...prev,
-          first_name: psychologist.first_name || "",
+          first_name:
+            psychologist.first_name ||
+            (psychologist.name ? psychologist.name.split(" ")[0] : ""),
           middle_name: psychologist.middle_name || "",
-          last_name: psychologist.last_name || "",
+          last_name:
+            psychologist.last_name ||
+            (psychologist.name
+              ? psychologist.name.split(" ").slice(1).join(" ")
+              : ""),
           email: psychologist.email || "",
           phone: psychologist.contact || "",
           license_number: psychologist.license_number || "",
@@ -461,7 +781,7 @@ const DashboardNew = () => {
         console.log("Loaded pending requests:", pending);
         setAppointmentRequests(pending);
 
-  // Recent activity card removed (placeholder data previously set here)
+        // Recent activity card removed (placeholder data previously set here)
       } catch (error) {
         console.error("Error loading dashboard data:", error);
       } finally {
@@ -474,7 +794,8 @@ const DashboardNew = () => {
 
   // Initialize profile form when user data is available
   useEffect(() => {
-    if (user?.id && !profileForm.email) { // Only update if profileForm is empty
+    if (user?.id && !profileForm.email) {
+      // Only update if profileForm is empty
       setProfileForm((prev) => ({
         ...prev,
         name: user.name || "",
@@ -485,6 +806,12 @@ const DashboardNew = () => {
       }));
     }
   }, [user?.id]); // Only depend on user ID to prevent unnecessary re-renders
+
+  // Notification helper function
+  const showNotification = (type, title, message) => {
+    setNotificationModal({ type, title, message });
+    setShowNotificationModal(true);
+  };
 
   // Profile form handlers
   const handleProfileFormChange = useCallback((field, value) => {
@@ -507,6 +834,74 @@ const DashboardNew = () => {
   };
 
   const handleProfileUpdate = async () => {
+    // Validation: Check for required fields
+    const requiredFields = [
+      { field: "first_name", label: "First Name" },
+      { field: "last_name", label: "Last Name" },
+      { field: "phone", label: "Phone Number" },
+      { field: "license_number", label: "License Number" },
+    ];
+
+    const emptyFields = requiredFields.filter(
+      ({ field }) => !profileForm[field]?.trim()
+    );
+
+    if (emptyFields.length > 0) {
+      const fieldNames = emptyFields.map(({ label }) => label).join(", ");
+      showNotification(
+        "warning",
+        "Required Fields Missing",
+        `Please fill in the following required fields: ${fieldNames}`
+      );
+      return;
+    }
+
+    // Name validation (no numbers, minimum 2 letters)
+    const nameFields = [
+      { field: "first_name", label: "First Name" },
+      { field: "last_name", label: "Last Name" },
+      { field: "middle_name", label: "Middle Name" },
+    ];
+
+    for (const { field, label } of nameFields) {
+      const value = profileForm[field]?.trim();
+
+      // Skip validation for middle name if it's empty (optional field)
+      if (field === "middle_name" && !value) continue;
+
+      if (value) {
+        // Check for numbers in name
+        if (/\d/.test(value)) {
+          showNotification(
+            "warning",
+            "Invalid Name Format",
+            `${label} cannot contain numbers. Please use only letters.`
+          );
+          return;
+        }
+
+        // Check minimum length (2 letters)
+        if (value.length < 2) {
+          showNotification(
+            "warning",
+            "Name Too Short",
+            `${label} must be at least 2 characters long.`
+          );
+          return;
+        }
+      }
+    }
+
+    // Phone validation (should be 11 digits)
+    if (profileForm.phone.length !== 11) {
+      showNotification(
+        "warning",
+        "Invalid Phone Number",
+        "Phone number must be exactly 11 digits."
+      );
+      return;
+    }
+
     setProfileUpdateLoading(true);
     try {
       console.log("Updating profile:", profileForm);
@@ -519,17 +914,17 @@ const DashboardNew = () => {
       let uploadedAvatarUrl = profileForm.avatar_url || null;
       if (profileForm.profilePicture) {
         const file = profileForm.profilePicture;
-        const fileExt = file.name.split('.').pop();
+        const fileExt = file.name.split(".").pop();
         const fileName = `${psychologistId}/${Date.now()}.${fileExt}`;
         const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('avatars')
+          .from("avatars")
           .upload(fileName, file, { upsert: true, contentType: file.type });
         if (uploadError) {
-          console.error('Avatar upload error:', uploadError);
+          console.error("Avatar upload error:", uploadError);
           throw uploadError;
         }
         const { data: publicUrlData } = supabase.storage
-          .from('avatars')
+          .from("avatars")
           .getPublicUrl(uploadData.path);
         uploadedAvatarUrl = publicUrlData.publicUrl;
       }
@@ -540,7 +935,11 @@ const DashboardNew = () => {
         middle_name: profileForm.middle_name,
         last_name: profileForm.last_name,
         // Generate full name for backwards compatibility
-        name: `${profileForm.last_name}, ${profileForm.first_name}${profileForm.middle_name ? ' ' + profileForm.middle_name.charAt(0) + '.' : ''}`,
+        name: `${profileForm.last_name}, ${profileForm.first_name}${
+          profileForm.middle_name
+            ? " " + profileForm.middle_name.charAt(0) + "."
+            : ""
+        }`,
         contact: profileForm.phone,
         license_number: profileForm.license_number,
         bio: profileForm.bio,
@@ -559,18 +958,24 @@ const DashboardNew = () => {
       }
 
       console.log("Profile updated successfully:", updatedPsychologist);
-      
+
       setProfileUpdateLoading(false);
       setShowProfileModal(false);
-      alert("Profile updated successfully!");
-      
+      showNotification(
+        "success",
+        "Profile Updated",
+        "Your profile has been updated successfully!"
+      );
+
       // Reload dashboard data to reflect changes
       const loadDashboardData = async () => {
         // Re-run the data loading logic
         if (user?.id) {
           const { data: psychologist } = await supabase
             .from("psychologists")
-            .select("id, name, first_name, middle_name, last_name, email, contact, license_number, sex, avatar_url, bio")
+            .select(
+              "id, name, first_name, middle_name, last_name, email, contact, license_number, sex, avatar_url, bio"
+            )
             .eq("user_id", user.id)
             .single();
 
@@ -590,16 +995,94 @@ const DashboardNew = () => {
           }
         }
       };
-      
-  await loadDashboardData();
-  // Clear transient file to avoid re-uploads
-  setProfileForm((prev) => ({ ...prev, profilePicture: null }));
-      
+
+      await loadDashboardData();
+      // Clear transient file to avoid re-uploads
+      setProfileForm((prev) => ({ ...prev, profilePicture: null }));
     } catch (error) {
       console.error("Error updating profile:", error);
       setProfileUpdateLoading(false);
-      alert(`Error updating profile: ${error.message}`);
+      showNotification(
+        "error",
+        "Update Failed",
+        `Error updating profile: ${error.message}`
+      );
     }
+  };
+
+  // Handle Password Change
+  const handlePasswordChange = async () => {
+    setPasswordUpdateLoading(true);
+    try {
+      // Validate password change
+      if (!passwordForm.currentPassword) {
+        throw new Error("Current password is required");
+      }
+      if (!passwordForm.newPassword) {
+        throw new Error("New password is required");
+      }
+      if (!passwordForm.confirmPassword) {
+        throw new Error("Please confirm your new password");
+      }
+      if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+        throw new Error("New passwords do not match");
+      }
+      if (passwordForm.newPassword.length < 6) {
+        throw new Error("New password must be at least 6 characters long");
+      }
+
+      // Verify current password by attempting to sign in
+      try {
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: profileForm.email,
+          password: passwordForm.currentPassword,
+        });
+        if (signInError) {
+          throw new Error("Current password is incorrect");
+        }
+      } catch (error) {
+        throw new Error("Current password is incorrect");
+      }
+
+      // Update the password
+      const { error: passwordError } = await supabase.auth.updateUser({
+        password: passwordForm.newPassword,
+      });
+      if (passwordError) {
+        throw new Error(`Failed to update password: ${passwordError.message}`);
+      }
+
+      // Clear password form
+      setPasswordForm({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+
+      setPasswordUpdateLoading(false);
+      setShowChangePasswordModal(false);
+      showNotification(
+        "success",
+        "Password Updated",
+        "Your password has been updated successfully!"
+      );
+    } catch (error) {
+      console.error("Error updating password:", error);
+      setPasswordUpdateLoading(false);
+      showNotification(
+        "error",
+        "Password Update Failed",
+        `Error updating password: ${error.message}`
+      );
+    }
+  };
+
+  // Handle password form changes
+  const handlePasswordFormChange = (field, value) => {
+    setPasswordForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
   };
 
   // Profile Modal Component (moved to top-level to prevent remounts)
@@ -637,11 +1120,7 @@ const DashboardNew = () => {
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
-          <ProfilePicture 
-            patient={patient} 
-            size={40}
-            className=""
-          />
+          <ProfilePicture patient={patient} size={40} className="" />
           <div>
             <h3 className="font-semibold text-gray-900">{patient.name}</h3>
             <p className="text-sm text-gray-600">{patient.email}</p>
@@ -808,6 +1287,21 @@ const DashboardNew = () => {
     }
   };
 
+  // Filter patients based on search term
+  const filteredPatients = React.useMemo(() => {
+    if (!searchTerm.trim()) {
+      return patients;
+    }
+
+    const searchLower = searchTerm.toLowerCase().trim();
+    return patients.filter((patient) => {
+      const name = (patient.name || patient.full_name || "").toLowerCase();
+      const email = (patient.email || "").toLowerCase();
+
+      return name.includes(searchLower) || email.includes(searchLower);
+    });
+  }, [patients, searchTerm]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -841,13 +1335,16 @@ const DashboardNew = () => {
                     className="h-6 w-6 logo-breathe"
                   />
                   <div className="flex items-baseline space-x-3">
-                    <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-                    <span className="text-sm text-gray-500">Psychologist Portal</span>
+                    <h1 className="text-2xl font-bold text-gray-900">
+                      Dashboard
+                    </h1>
+                    <span className="text-sm text-gray-500">
+                      Psychologist Portal
+                    </span>
                   </div>
                 </div>
 
                 <div className="flex items-center space-x-4">
-
                   <div className="flex items-center space-x-3">
                     <button
                       onClick={() => setShowProfileOverview(true)}
@@ -856,18 +1353,33 @@ const DashboardNew = () => {
                     >
                       <div className="text-right">
                         <p className="text-sm font-medium text-gray-900">
-                          Dr. {profileForm.last_name ? 
-                            `${profileForm.last_name}, ${profileForm.first_name}${profileForm.middle_name ? ' ' + profileForm.middle_name.charAt(0) + '.' : ''}` 
-                            : (user?.name || "Psychologist")}
+                          Dr.{" "}
+                          {profileForm.last_name
+                            ? `${profileForm.last_name}, ${
+                                profileForm.first_name
+                              }${
+                                profileForm.middle_name
+                                  ? " " +
+                                    profileForm.middle_name.charAt(0) +
+                                    "."
+                                  : ""
+                              }`
+                            : user?.name || "Psychologist"}
                         </p>
                         <p className="text-xs text-gray-500">{user?.email}</p>
                       </div>
                       {profileForm.avatar_url ? (
-                        <img src={profileForm.avatar_url} alt="Profile" className="h-8 w-8 rounded-full object-cover border" />
+                        <img
+                          src={profileForm.avatar_url}
+                          alt="Profile"
+                          className="h-12 w-12 rounded-full object-cover border"
+                        />
                       ) : (
-                        <div className="h-8 w-8 rounded-full bg-emerald-100 flex items-center justify-center">
-                          <span className="text-emerald-600 font-medium text-sm">
-                            {profileForm.first_name?.charAt(0) || user?.name?.charAt(0) || "D"}
+                        <div className="h-12 w-12 rounded-full bg-emerald-100 flex items-center justify-center">
+                          <span className="text-emerald-600 font-medium text-lg">
+                            {profileForm.first_name?.charAt(0) ||
+                              user?.name?.charAt(0) ||
+                              "D"}
                           </span>
                         </div>
                       )}
@@ -935,27 +1447,44 @@ const DashboardNew = () => {
                 {/* My Patients (moved here above Appointment Requests) */}
                 <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
                   <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-lg font-semibold text-gray-900">
-                      My Patients
-                    </h2>
+                    <div className="flex items-center gap-3">
+                      <h2 className="text-lg font-semibold text-gray-900">
+                        My Patients
+                      </h2>
+                      {searchTerm.trim() ? (
+                        <div className="flex items-center gap-1">
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            {filteredPatients.length} found
+                          </span>
+                          <span className="text-xs text-gray-400">of</span>
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-50 text-gray-600 border border-gray-200">
+                            {patients.length} total
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                          {patients.length}{" "}
+                          {patients.length === 1 ? "patient" : "patients"}
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center space-x-2">
                       <div className="relative">
                         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                         <input
                           type="text"
                           placeholder="Search patients..."
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
                           className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
                         />
                       </div>
-                      <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg">
-                        <Filter className="h-4 w-4" />
-                      </button>
                     </div>
                   </div>
 
                   <div className="space-y-3">
-                    {patients.length > 0 ? (
-                      patients.map((patient) => (
+                    {filteredPatients.length > 0 ? (
+                      filteredPatients.map((patient) => (
                         <PatientCard
                           key={patient.id}
                           patient={patient}
@@ -965,6 +1494,17 @@ const DashboardNew = () => {
                           }}
                         />
                       ))
+                    ) : searchTerm.trim() ? (
+                      <div className="text-center py-8 text-gray-500">
+                        <Search className="h-12 w-12 mx-auto mb-2 text-gray-300" />
+                        <p>No patients found matching "{searchTerm}"</p>
+                        <button
+                          onClick={() => setSearchTerm("")}
+                          className="mt-2 text-emerald-600 hover:text-emerald-700 text-sm"
+                        >
+                          Clear search
+                        </button>
+                      </div>
                     ) : (
                       <div className="text-center py-8 text-gray-500">
                         <Users className="h-12 w-12 mx-auto mb-2 text-gray-300" />
@@ -1040,14 +1580,34 @@ const DashboardNew = () => {
             user={user}
             handleProfilePictureChange={handleProfilePictureChange}
             handleProfileFormChange={handleProfileFormChange}
+            handleProfileUpdate={handleProfileUpdate}
+            profileUpdateLoading={profileUpdateLoading}
+            setShowChangePasswordModal={setShowChangePasswordModal}
+          />
+
+          {/* Change Password Modal */}
+          <ChangePasswordModal
+            isOpen={showChangePasswordModal}
+            onClose={() => setShowChangePasswordModal(false)}
+            passwordForm={passwordForm}
+            handlePasswordFormChange={handlePasswordFormChange}
             showCurrentPassword={showCurrentPassword}
             setShowCurrentPassword={setShowCurrentPassword}
             showNewPassword={showNewPassword}
             setShowNewPassword={setShowNewPassword}
             showConfirmPassword={showConfirmPassword}
             setShowConfirmPassword={setShowConfirmPassword}
-            handleProfileUpdate={handleProfileUpdate}
-            profileUpdateLoading={profileUpdateLoading}
+            handlePasswordChange={handlePasswordChange}
+            passwordUpdateLoading={passwordUpdateLoading}
+          />
+
+          {/* Success/Error Notification Modal */}
+          <SuccessModal
+            isOpen={showNotificationModal}
+            onClose={() => setShowNotificationModal(false)}
+            type={notificationModal.type}
+            title={notificationModal.title}
+            message={notificationModal.message}
           />
 
           {/* Profile Overview Modal */}
@@ -1057,8 +1617,10 @@ const DashboardNew = () => {
             profileForm={profileForm}
             user={user}
             stats={stats}
-            onEdit={() => { setShowProfileOverview(false); setShowProfileModal(true); }}
-            onSignOut={signOut}
+            onEdit={() => {
+              setShowProfileOverview(false);
+              setShowProfileModal(true);
+            }}
           />
 
           {/* Full Calendar (modal) removed since calendar is inline now */}
@@ -1080,9 +1642,9 @@ const DashboardNew = () => {
                 </div>
                 <div className="space-y-4">
                   <div className="flex items-center space-x-3">
-                    <ProfilePicture 
-                      patient={selectedPatient} 
-                      size={64}
+                    <ProfilePicture
+                      patient={selectedPatient}
+                      size={100}
                       className=""
                     />
                     <div>

@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Lock } from "lucide-react";
+import { supabase } from "../services/supabaseClient";
+import { authService } from "../services/authService";
 
 const ResetPasswordPage = () => {
   const [password, setPassword] = useState("");
@@ -15,17 +17,37 @@ const ResetPasswordPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Extract token from URL when component mounts
+  // Handle Supabase recovery session on mount
   useEffect(() => {
-    const queryParams = new URLSearchParams(location.search);
-    const tokenFromUrl = queryParams.get("token");
-    if (tokenFromUrl) {
-      setToken(tokenFromUrl);
-    } else {
-      setError(
-        "Invalid or missing reset token. Please try the reset password process again."
-      );
-    }
+    const handleHashSession = async () => {
+      // Supabase sends access_token in URL hash on recovery
+      if (location.hash && location.hash.includes("access_token")) {
+        const { data, error } = await supabase.auth.getSessionFromUrl({
+          storeSession: true,
+        });
+        if (error) {
+          setError("Failed to verify reset link. Please try again.");
+          return;
+        }
+        // Session is now set; allow password update
+        setToken("recovery");
+        // Clean the hash from the URL
+        window.history.replaceState({}, document.title, location.pathname);
+      } else {
+        // If using a direct token query param (legacy), fall back
+        const queryParams = new URLSearchParams(location.search);
+        const tokenFromUrl = queryParams.get("token");
+        if (tokenFromUrl) {
+          setToken(tokenFromUrl);
+        } else {
+          // We still allow user to land, but require a valid session to submit
+          setError(
+            "Open the reset link from your email to continue resetting your password."
+          );
+        }
+      }
+    };
+    handleHashSession();
   }, [location]);
 
   // Password toggle handlers
@@ -74,10 +96,8 @@ const ResetPasswordPage = () => {
     try {
       setIsSubmitting(true);
 
-      // Simulate API call to reset password
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-
-      // Simulate successful password reset
+      // Update password via Supabase (requires active recovery session)
+      await authService.updatePassword(password);
       setSuccess(true);
 
       // Redirect to login page after a delay
@@ -136,7 +156,7 @@ const ResetPasswordPage = () => {
                 strokeLinejoin="round"
               />
             </svg>
-            <div>Invalid or missing reset token.</div>
+            <div>{error}</div>
           </div>
         )}
 
@@ -169,7 +189,7 @@ const ResetPasswordPage = () => {
               Password reset successful!
             </div>
             <p className="text-gray-600">
-              Your password has been updated. Redirecting to login page...
+              Your password has been updated. Redirecting to sign in page...
             </p>
           </div>
         ) : (

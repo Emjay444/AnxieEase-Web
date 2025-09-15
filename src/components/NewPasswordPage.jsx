@@ -173,7 +173,7 @@ const NewPasswordPage = () => {
               Password update successful!
             </div>
             <p className="text-gray-600">
-              Your password has been updated. Redirecting to login page...
+              Your password has been updated. Redirecting to sign in page...
             </p>
           </div>
         ) : (

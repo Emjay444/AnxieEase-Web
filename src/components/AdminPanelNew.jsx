@@ -25,11 +25,35 @@ import {
   UserCheck,
   UserX,
   BarChart3,
-  LogOut,
   CheckCircle,
   User,
   X,
 } from "lucide-react";
+import LogoutButton from "./LogoutButton";
+// Charts
+import { Pie, Bar, Line } from "react-chartjs-2";
+import {
+  Chart as ChartJS,
+  ArcElement,
+  Tooltip as ChartTooltip,
+  Legend as ChartLegend,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  PointElement,
+  LineElement,
+} from "chart.js";
+
+ChartJS.register(
+  ArcElement,
+  ChartTooltip,
+  ChartLegend,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  PointElement,
+  LineElement
+);
 
 // Success Modal Component
 const SuccessModal = ({ isOpen, onClose, title, message, details = [] }) => {
@@ -103,7 +127,7 @@ const SuccessModal = ({ isOpen, onClose, title, message, details = [] }) => {
 };
 
 const AdminPanelNew = () => {
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("overview");
   const [psychologistSearchTerm, setPsychologistSearchTerm] = useState("");
   const [patientSearchTerm, setPatientSearchTerm] = useState("");
@@ -208,7 +232,13 @@ const AdminPanelNew = () => {
       // Load psychologists
       const psychologistsList = await psychologistService.getAllPsychologists();
       console.log("Loaded psychologists:", psychologistsList);
-      console.log("Psychologist avatar URLs:", psychologistsList.map(p => ({ name: p.name, avatar_url: p.avatar_url })));
+      console.log(
+        "Psychologist avatar URLs:",
+        psychologistsList.map((p) => ({
+          name: p.name,
+          avatar_url: p.avatar_url,
+        }))
+      );
       setPsychologists(psychologistsList);
 
       // Load activity logs
@@ -558,11 +588,7 @@ const AdminPanelNew = () => {
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center space-x-3">
           <div className={`${!psychologist.is_active ? "opacity-60" : ""}`}>
-            <ProfilePicture 
-              patient={psychologist} 
-              size={48}
-              className=""
-            />
+            <ProfilePicture patient={psychologist} size={48} className="" />
           </div>
           <div>
             <h3
@@ -714,7 +740,9 @@ const AdminPanelNew = () => {
                   e.currentTarget.style.display = "none";
                 }}
               />
-              <h1 className="text-2xl font-bold text-gray-900">AnxieEase Admin</h1>
+              <h1 className="text-2xl font-bold text-gray-900">
+                AnxieEase Admin
+              </h1>
               <span className="text-sm text-gray-500">Dashboard</span>
             </div>
 
@@ -727,12 +755,7 @@ const AdminPanelNew = () => {
                   </p>
                   <p className="text-xs text-gray-500">{user?.email}</p>
                 </div>
-                <button
-                  onClick={signOut}
-                  className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                >
-                  <LogOut className="h-5 w-5" />
-                </button>
+                <LogoutButton variant="icon" />
               </div>
             </div>
           </div>
@@ -843,33 +866,30 @@ const AdminPanelNew = () => {
                     Gender Distribution
                   </h3>
                 </div>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center">
-                      <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
-                      <span className="text-sm text-gray-600">Male:</span>
-                    </div>
-                    <span className="font-medium">
-                      {analyticsData.genderDistribution.male}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center">
-                      <div className="w-3 h-3 bg-red-500 rounded-full mr-2"></div>
-                      <span className="text-sm text-gray-600">Female:</span>
-                    </div>
-                    <span className="font-medium">
-                      {analyticsData.genderDistribution.female}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center">
-                      <div className="w-3 h-3 bg-orange-500 rounded-full mr-2"></div>
-                      <span className="text-sm text-gray-600">Other:</span>
-                    </div>
-                    <span className="font-medium">
-                      {analyticsData.genderDistribution.other}
-                    </span>
+                <div className="space-y-4">
+                  <div className="w-full h-64">
+                    <Pie
+                      data={{
+                        labels: ["Male", "Female"],
+                        datasets: [
+                          {
+                            data: [
+                              analyticsData.genderDistribution.male || 0,
+                              analyticsData.genderDistribution.female || 0,
+                            ],
+                            backgroundColor: ["#22c55e", "#ef4444"], // green, red
+                            borderColor: "#ffffff",
+                            borderWidth: 2,
+                          },
+                        ],
+                      }}
+                      options={{
+                        maintainAspectRatio: false,
+                        plugins: {
+                          legend: { position: "bottom" },
+                        },
+                      }}
+                    />
                   </div>
                   <div className="pt-2 border-t border-gray-200">
                     <div className="flex items-center justify-between">
@@ -892,20 +912,100 @@ const AdminPanelNew = () => {
                     Age Distribution
                   </h3>
                 </div>
-                <div className="space-y-3">
-                  {Object.entries(analyticsData.ageDistribution).map(
-                    ([ageRange, count]) => (
-                      <div
-                        key={ageRange}
-                        className="flex items-center justify-between"
-                      >
-                        <span className="text-sm text-gray-600">
-                          {ageRange}:
-                        </span>
-                        <span className="font-medium">{count}</span>
-                      </div>
-                    )
-                  )}
+                <div className="w-full h-64">
+                  <Bar
+                    data={{
+                      labels: (() => {
+                        const hist = analyticsData.ageHistogram || {};
+                        const present = Object.keys(hist)
+                          .map((k) => parseInt(k, 10))
+                          .filter((age) => age >= 0 && age <= 120);
+                        const minAge = 18;
+                        const maxPresent = present.length
+                          ? Math.max(...present)
+                          : 60;
+                        const maxAge = Math.min(Math.max(maxPresent, 60), 100);
+                        return Array.from(
+                          { length: maxAge - minAge + 1 },
+                          (_, i) => minAge + i
+                        );
+                      })(),
+                      datasets: [
+                        {
+                          label: "Patients",
+                          data: (() => {
+                            const hist = analyticsData.ageHistogram || {};
+                            const minAge = 18;
+                            const labels = (() => {
+                              const present = Object.keys(hist)
+                                .map((k) => parseInt(k, 10))
+                                .filter((age) => age >= 0 && age <= 120);
+                              const maxPresent = present.length
+                                ? Math.max(...present)
+                                : 60;
+                              const maxAge = Math.min(
+                                Math.max(maxPresent, 60),
+                                100
+                              );
+                              return Array.from(
+                                { length: maxAge - minAge + 1 },
+                                (_, i) => minAge + i
+                              );
+                            })();
+                            return labels.map((a) => hist[String(a)] || 0);
+                          })(),
+                          backgroundColor: "#3b82f6", // blue-500
+                          borderRadius: 4,
+                          borderSkipped: false,
+                          barThickness: 14,
+                          maxBarThickness: 18,
+                          categoryPercentage: 1.0,
+                          barPercentage: 1.0,
+                        },
+                      ],
+                    }}
+                    options={{
+                      maintainAspectRatio: false,
+                      plugins: { legend: { display: false } },
+                      scales: {
+                        x: {
+                          grid: { display: false },
+                          ticks: {
+                            autoSkip: false,
+                            maxRotation: 0,
+                            minRotation: 0,
+                            callback: function (value, index, ticks) {
+                              const label = this.getLabelForValue(value);
+                              const total = ticks.length;
+                              // Dynamic density: show about 10–15 labels
+                              const N =
+                                total > 45
+                                  ? 4
+                                  : total > 30
+                                  ? 3
+                                  : total > 20
+                                  ? 2
+                                  : 1;
+                              return index % N === 0 ? label : "";
+                            },
+                          },
+                        },
+                        y: {
+                          beginAtZero: true,
+                          ticks: { precision: 0 },
+                          suggestedMax: (() => {
+                            const hist = analyticsData.ageHistogram || {};
+                            const vals = Object.values(hist).map(
+                              (v) => Number(v) || 0
+                            );
+                            const maxVal = vals.length ? Math.max(...vals) : 0;
+                            const padded = Math.ceil(maxVal * 1.2);
+                            return Math.max(10, padded);
+                          })(),
+                        },
+                      },
+                    }}
+                  />
                 </div>
               </div>
 
@@ -941,53 +1041,60 @@ const AdminPanelNew = () => {
                     })()}
                   </select>
                 </div>
-                <div className="space-y-2">
-                  {Object.entries(analyticsData.monthlyRegistrations).map(
-                    ([month, count]) => {
-                      const maxCount = Math.max(
-                        ...Object.values(analyticsData.monthlyRegistrations)
-                      );
-                      const hasData = maxCount > 0;
-                      const percentage =
-                        hasData && count > 0 ? (count / maxCount) * 100 : 0;
-
-                      return (
-                        <div
-                          key={month}
-                          className="flex items-center justify-between"
-                        >
-                          <span className="text-sm text-gray-600">
-                            {month}:
-                          </span>
-                          <div className="flex items-center space-x-2">
-                            <div className="w-20 bg-gray-200 rounded-full h-2">
-                              <div
-                                className="bg-purple-600 h-2 rounded-full transition-all duration-300"
-                                style={{
-                                  width: `${percentage}%`,
-                                }}
-                              ></div>
-                            </div>
-                            <span className="font-medium text-sm w-6">
-                              {count}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    }
-                  )}
-                  <div className="pt-2 border-t border-gray-200">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-700">
-                        Total {selectedYear}:
-                      </span>
-                      <span className="font-semibold">
-                        {Object.values(
-                          analyticsData.monthlyRegistrations
-                        ).reduce((sum, count) => sum + count, 0)}{" "}
-                        patients
-                      </span>
-                    </div>
+                <div className="w-full h-64">
+                  <Line
+                    data={{
+                      labels: Object.keys(
+                        analyticsData.monthlyRegistrations || {}
+                      ),
+                      datasets: [
+                        {
+                          label: `Registrations ${selectedYear}`,
+                          data: Object.values(
+                            analyticsData.monthlyRegistrations || {}
+                          ),
+                          borderColor: "#a855f7", // purple-500
+                          backgroundColor: "rgba(168, 85, 247, 0.15)",
+                          tension: 0.3,
+                          fill: true,
+                          pointRadius: 3,
+                          pointBackgroundColor: "#7c3aed", // purple-600
+                        },
+                      ],
+                    }}
+                    options={{
+                      maintainAspectRatio: false,
+                      plugins: { legend: { display: false } },
+                      scales: {
+                        x: { grid: { display: false } },
+                        y: {
+                          beginAtZero: true,
+                          ticks: { precision: 0 },
+                          // Ensure at least 10 on the Y-axis; add headroom when data is higher
+                          suggestedMax: (() => {
+                            const vals = Object.values(
+                              analyticsData.monthlyRegistrations || {}
+                            ).map((v) => Number(v) || 0);
+                            const maxVal = vals.length ? Math.max(...vals) : 0;
+                            const padded = Math.ceil(maxVal * 1.2);
+                            return Math.max(10, padded);
+                          })(),
+                        },
+                      },
+                    }}
+                  />
+                </div>
+                <div className="pt-2 border-t border-gray-200 mt-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-700">
+                      Total {selectedYear}:
+                    </span>
+                    <span className="font-semibold">
+                      {Object.values(
+                        analyticsData.monthlyRegistrations || {}
+                      ).reduce((sum, count) => sum + count, 0)}{" "}
+                      patients
+                    </span>
                   </div>
                 </div>
               </div>
@@ -1552,8 +1659,8 @@ const AdminPanelNew = () => {
 
             <div className="space-y-6">
               <div className="flex items-center space-x-4">
-                <ProfilePicture 
-                  patient={selectedPsychologist} 
+                <ProfilePicture
+                  patient={selectedPsychologist}
                   size={64}
                   className=""
                 />
@@ -1660,8 +1767,8 @@ const AdminPanelNew = () => {
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center space-x-3">
-                              <ProfilePicture 
-                                patient={patient} 
+                              <ProfilePicture
+                                patient={patient}
                                 size={32}
                                 className=""
                               />
@@ -2364,12 +2471,17 @@ const AdminPanelNew = () => {
             <div className="p-6">
               {/* Patient Info Header */}
               <div className="flex items-center space-x-4 mb-6">
-                <ProfilePicture 
-                  userId={patientToAssign.user_id || patientToAssign.id} 
-                  name={patientToAssign.name || 
-                    `${patientToAssign.first_name || ""} ${patientToAssign.last_name || ""}`.trim() || 
-                    patientToAssign.email?.split("@")[0] || "Unknown Patient"} 
-                  size={48} 
+                <ProfilePicture
+                  userId={patientToAssign.user_id || patientToAssign.id}
+                  name={
+                    patientToAssign.name ||
+                    `${patientToAssign.first_name || ""} ${
+                      patientToAssign.last_name || ""
+                    }`.trim() ||
+                    patientToAssign.email?.split("@")[0] ||
+                    "Unknown Patient"
+                  }
+                  size={48}
                 />
                 <div>
                   <h3 className="text-lg font-medium text-gray-900">
@@ -2585,10 +2697,10 @@ const AdminPanelNew = () => {
             <div className="p-6">
               {/* Patient Info Header */}
               <div className="flex items-center space-x-4 mb-6">
-                <ProfilePicture 
-                  userId={pendingAssignment.patientId} 
-                  name={pendingAssignment.patientName} 
-                  size={48} 
+                <ProfilePicture
+                  userId={pendingAssignment.patientId}
+                  name={pendingAssignment.patientName}
+                  size={48}
                 />
                 <div>
                   <h3 className="text-lg font-medium text-gray-900">

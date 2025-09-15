@@ -668,13 +668,14 @@ export const adminService = {
         });
       }
 
-      // Process age distribution
+      // Process age distribution (bucketed) and exact-age histogram
       const ageStats = {
         "18-25": 0,
         "26-35": 0,
         "36-45": 0,
         "46+": 0,
       };
+      const ageHistogram = {}; // { '18': 3, '19': 1, ... }
 
       if (ageData) {
         const currentDate = new Date();
@@ -688,6 +689,12 @@ export const adminService = {
               (monthDiff === 0 && currentDate.getDate() < birthDate.getDate())
                 ? age - 1
                 : age;
+
+            // Build exact-age histogram (limit to a reasonable range)
+            if (adjustedAge >= 0 && adjustedAge <= 120) {
+              const key = String(adjustedAge);
+              ageHistogram[key] = (ageHistogram[key] || 0) + 1;
+            }
 
             if (adjustedAge >= 18 && adjustedAge <= 25) {
               ageStats["18-25"]++;
@@ -734,6 +741,7 @@ export const adminService = {
       return {
         genderDistribution: genderStats,
         ageDistribution: ageStats,
+        ageHistogram,
         monthlyRegistrations: monthlyStats,
         totalPatients: genderData?.length || 0,
       };
@@ -742,6 +750,7 @@ export const adminService = {
       return {
         genderDistribution: { male: 0, female: 0, other: 0 },
         ageDistribution: { "18-25": 0, "26-35": 0, "36-45": 0, "46+": 0 },
+        ageHistogram: {},
         monthlyRegistrations: {
           Jan: 0,
           Feb: 0,

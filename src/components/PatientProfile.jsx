@@ -172,8 +172,8 @@ const PatientProfile = () => {
   }
 
   return (
-    <div className="min-h-screen bg-app-light px-4 py-6">
-      <header className="flex items-center justify-between max-w-6xl mx-auto mb-6">
+    <div className="min-h-screen bg-app-light px-4 sm:px-5 lg:px-6 xl:px-8 py-6">
+      <header className="flex items-center justify-between w-full mx-auto mb-6">
         <button
           className="text-emerald-700 hover:underline"
           onClick={handleBackClick}
@@ -188,7 +188,7 @@ const PatientProfile = () => {
         </div>
       </header>
 
-      <div className="max-w-6xl mx-auto">
+      <div className="w-full mx-auto">
         <div className="mb-4 text-sm text-gray-600">
           ID: {currentPatient.id}
         </div>
