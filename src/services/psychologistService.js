@@ -128,58 +128,69 @@ export const psychologistService = {
       // Generate a UUID for the psychologist
       const psychologistId = crypto.randomUUID();
 
-      // Create the psychologist record first
-      const { data: psychData, error: psychError } = await supabase
-        .from("psychologists")
-        .insert([
-          {
-            id: psychologistId,
-            name: psychologistData.name,
-            email: psychologistData.email,
-            contact: psychologistData.contact,
-            license_number: psychologistData.licenseNumber,
-            sex: psychologistData.sex,
-            is_active:
-              psychologistData.is_active !== undefined
-                ? psychologistData.is_active
-                : false, // Default to false for email verification
+      // Create the psychologist record and send email in parallel for better performance
+      const [psychResult, emailResult] = await Promise.allSettled([
+        // Create the psychologist record
+        supabase
+          .from("psychologists")
+          .insert([
+            {
+              id: psychologistId,
+              name: psychologistData.name,
+              email: psychologistData.email,
+              contact: psychologistData.contact,
+              license_number: psychologistData.licenseNumber,
+              sex: psychologistData.sex,
+              is_active:
+                psychologistData.is_active !== undefined
+                  ? psychologistData.is_active
+                  : false, // Default to false for email verification
+            },
+          ])
+          .select(),
+        
+        // Send magic link with setup URL
+        supabase.auth.signInWithOtp({
+          email: psychologistData.email,
+          options: {
+            // Always redirect to a clean setup route; Supabase will attach tokens in the URL hash
+            emailRedirectTo: `${
+              import.meta.env.VITE_APP_URL || window.location.origin
+            }/psychologist-setup`,
+            data: {
+              role: "psychologist",
+              psychologistId: psychologistId,
+              name: psychologistData.name,
+            },
           },
-        ])
-        .select();
+        })
+      ]);
 
-      if (psychError) {
-        console.error("Database error:", psychError.message);
-        throw psychError;
+      // Check if psychologist creation failed
+      if (psychResult.status === 'rejected' || psychResult.value.error) {
+        const error = psychResult.status === 'rejected' ? psychResult.reason : psychResult.value.error;
+        console.error("Database error:", error.message);
+        throw error;
       }
 
-      // Send magic link with setup URL
-      const { error: signInError } = await supabase.auth.signInWithOtp({
-        email: psychologistData.email,
-        options: {
-          emailRedirectTo: `${
-            import.meta.env.VITE_APP_URL || window.location.origin
-          }/psychologist-setup/${encodeURIComponent(
-            psychologistData.email
-          )}/${psychologistId}`,
-          data: {
-            role: "psychologist",
-            psychologistId: psychologistId,
-            name: psychologistData.name,
-          },
-        },
-      });
-
-      if (signInError) {
-        // If sign-in fails, clean up the psychologist record
-        await supabase.from("psychologists").delete().eq("id", psychologistId);
-        console.error("Magic link error:", signInError.message);
-        throw signInError;
+      // Check if email sending failed
+      if (emailResult.status === 'rejected' || emailResult.value.error) {
+        // If email fails, still keep the psychologist record but warn
+        const error = emailResult.status === 'rejected' ? emailResult.reason : emailResult.value.error;
+        console.warn("Magic link email failed, but psychologist created:", error.message);
+        
+        return {
+          ...psychResult.value.data[0],
+          message: "Psychologist created but email could not be sent. Please try sending the invitation manually.",
+          emailSent: false
+        };
       }
 
       return {
-        ...psychData[0],
+        ...psychResult.value.data[0],
         message:
           "Invitation sent! The psychologist will receive an email with a magic link to set up their account.",
+        emailSent: true
       };
     } catch (error) {
       console.error("Create psychologist error:", error.message);

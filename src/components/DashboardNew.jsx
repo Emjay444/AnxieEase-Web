@@ -20,6 +20,7 @@ import {
   Save,
   Eye,
   EyeOff,
+  ArrowLeft,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { psychologistService } from "../services/psychologistService";
@@ -475,26 +476,62 @@ const ChangePasswordModal = React.memo(
   }) => {
     if (!isOpen) return null;
 
+    // Password validation logic
+    const validatePassword = (password) => {
+      const requirements = {
+        minLength: password.length >= 8,
+        hasUppercase: /[A-Z]/.test(password),
+        hasLowercase: /[a-z]/.test(password),
+        hasNumber: /[0-9]/.test(password),
+        hasSpecialChar: /[!@#$%^&*(),.?":{}|<>]/.test(password),
+      };
+      return requirements;
+    };
+
+    const passwordRequirements = validatePassword(passwordForm.newPassword);
+    const allRequirementsMet =
+      Object.values(passwordRequirements).every(Boolean);
+    const passwordsMatch =
+      passwordForm.newPassword &&
+      passwordForm.confirmPassword &&
+      passwordForm.newPassword === passwordForm.confirmPassword;
+
+    // Field validation errors
+    const currentPasswordError =
+      passwordForm.currentPassword === ""
+        ? "Please enter current password"
+        : "";
+    const newPasswordError =
+      passwordForm.newPassword && !allRequirementsMet
+        ? "Password must meet all requirements"
+        : "";
+    const confirmPasswordError =
+      passwordForm.confirmPassword && !passwordsMatch
+        ? "Passwords do not match"
+        : "";
+
     return (
       <div className="fixed inset-0 bg-transparent backdrop-blur-md flex items-center justify-center p-4 z-50">
         <div className="bg-white rounded-xl p-8 md:p-10 max-w-lg w-full shadow-2xl">
           <div className="flex items-center justify-between mb-8">
-            <h3 className="text-xl font-semibold text-gray-900">
-              Change Password
-            </h3>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 text-2xl"
-            >
-              ×
-            </button>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={onClose}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </button>
+              <h3 className="text-xl font-semibold text-gray-900">
+                Change Password
+              </h3>
+            </div>
           </div>
 
           <div className="space-y-6">
             {/* Current Password */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Current Password
+                Change Password
               </label>
               <div className="relative">
                 <input
@@ -503,7 +540,9 @@ const ChangePasswordModal = React.memo(
                   onChange={(e) =>
                     handlePasswordFormChange("currentPassword", e.target.value)
                   }
-                  className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  className={`w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent ${
+                    currentPasswordError ? "border-red-500" : "border-gray-300"
+                  }`}
                   placeholder="Enter current password"
                 />
                 <button
@@ -518,6 +557,11 @@ const ChangePasswordModal = React.memo(
                   )}
                 </button>
               </div>
+              {currentPasswordError && (
+                <p className="text-red-500 text-sm mt-1">
+                  {currentPasswordError}
+                </p>
+              )}
             </div>
 
             {/* New Password */}
@@ -532,7 +576,9 @@ const ChangePasswordModal = React.memo(
                   onChange={(e) =>
                     handlePasswordFormChange("newPassword", e.target.value)
                   }
-                  className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  className={`w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent ${
+                    newPasswordError ? "border-red-500" : "border-gray-300"
+                  }`}
                   placeholder="Enter new password"
                 />
                 <button
@@ -547,12 +593,168 @@ const ChangePasswordModal = React.memo(
                   )}
                 </button>
               </div>
+              {newPasswordError && (
+                <p className="text-red-500 text-sm mt-1">{newPasswordError}</p>
+              )}
+            </div>
+
+            {/* Password Requirements - Always Show */}
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h4 className="text-sm font-medium text-gray-700 mb-3">
+                Password Requirements:
+              </h4>
+              <div className="space-y-2">
+                <div className="flex items-center">
+                  {passwordRequirements.minLength ? (
+                    <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center mr-3">
+                      <svg
+                        className="w-3 h-3 text-white"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </div>
+                  ) : (
+                    <div className="w-5 h-5 rounded-full border-2 border-gray-300 mr-3"></div>
+                  )}
+                  <span
+                    className={`text-sm ${
+                      passwordRequirements.minLength
+                        ? "text-green-600"
+                        : "text-gray-600"
+                    }`}
+                  >
+                    At least 8 characters
+                  </span>
+                </div>
+
+                <div className="flex items-center">
+                  {passwordRequirements.hasUppercase ? (
+                    <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center mr-3">
+                      <svg
+                        className="w-3 h-3 text-white"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </div>
+                  ) : (
+                    <div className="w-5 h-5 rounded-full border-2 border-gray-300 mr-3"></div>
+                  )}
+                  <span
+                    className={`text-sm ${
+                      passwordRequirements.hasUppercase
+                        ? "text-green-600"
+                        : "text-gray-600"
+                    }`}
+                  >
+                    One uppercase letter (A-Z)
+                  </span>
+                </div>
+
+                <div className="flex items-center">
+                  {passwordRequirements.hasLowercase ? (
+                    <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center mr-3">
+                      <svg
+                        className="w-3 h-3 text-white"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </div>
+                  ) : (
+                    <div className="w-5 h-5 rounded-full border-2 border-gray-300 mr-3"></div>
+                  )}
+                  <span
+                    className={`text-sm ${
+                      passwordRequirements.hasLowercase
+                        ? "text-green-600"
+                        : "text-gray-600"
+                    }`}
+                  >
+                    One lowercase letter (a-z)
+                  </span>
+                </div>
+
+                <div className="flex items-center">
+                  {passwordRequirements.hasNumber ? (
+                    <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center mr-3">
+                      <svg
+                        className="w-3 h-3 text-white"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </div>
+                  ) : (
+                    <div className="w-5 h-5 rounded-full border-2 border-gray-300 mr-3"></div>
+                  )}
+                  <span
+                    className={`text-sm ${
+                      passwordRequirements.hasNumber
+                        ? "text-green-600"
+                        : "text-gray-600"
+                    }`}
+                  >
+                    One number (0-9)
+                  </span>
+                </div>
+
+                <div className="flex items-center">
+                  {passwordRequirements.hasSpecialChar ? (
+                    <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center mr-3">
+                      <svg
+                        className="w-3 h-3 text-white"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </div>
+                  ) : (
+                    <div className="w-5 h-5 rounded-full border-2 border-gray-300 mr-3"></div>
+                  )}
+                  <span
+                    className={`text-sm ${
+                      passwordRequirements.hasSpecialChar
+                        ? "text-green-600"
+                        : "text-gray-600"
+                    }`}
+                  >
+                    One special character (!@#$%^&*)
+                  </span>
+                </div>
+              </div>
             </div>
 
             {/* Confirm New Password */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Confirm New Password
+                Confirm Password
               </label>
               <div className="relative">
                 <input
@@ -561,7 +763,9 @@ const ChangePasswordModal = React.memo(
                   onChange={(e) =>
                     handlePasswordFormChange("confirmPassword", e.target.value)
                   }
-                  className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  className={`w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent ${
+                    confirmPasswordError ? "border-red-500" : "border-gray-300"
+                  }`}
                   placeholder="Confirm new password"
                 />
                 <button
@@ -576,6 +780,11 @@ const ChangePasswordModal = React.memo(
                   )}
                 </button>
               </div>
+              {confirmPasswordError && (
+                <p className="text-red-500 text-sm mt-1">
+                  {confirmPasswordError}
+                </p>
+              )}
             </div>
 
             {/* Action Buttons */}
@@ -1014,21 +1223,43 @@ const DashboardNew = () => {
   const handlePasswordChange = async () => {
     setPasswordUpdateLoading(true);
     try {
-      // Validate password change
+      // Validate required fields first
       if (!passwordForm.currentPassword) {
-        throw new Error("Current password is required");
+        throw new Error("Please enter your current password");
       }
       if (!passwordForm.newPassword) {
-        throw new Error("New password is required");
+        throw new Error("Please enter a new password");
       }
       if (!passwordForm.confirmPassword) {
         throw new Error("Please confirm your new password");
       }
+
+      // Check if passwords match
       if (passwordForm.newPassword !== passwordForm.confirmPassword) {
         throw new Error("New passwords do not match");
       }
-      if (passwordForm.newPassword.length < 6) {
-        throw new Error("New password must be at least 6 characters long");
+
+      // Enhanced password validation with specific error messages
+      if (passwordForm.newPassword.length < 8) {
+        throw new Error("Password must be at least 8 characters long");
+      }
+      if (!/[A-Z]/.test(passwordForm.newPassword)) {
+        throw new Error(
+          "Password must contain at least one uppercase letter (A-Z)"
+        );
+      }
+      if (!/[a-z]/.test(passwordForm.newPassword)) {
+        throw new Error(
+          "Password must contain at least one lowercase letter (a-z)"
+        );
+      }
+      if (!/[0-9]/.test(passwordForm.newPassword)) {
+        throw new Error("Password must contain at least one number (0-9)");
+      }
+      if (!/[!@#$%^&*(),.?":{}|<>]/.test(passwordForm.newPassword)) {
+        throw new Error(
+          "Password must contain at least one special character (!@#$%^&*)"
+        );
       }
 
       // Verify current password by attempting to sign in
@@ -1069,11 +1300,7 @@ const DashboardNew = () => {
     } catch (error) {
       console.error("Error updating password:", error);
       setPasswordUpdateLoading(false);
-      showNotification(
-        "error",
-        "Password Update Failed",
-        `Error updating password: ${error.message}`
-      );
+      showNotification("error", "Password Update Failed", error.message);
     }
   };
 

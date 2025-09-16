@@ -309,13 +309,14 @@ const AdminPanelNew = () => {
         psychologistWithStatus
       );
 
-      // Refresh the psychologists list
-      const updatedPsychologists =
-        await psychologistService.getAllPsychologists();
-      setPsychologists(updatedPsychologists);
+      // Run these operations in parallel for better performance
+      const [updatedPsychologists, statsData] = await Promise.all([
+        psychologistService.getAllPsychologists(),
+        adminService.getDashboardStats()
+      ]);
 
-      // Refresh stats
-      const statsData = await adminService.getDashboardStats();
+      // Update state
+      setPsychologists(updatedPsychologists);
       setStats({
         totalPsychologists: statsData.psychologistsCount || 0,
         totalPatients: statsData.patientsCount || 0,
@@ -645,6 +646,18 @@ const AdminPanelNew = () => {
                 </button>
                 <button
                   onClick={() => {
+                    setShowOptionsMenu(null);
+                    // TODO: Add edit psychologist functionality
+                    console.log("Edit button clicked for:", psychologist.name);
+                    alert(`Edit functionality for ${psychologist.name} - Coming soon!`);
+                  }}
+                  className="block w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 flex items-center"
+                >
+                  <Edit3 className="h-4 w-4 mr-2" />
+                  Edit
+                </button>
+                <button
+                  onClick={() => {
                     console.log(
                       "Delete button clicked for:",
                       psychologist.name
@@ -653,8 +666,9 @@ const AdminPanelNew = () => {
                     setPsychologistToDelete(psychologist);
                     setShowDeleteConfirmModal(true);
                   }}
-                  className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                  className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center"
                 >
+                  <Trash2 className="h-4 w-4 mr-2" />
                   Delete
                 </button>
               </div>
@@ -914,93 +928,208 @@ const AdminPanelNew = () => {
                 </div>
                 <div className="w-full h-64">
                   <Bar
-                    data={{
-                      labels: (() => {
-                        const hist = analyticsData.ageHistogram || {};
-                        const present = Object.keys(hist)
-                          .map((k) => parseInt(k, 10))
-                          .filter((age) => age >= 0 && age <= 120);
-                        const minAge = 18;
-                        const maxPresent = present.length
-                          ? Math.max(...present)
-                          : 60;
-                        const maxAge = Math.min(Math.max(maxPresent, 60), 100);
-                        return Array.from(
-                          { length: maxAge - minAge + 1 },
-                          (_, i) => minAge + i
-                        );
-                      })(),
-                      datasets: [
-                        {
-                          label: "Patients",
-                          data: (() => {
-                            const hist = analyticsData.ageHistogram || {};
-                            const minAge = 18;
-                            const labels = (() => {
-                              const present = Object.keys(hist)
-                                .map((k) => parseInt(k, 10))
-                                .filter((age) => age >= 0 && age <= 120);
-                              const maxPresent = present.length
-                                ? Math.max(...present)
-                                : 60;
-                              const maxAge = Math.min(
-                                Math.max(maxPresent, 60),
-                                100
-                              );
-                              return Array.from(
-                                { length: maxAge - minAge + 1 },
-                                (_, i) => minAge + i
-                              );
-                            })();
-                            return labels.map((a) => hist[String(a)] || 0);
-                          })(),
-                          backgroundColor: "#3b82f6", // blue-500
-                          borderRadius: 4,
-                          borderSkipped: false,
-                          barThickness: 14,
-                          maxBarThickness: 18,
-                          categoryPercentage: 1.0,
-                          barPercentage: 1.0,
-                        },
-                      ],
-                    }}
+                    data={(() => {
+                      const hist = analyticsData.ageHistogram || {};
+                      
+                      // Define age groups (5-year ranges)
+                      const ageGroups = [
+                        { label: "0-4", min: 0, max: 4 },
+                        { label: "5-9", min: 5, max: 9 },
+                        { label: "10-14", min: 10, max: 14 },
+                        { label: "15-19", min: 15, max: 19 },
+                        { label: "20-24", min: 20, max: 24 },
+                        { label: "25-29", min: 25, max: 29 },
+                        { label: "30-34", min: 30, max: 34 },
+                        { label: "35-39", min: 35, max: 39 },
+                        { label: "40-44", min: 40, max: 44 },
+                        { label: "45-49", min: 45, max: 49 },
+                        { label: "50-54", min: 50, max: 54 },
+                        { label: "55-59", min: 55, max: 59 },
+                        { label: "60-64", min: 60, max: 64 },
+                        { label: "65-69", min: 65, max: 69 },
+                        { label: "70-74", min: 70, max: 74 },
+                        { label: "75+", min: 75, max: 120 }
+                      ];
+                      
+                      // Calculate count for each age group
+                      const groupCounts = ageGroups.map(group => {
+                        let count = 0;
+                        for (let age = group.min; age <= group.max; age++) {
+                          count += hist[String(age)] || 0;
+                        }
+                        return count;
+                      });
+                      
+                      return {
+                        labels: ageGroups.map(group => group.label),
+                        datasets: [
+                          {
+                            label: "Patients",
+                            data: groupCounts,
+                            backgroundColor: "#3b82f6", // blue-500
+                            borderRadius: 4,
+                            borderSkipped: false,
+                            barThickness: 40,
+                            maxBarThickness: 60,
+                            categoryPercentage: 0.8,
+                            barPercentage: 0.9,
+                          },
+                        ],
+                      };
+                    })()}
                     options={{
                       maintainAspectRatio: false,
-                      plugins: { legend: { display: false } },
+                      plugins: { 
+                        legend: { display: false },
+                        tooltip: {
+                          callbacks: {
+                            title: function(context) {
+                              return `Age Group: ${context[0].label}`;
+                            },
+                            label: function(context) {
+                              const hist = analyticsData.ageHistogram || {};
+                              const ageGroups = [
+                                { label: "0-4", min: 0, max: 4 },
+                                { label: "5-9", min: 5, max: 9 },
+                                { label: "10-14", min: 10, max: 14 },
+                                { label: "15-19", min: 15, max: 19 },
+                                { label: "20-24", min: 20, max: 24 },
+                                { label: "25-29", min: 25, max: 29 },
+                                { label: "30-34", min: 30, max: 34 },
+                                { label: "35-39", min: 35, max: 39 },
+                                { label: "40-44", min: 40, max: 44 },
+                                { label: "45-49", min: 45, max: 49 },
+                                { label: "50-54", min: 50, max: 54 },
+                                { label: "55-59", min: 55, max: 59 },
+                                { label: "60-64", min: 60, max: 64 },
+                                { label: "65-69", min: 65, max: 69 },
+                                { label: "70-74", min: 70, max: 74 },
+                                { label: "75+", min: 75, max: 120 }
+                              ];
+                              
+                              // Find the current age group
+                              const currentGroup = ageGroups[context.dataIndex];
+                              if (!currentGroup) return `Total: ${context.parsed.y} patients`;
+                              
+                              // Build detailed breakdown
+                              const breakdown = [];
+                              for (let age = currentGroup.min; age <= currentGroup.max; age++) {
+                                const count = hist[String(age)] || 0;
+                                if (count > 0) {
+                                  breakdown.push(`Age ${age}: ${count} patient${count > 1 ? 's' : ''}`);
+                                }
+                              }
+                              
+                              if (breakdown.length === 0) {
+                                return `Total: ${context.parsed.y} patients`;
+                              }
+                              
+                              return [
+                                `Total: ${context.parsed.y} patients`,
+                                '─────────────────',
+                                ...breakdown
+                              ];
+                            }
+                          },
+                          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                          titleColor: 'white',
+                          bodyColor: 'white',
+                          borderColor: '#3b82f6',
+                          borderWidth: 1,
+                          cornerRadius: 8,
+                          displayColors: false,
+                          titleFont: {
+                            size: 14,
+                            weight: 'bold'
+                          },
+                          bodyFont: {
+                            size: 12
+                          },
+                          padding: 12
+                        }
+                      },
                       scales: {
                         x: {
                           grid: { display: false },
                           ticks: {
-                            autoSkip: false,
+                            font: {
+                              size: 12,
+                              weight: "bold",
+                            },
                             maxRotation: 0,
                             minRotation: 0,
-                            callback: function (value, index, ticks) {
-                              const label = this.getLabelForValue(value);
-                              const total = ticks.length;
-                              // Dynamic density: show about 10–15 labels
-                              const N =
-                                total > 45
-                                  ? 4
-                                  : total > 30
-                                  ? 3
-                                  : total > 20
-                                  ? 2
-                                  : 1;
-                              return index % N === 0 ? label : "";
-                            },
                           },
                         },
                         y: {
                           beginAtZero: true,
-                          ticks: { precision: 0 },
+                          ticks: {
+                            precision: 0,
+                            stepSize: (() => {
+                              const hist = analyticsData.ageHistogram || {};
+                              const allValues = Object.values(hist).filter(val => typeof val === 'number' && val > 0);
+                              const maxVal = allValues.length ? Math.max(...allValues) : 0;
+                              
+                              // Dynamic step size based on max value
+                              if (maxVal <= 10) return 1;      // Steps of 1 for small numbers
+                              if (maxVal <= 50) return 5;      // Steps of 5 for medium numbers
+                              if (maxVal <= 100) return 10;    // Steps of 10 for larger numbers
+                              return Math.ceil(maxVal / 10);   // Dynamic steps for very large numbers
+                            })(),
+                            font: {
+                              size: 12,
+                            },
+                            callback: function(value) {
+                              // Always show whole numbers only
+                              return Number.isInteger(value) ? value : '';
+                            }
+                          },
                           suggestedMax: (() => {
                             const hist = analyticsData.ageHistogram || {};
-                            const vals = Object.values(hist).map(
-                              (v) => Number(v) || 0
-                            );
-                            const maxVal = vals.length ? Math.max(...vals) : 0;
-                            const padded = Math.ceil(maxVal * 1.2);
-                            return Math.max(10, padded);
+                            
+                            // Calculate max from grouped data (more accurate for our chart)
+                            const ageGroups = [
+                              { label: "0-4", min: 0, max: 4 },
+                              { label: "5-9", min: 5, max: 9 },
+                              { label: "10-14", min: 10, max: 14 },
+                              { label: "15-19", min: 15, max: 19 },
+                              { label: "20-24", min: 20, max: 24 },
+                              { label: "25-29", min: 25, max: 29 },
+                              { label: "30-34", min: 30, max: 34 },
+                              { label: "35-39", min: 35, max: 39 },
+                              { label: "40-44", min: 40, max: 44 },
+                              { label: "45-49", min: 45, max: 49 },
+                              { label: "50-54", min: 50, max: 54 },
+                              { label: "55-59", min: 55, max: 59 },
+                              { label: "60-64", min: 60, max: 64 },
+                              { label: "65-69", min: 65, max: 69 },
+                              { label: "70-74", min: 70, max: 74 },
+                              { label: "75+", min: 75, max: 120 }
+                            ];
+                            
+                            // Calculate max group count
+                            let maxGroupCount = 0;
+                            ageGroups.forEach(group => {
+                              let groupCount = 0;
+                              for (let age = group.min; age <= group.max; age++) {
+                                groupCount += hist[String(age)] || 0;
+                              }
+                              maxGroupCount = Math.max(maxGroupCount, groupCount);
+                            });
+
+                            // Smart scaling based on actual chart data
+                            if (maxGroupCount === 0) {
+                              return 5; // Show small scale when no data
+                            } else if (maxGroupCount <= 5) {
+                              return 10; // Minimum readable scale
+                            } else if (maxGroupCount <= 10) {
+                              return Math.ceil(maxGroupCount * 1.5); // 50% headroom for small numbers
+                            } else if (maxGroupCount <= 50) {
+                              return Math.ceil(maxGroupCount * 1.3); // 30% headroom for medium numbers
+                            } else if (maxGroupCount <= 100) {
+                              return Math.ceil(maxGroupCount * 1.2); // 20% headroom for larger numbers
+                            } else {
+                              return Math.ceil(maxGroupCount * 1.1); // 10% headroom for very large numbers
+                            }
                           })(),
                         },
                       },
@@ -1069,15 +1198,21 @@ const AdminPanelNew = () => {
                         x: { grid: { display: false } },
                         y: {
                           beginAtZero: true,
-                          ticks: { precision: 0 },
-                          // Ensure at least 10 on the Y-axis; add headroom when data is higher
+                          ticks: {
+                            precision: 0,
+                            stepSize: 1,
+                          },
                           suggestedMax: (() => {
                             const vals = Object.values(
                               analyticsData.monthlyRegistrations || {}
                             ).map((v) => Number(v) || 0);
                             const maxVal = vals.length ? Math.max(...vals) : 0;
-                            const padded = Math.ceil(maxVal * 1.2);
-                            return Math.max(10, padded);
+
+                            // Dynamic scaling based on actual data
+                            if (maxVal === 0) return 5; // Show 0-5 when no data
+                            if (maxVal <= 5) return maxVal + 2; // Small numbers: add 2 for headroom
+                            if (maxVal <= 10) return maxVal + 3; // Medium numbers: add 3 for headroom
+                            return Math.ceil(maxVal * 1.2); // Large numbers: add 20% headroom
                           })(),
                         },
                       },
@@ -1975,9 +2110,36 @@ const AdminPanelNew = () => {
                 Cancel
               </button>
               <button
-                onClick={() => {
-                  // Add delete functionality here
-                  alert("Delete functionality coming soon!");
+                onClick={async () => {
+                  try {
+                    console.log("Deleting psychologist:", psychologistToDelete.id);
+                    
+                    // Call the delete function
+                    const success = await psychologistService.deletePsychologist(psychologistToDelete.id);
+                    
+                    if (success) {
+                      // Log the activity
+                      await adminService.logActivity(
+                        user?.id,
+                        "Delete Psychologist",
+                        `Deleted psychologist: ${psychologistToDelete.name} (ID: ${psychologistToDelete.id})`
+                      );
+                      
+                      // Refresh the psychologists list
+                      const updatedPsychologists = await psychologistService.getAllPsychologists();
+                      setPsychologists(updatedPsychologists);
+                      
+                      // Show success feedback
+                      alert(`${psychologistToDelete.name} has been successfully deleted.`);
+                    } else {
+                      alert("Failed to delete psychologist. Please try again.");
+                    }
+                  } catch (error) {
+                    console.error("Delete error:", error);
+                    alert("An error occurred while deleting the psychologist. Please try again.");
+                  }
+                  
+                  // Close the modal
                   setShowDeleteConfirmModal(false);
                   setPsychologistToDelete(null);
                 }}

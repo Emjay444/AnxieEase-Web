@@ -18,9 +18,11 @@ const PsychologistSetupPage = () => {
   const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
+    // Supabase magic-link redirects to this page with tokens in the URL hash.
+    // The supabase-js client automatically picks up the hash and restores a session.
     const initializeAuth = async () => {
       try {
-        // Get the current session
+        // First, attempt to recover an existing session (after magic link it should exist)
         const {
           data: { session },
           error: sessionError,
@@ -28,19 +30,7 @@ const PsychologistSetupPage = () => {
 
         if (sessionError) throw sessionError;
 
-        // If we have URL parameters but no session, try to verify the email
-        if (email && inviteCode && !session) {
-          // Verify the email first
-          const { error: verifyError } = await supabase.auth.verifyOtp({
-            email,
-            token: inviteCode,
-            type: "email",
-          });
-
-          if (verifyError) throw verifyError;
-        }
-
-        // If we have a session, update the psychologist's user_id
+        // If session is present, bind the user id to psychologist row
         if (session?.user) {
           try {
             await psychologistService.updatePsychologistUserId(
@@ -48,23 +38,20 @@ const PsychologistSetupPage = () => {
               session.user.id
             );
           } catch (updateError) {
-            console.error(
-              "Failed to update psychologist user_id:",
-              updateError
-            );
+            console.error("Failed to update psychologist user_id:", updateError);
           }
         }
 
-        // Set the email from params or session
+        // Prefer the authenticated user's email; fallback to route param for legacy links
         setFormData((prev) => ({
           ...prev,
-          email: email || session?.user?.email || "",
+          email: session?.user?.email || email || "",
         }));
 
         setLoading(false);
       } catch (error) {
         console.error("Auth initialization error:", error);
-        setErrors({ general: "Authentication failed. Please try again." });
+        setErrors({ general: "Authentication failed. Please open the link from your email again." });
         setLoading(false);
       }
     };
