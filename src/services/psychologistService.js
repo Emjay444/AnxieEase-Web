@@ -20,10 +20,15 @@ export const psychologistService = {
 
       if (!userProfilesError && userProfiles && userProfiles.length > 0) {
         // Format user_profiles data to match expected psychologist structure
-        return userProfiles.map(user => ({
+        return userProfiles.map((user) => ({
           id: user.id,
           user_id: user.id,
-          name: `${user.first_name || ""} ${user.middle_name || ""} ${user.last_name || ""}`.trim() || user.email?.split("@")[0] || "Psychologist",
+          name:
+            `${user.first_name || ""} ${user.middle_name || ""} ${
+              user.last_name || ""
+            }`.trim() ||
+            user.email?.split("@")[0] ||
+            "Psychologist",
           email: user.email,
           contact: user.contact_number,
           specialization: user.specialization,
@@ -148,7 +153,7 @@ export const psychologistService = {
             },
           ])
           .select(),
-        
+
         // Send magic link with setup URL
         supabase.auth.signInWithOtp({
           email: psychologistData.email,
@@ -163,26 +168,36 @@ export const psychologistService = {
               name: psychologistData.name,
             },
           },
-        })
+        }),
       ]);
 
       // Check if psychologist creation failed
-      if (psychResult.status === 'rejected' || psychResult.value.error) {
-        const error = psychResult.status === 'rejected' ? psychResult.reason : psychResult.value.error;
+      if (psychResult.status === "rejected" || psychResult.value.error) {
+        const error =
+          psychResult.status === "rejected"
+            ? psychResult.reason
+            : psychResult.value.error;
         console.error("Database error:", error.message);
         throw error;
       }
 
       // Check if email sending failed
-      if (emailResult.status === 'rejected' || emailResult.value.error) {
+      if (emailResult.status === "rejected" || emailResult.value.error) {
         // If email fails, still keep the psychologist record but warn
-        const error = emailResult.status === 'rejected' ? emailResult.reason : emailResult.value.error;
-        console.warn("Magic link email failed, but psychologist created:", error.message);
-        
+        const error =
+          emailResult.status === "rejected"
+            ? emailResult.reason
+            : emailResult.value.error;
+        console.warn(
+          "Magic link email failed, but psychologist created:",
+          error.message
+        );
+
         return {
           ...psychResult.value.data[0],
-          message: "Psychologist created but email could not be sent. Please try sending the invitation manually.",
-          emailSent: false
+          message:
+            "Psychologist created but email could not be sent. Please try sending the invitation manually.",
+          emailSent: false,
         };
       }
 
@@ -190,7 +205,7 @@ export const psychologistService = {
         ...psychResult.value.data[0],
         message:
           "Invitation sent! The psychologist will receive an email with a magic link to set up their account.",
-        emailSent: true
+        emailSent: true,
       };
     } catch (error) {
       console.error("Create psychologist error:", error.message);

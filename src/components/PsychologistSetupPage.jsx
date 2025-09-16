@@ -38,7 +38,10 @@ const PsychologistSetupPage = () => {
               session.user.id
             );
           } catch (updateError) {
-            console.error("Failed to update psychologist user_id:", updateError);
+            console.error(
+              "Failed to update psychologist user_id:",
+              updateError
+            );
           }
         }
 
@@ -51,7 +54,10 @@ const PsychologistSetupPage = () => {
         setLoading(false);
       } catch (error) {
         console.error("Auth initialization error:", error);
-        setErrors({ general: "Authentication failed. Please open the link from your email again." });
+        setErrors({
+          general:
+            "Authentication failed. Please open the link from your email again.",
+        });
         setLoading(false);
       }
     };

@@ -312,7 +312,7 @@ const AdminPanelNew = () => {
       // Run these operations in parallel for better performance
       const [updatedPsychologists, statsData] = await Promise.all([
         psychologistService.getAllPsychologists(),
-        adminService.getDashboardStats()
+        adminService.getDashboardStats(),
       ]);
 
       // Update state
@@ -649,7 +649,9 @@ const AdminPanelNew = () => {
                     setShowOptionsMenu(null);
                     // TODO: Add edit psychologist functionality
                     console.log("Edit button clicked for:", psychologist.name);
-                    alert(`Edit functionality for ${psychologist.name} - Coming soon!`);
+                    alert(
+                      `Edit functionality for ${psychologist.name} - Coming soon!`
+                    );
                   }}
                   className="block w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 flex items-center"
                 >
@@ -930,7 +932,7 @@ const AdminPanelNew = () => {
                   <Bar
                     data={(() => {
                       const hist = analyticsData.ageHistogram || {};
-                      
+
                       // Define age groups (5-year ranges)
                       const ageGroups = [
                         { label: "0-4", min: 0, max: 4 },
@@ -948,20 +950,20 @@ const AdminPanelNew = () => {
                         { label: "60-64", min: 60, max: 64 },
                         { label: "65-69", min: 65, max: 69 },
                         { label: "70-74", min: 70, max: 74 },
-                        { label: "75+", min: 75, max: 120 }
+                        { label: "75+", min: 75, max: 120 },
                       ];
-                      
+
                       // Calculate count for each age group
-                      const groupCounts = ageGroups.map(group => {
+                      const groupCounts = ageGroups.map((group) => {
                         let count = 0;
                         for (let age = group.min; age <= group.max; age++) {
                           count += hist[String(age)] || 0;
                         }
                         return count;
                       });
-                      
+
                       return {
-                        labels: ageGroups.map(group => group.label),
+                        labels: ageGroups.map((group) => group.label),
                         datasets: [
                           {
                             label: "Patients",
@@ -979,14 +981,14 @@ const AdminPanelNew = () => {
                     })()}
                     options={{
                       maintainAspectRatio: false,
-                      plugins: { 
+                      plugins: {
                         legend: { display: false },
                         tooltip: {
                           callbacks: {
-                            title: function(context) {
+                            title: function (context) {
                               return `Age Group: ${context[0].label}`;
                             },
-                            label: function(context) {
+                            label: function (context) {
                               const hist = analyticsData.ageHistogram || {};
                               const ageGroups = [
                                 { label: "0-4", min: 0, max: 4 },
@@ -1004,49 +1006,58 @@ const AdminPanelNew = () => {
                                 { label: "60-64", min: 60, max: 64 },
                                 { label: "65-69", min: 65, max: 69 },
                                 { label: "70-74", min: 70, max: 74 },
-                                { label: "75+", min: 75, max: 120 }
+                                { label: "75+", min: 75, max: 120 },
                               ];
-                              
+
                               // Find the current age group
                               const currentGroup = ageGroups[context.dataIndex];
-                              if (!currentGroup) return `Total: ${context.parsed.y} patients`;
-                              
+                              if (!currentGroup)
+                                return `Total: ${context.parsed.y} patients`;
+
                               // Build detailed breakdown
                               const breakdown = [];
-                              for (let age = currentGroup.min; age <= currentGroup.max; age++) {
+                              for (
+                                let age = currentGroup.min;
+                                age <= currentGroup.max;
+                                age++
+                              ) {
                                 const count = hist[String(age)] || 0;
                                 if (count > 0) {
-                                  breakdown.push(`Age ${age}: ${count} patient${count > 1 ? 's' : ''}`);
+                                  breakdown.push(
+                                    `Age ${age}: ${count} patient${
+                                      count > 1 ? "s" : ""
+                                    }`
+                                  );
                                 }
                               }
-                              
+
                               if (breakdown.length === 0) {
                                 return `Total: ${context.parsed.y} patients`;
                               }
-                              
+
                               return [
                                 `Total: ${context.parsed.y} patients`,
-                                '─────────────────',
-                                ...breakdown
+                                "─────────────────",
+                                ...breakdown,
                               ];
-                            }
+                            },
                           },
-                          backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                          titleColor: 'white',
-                          bodyColor: 'white',
-                          borderColor: '#3b82f6',
+                          backgroundColor: "rgba(0, 0, 0, 0.8)",
+                          titleColor: "white",
+                          bodyColor: "white",
+                          borderColor: "#3b82f6",
                           borderWidth: 1,
                           cornerRadius: 8,
                           displayColors: false,
                           titleFont: {
                             size: 14,
-                            weight: 'bold'
+                            weight: "bold",
                           },
                           bodyFont: {
-                            size: 12
+                            size: 12,
                           },
-                          padding: 12
-                        }
+                          padding: 12,
+                        },
                       },
                       scales: {
                         x: {
@@ -1066,26 +1077,30 @@ const AdminPanelNew = () => {
                             precision: 0,
                             stepSize: (() => {
                               const hist = analyticsData.ageHistogram || {};
-                              const allValues = Object.values(hist).filter(val => typeof val === 'number' && val > 0);
-                              const maxVal = allValues.length ? Math.max(...allValues) : 0;
-                              
+                              const allValues = Object.values(hist).filter(
+                                (val) => typeof val === "number" && val > 0
+                              );
+                              const maxVal = allValues.length
+                                ? Math.max(...allValues)
+                                : 0;
+
                               // Dynamic step size based on max value
-                              if (maxVal <= 10) return 1;      // Steps of 1 for small numbers
-                              if (maxVal <= 50) return 5;      // Steps of 5 for medium numbers
-                              if (maxVal <= 100) return 10;    // Steps of 10 for larger numbers
-                              return Math.ceil(maxVal / 10);   // Dynamic steps for very large numbers
+                              if (maxVal <= 10) return 1; // Steps of 1 for small numbers
+                              if (maxVal <= 50) return 5; // Steps of 5 for medium numbers
+                              if (maxVal <= 100) return 10; // Steps of 10 for larger numbers
+                              return Math.ceil(maxVal / 10); // Dynamic steps for very large numbers
                             })(),
                             font: {
                               size: 12,
                             },
-                            callback: function(value) {
+                            callback: function (value) {
                               // Always show whole numbers only
-                              return Number.isInteger(value) ? value : '';
-                            }
+                              return Number.isInteger(value) ? value : "";
+                            },
                           },
                           suggestedMax: (() => {
                             const hist = analyticsData.ageHistogram || {};
-                            
+
                             // Calculate max from grouped data (more accurate for our chart)
                             const ageGroups = [
                               { label: "0-4", min: 0, max: 4 },
@@ -1103,17 +1118,24 @@ const AdminPanelNew = () => {
                               { label: "60-64", min: 60, max: 64 },
                               { label: "65-69", min: 65, max: 69 },
                               { label: "70-74", min: 70, max: 74 },
-                              { label: "75+", min: 75, max: 120 }
+                              { label: "75+", min: 75, max: 120 },
                             ];
-                            
+
                             // Calculate max group count
                             let maxGroupCount = 0;
-                            ageGroups.forEach(group => {
+                            ageGroups.forEach((group) => {
                               let groupCount = 0;
-                              for (let age = group.min; age <= group.max; age++) {
+                              for (
+                                let age = group.min;
+                                age <= group.max;
+                                age++
+                              ) {
                                 groupCount += hist[String(age)] || 0;
                               }
-                              maxGroupCount = Math.max(maxGroupCount, groupCount);
+                              maxGroupCount = Math.max(
+                                maxGroupCount,
+                                groupCount
+                              );
                             });
 
                             // Smart scaling based on actual chart data
@@ -2112,11 +2134,17 @@ const AdminPanelNew = () => {
               <button
                 onClick={async () => {
                   try {
-                    console.log("Deleting psychologist:", psychologistToDelete.id);
-                    
+                    console.log(
+                      "Deleting psychologist:",
+                      psychologistToDelete.id
+                    );
+
                     // Call the delete function
-                    const success = await psychologistService.deletePsychologist(psychologistToDelete.id);
-                    
+                    const success =
+                      await psychologistService.deletePsychologist(
+                        psychologistToDelete.id
+                      );
+
                     if (success) {
                       // Log the activity
                       await adminService.logActivity(
@@ -2124,21 +2152,26 @@ const AdminPanelNew = () => {
                         "Delete Psychologist",
                         `Deleted psychologist: ${psychologistToDelete.name} (ID: ${psychologistToDelete.id})`
                       );
-                      
+
                       // Refresh the psychologists list
-                      const updatedPsychologists = await psychologistService.getAllPsychologists();
+                      const updatedPsychologists =
+                        await psychologistService.getAllPsychologists();
                       setPsychologists(updatedPsychologists);
-                      
+
                       // Show success feedback
-                      alert(`${psychologistToDelete.name} has been successfully deleted.`);
+                      alert(
+                        `${psychologistToDelete.name} has been successfully deleted.`
+                      );
                     } else {
                       alert("Failed to delete psychologist. Please try again.");
                     }
                   } catch (error) {
                     console.error("Delete error:", error);
-                    alert("An error occurred while deleting the psychologist. Please try again.");
+                    alert(
+                      "An error occurred while deleting the psychologist. Please try again."
+                    );
                   }
-                  
+
                   // Close the modal
                   setShowDeleteConfirmModal(false);
                   setPsychologistToDelete(null);
