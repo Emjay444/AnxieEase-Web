@@ -4,6 +4,7 @@ import { adminService } from "../services/adminService";
 import { psychologistService } from "../services/psychologistService";
 import AddDoctorModal from "./AddDoctorModal";
 import ProfilePicture from "./ProfilePicture";
+import { getFullName } from "../utils/helpers";
 import {
   Users,
   UserPlus,
@@ -28,6 +29,7 @@ import {
   CheckCircle,
   User,
   X,
+  AlertTriangle,
 } from "lucide-react";
 import LogoutButton from "./LogoutButton";
 // Charts
@@ -155,6 +157,8 @@ const AdminPanelNew = () => {
   // Real data states - connected to Supabase
   const [stats, setStats] = useState({
     totalPsychologists: 0,
+    activePsychologists: 0,
+    inactivePsychologists: 0,
     totalPatients: 0,
     activeAssignments: 0,
     pendingRequests: 0,
@@ -164,6 +168,11 @@ const AdminPanelNew = () => {
   const [patients, setPatients] = useState([]);
   const [unassignedPatients, setUnassignedPatients] = useState([]);
   const [activityLogs, setActivityLogs] = useState([]);
+  
+  // Activity logs filtering and sorting state
+  const [activityDateFilter, setActivityDateFilter] = useState(null);
+  const [activitySortOrder, setActivitySortOrder] = useState("desc"); // "desc" for newest first, "asc" for oldest first
+  
   const [analyticsData, setAnalyticsData] = useState({
     genderDistribution: { male: 0, female: 0, other: 0 },
     ageDistribution: { "18-25": 0, "26-35": 0, "36-45": 0, "46+": 0 },
@@ -189,14 +198,27 @@ const AdminPanelNew = () => {
   const [showViewModal, setShowViewModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showOptionsMenu, setShowOptionsMenu] = useState(null);
+  const [editFormData, setEditFormData] = useState({
+    name: "",
+    email: "",
+    contact: "",
+    specialization: ""
+  });
+  const [isUpdatingPsychologist, setIsUpdatingPsychologist] = useState(false);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   const [psychologistToDelete, setPsychologistToDelete] = useState(null);
+  const [showDeleteSuccessModal, setShowDeleteSuccessModal] = useState(false);
+  const [deleteResult, setDeleteResult] = useState({ success: false, message: "", psychologistName: "" });
   const [showActivateConfirmModal, setShowActivateConfirmModal] =
     useState(false);
   const [psychologistToToggle, setPsychologistToToggle] = useState(null);
   const [showResetEmailModal, setShowResetEmailModal] = useState(false);
   const [psychologistToReset, setPsychologistToReset] = useState(null);
   const [isSendingResetEmail, setIsSendingResetEmail] = useState(false);
+  
+  // State for deactivate blocked modal
+  const [showDeactivateBlockedModal, setShowDeactivateBlockedModal] = useState(false);
+  const [deactivateBlockedData, setDeactivateBlockedData] = useState({ psychologist: null, errorMessage: "" });
 
   // State for patient actions
   const [selectedPatient, setSelectedPatient] = useState(null);
@@ -216,6 +238,8 @@ const AdminPanelNew = () => {
       const statsData = await adminService.getDashboardStats();
       setStats({
         totalPsychologists: statsData.psychologistsCount || 0,
+        activePsychologists: statsData.activePsychologistsCount || 0,
+        inactivePsychologists: statsData.inactivePsychologistsCount || 0,
         totalPatients: statsData.patientsCount || 0,
         activeAssignments:
           statsData.patientsCount - statsData.unassignedPatientsCount || 0,
@@ -312,20 +336,26 @@ const AdminPanelNew = () => {
       );
 
       // Run these operations in parallel for better performance
-      const [updatedPsychologists, statsData] = await Promise.all([
+      const [updatedPsychologists, statsData, updatedLogs] = await Promise.all([
         psychologistService.getAllPsychologists(),
         adminService.getDashboardStats(),
+        adminService.getActivityLogs(), // Reload activity logs to show the new creation
       ]);
 
       // Update state
       setPsychologists(updatedPsychologists);
       setStats({
         totalPsychologists: statsData.psychologistsCount || 0,
+        activePsychologists: statsData.activePsychologistsCount || 0,
+        inactivePsychologists: statsData.inactivePsychologistsCount || 0,
         totalPatients: statsData.patientsCount || 0,
         activeAssignments:
           statsData.patientsCount - statsData.unassignedPatientsCount || 0,
         pendingRequests: 0,
       });
+      
+      // Update activity logs with the new entry
+      setActivityLogs(updatedLogs);
 
       // Show success modal with detailed information
       setSuccessMessage({
@@ -343,6 +373,10 @@ const AdminPanelNew = () => {
           {
             type: "info",
             text: "Once verified, they can complete their profile setup and begin seeing patients.",
+          },
+          {
+            type: "warning",
+            text: "⚠️ IMPORTANT: When the psychologist clicks the setup link, it may affect your current session. We recommend opening the setup link in a private/incognito browser tab to avoid being logged out.",
           },
         ],
       });
@@ -364,7 +398,62 @@ const AdminPanelNew = () => {
 
   const handleEditPsychologist = (psychologist) => {
     setSelectedPsychologist(psychologist);
+    setEditFormData({
+      name: psychologist.name || "",
+      email: psychologist.email || "",
+      contact: psychologist.contact || "",
+      specialization: psychologist.specialization || ""
+    });
     setShowEditModal(true);
+  };
+
+  const handleSavePsychologistChanges = async () => {
+    try {
+      setIsUpdatingPsychologist(true);
+      
+      // Update in the database
+      const updatedPsychologist = await psychologistService.updatePsychologist(
+        selectedPsychologist.id,
+        {
+          name: editFormData.name,
+          email: editFormData.email,
+          contact: editFormData.contact,
+          specialization: editFormData.specialization,
+        }
+      );
+
+      // Update local state
+      setPsychologists((prev) =>
+        prev.map((p) =>
+          p.id === selectedPsychologist.id
+            ? { ...p, ...editFormData }
+            : p
+        )
+      );
+
+      // Log the activity
+      await adminService.logActivity(
+        user?.id,
+        "Edit Psychologist",
+        `Updated psychologist information: ${editFormData.name} (${editFormData.email})`
+      );
+
+      // Refresh activity logs
+      const updatedLogs = await adminService.getActivityLogs();
+      setActivityLogs(updatedLogs);
+
+      setSuccessMessage({
+        title: "Psychologist Updated Successfully!",
+        message: `${editFormData.name}'s information has been updated.`,
+      });
+      setShowSuccessModal(true);
+      setShowEditModal(false);
+    } catch (error) {
+      console.error("Error updating psychologist:", error);
+      alert(`Error updating psychologist: ${error.message}`);
+    } finally {
+      setIsUpdatingPsychologist(false);
+    }
   };
 
   const handlePsychologistOptions = (psychologistId) => {
@@ -404,9 +493,12 @@ const AdminPanelNew = () => {
 
       // Show user-friendly error message
       if (error.message.includes("assigned patient")) {
-        alert(
-          `⚠️ Cannot Deactivate Psychologist\n\n${error.message}\n\nPlease go to the Patients tab to reassign these patients to another psychologist first.`
-        );
+        // Show custom modal instead of browser alert
+        setDeactivateBlockedData({
+          psychologist: psychologist,
+          errorMessage: error.message
+        });
+        setShowDeactivateBlockedModal(true);
       } else {
         alert("❌ Failed to update psychologist status: " + error.message);
       }
@@ -437,14 +529,8 @@ const AdminPanelNew = () => {
     psychologistName,
     isUnassign = false
   ) => {
-    // Get patient name more efficiently
-    const patientName =
-      patientToAssign?.name ||
-      (patientToAssign?.first_name && patientToAssign?.last_name
-        ? `${patientToAssign.first_name} ${patientToAssign.last_name}`
-        : patientToAssign?.first_name || patientToAssign?.last_name) ||
-      patientToAssign?.email?.split("@")[0] ||
-      "Unknown Patient";
+    // Get patient name using helper function
+    const patientName = getFullName(patientToAssign);
 
     // Set all states together to minimize re-renders
     setPendingAssignment({
@@ -453,6 +539,7 @@ const AdminPanelNew = () => {
       psychologistName,
       isUnassign,
       patientName,
+      patientData: patientToAssign, // Add the full patient object
     });
     setShowAssignmentModal(false);
     setShowConfirmationModal(true);
@@ -515,8 +602,7 @@ const AdminPanelNew = () => {
                   ...patient,
                   assigned_psychologist_id: psychologistId,
                   assigned_psychologist_name: psychologistId
-                    ? psychologists.find((p) => p.id === psychologistId)
-                        ?.name || null
+                    ? getFullName(psychologists.find((p) => p.id === psychologistId)) || null
                     : null,
                 }
               : patient
@@ -649,11 +735,7 @@ const AdminPanelNew = () => {
                 <button
                   onClick={() => {
                     setShowOptionsMenu(null);
-                    // TODO: Add edit psychologist functionality
-                    console.log("Edit button clicked for:", psychologist.name);
-                    alert(
-                      `Edit functionality for ${psychologist.name} - Coming soon!`
-                    );
+                    handleEditPsychologist(psychologist);
                   }}
                   className="block w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 flex items-center"
                 >
@@ -819,12 +901,30 @@ const AdminPanelNew = () => {
           <div className="space-y-6">
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <StatCard
-                title="Total Psychologists"
-                value={stats.totalPsychologists}
-                icon={Users}
-                color="emerald"
-              />
+              {/* Enhanced Psychologists Card with Breakdown */}
+              <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+                <div className="flex items-center">
+                  <div className="p-3 rounded-lg bg-emerald-100">
+                    <Users className="h-6 w-6 text-emerald-600" />
+                  </div>
+                  <div className="ml-4 flex-1">
+                    <p className="text-sm font-medium text-gray-600">Total Psychologists</p>
+                    <p className="text-2xl font-bold text-gray-900">{stats.totalPsychologists}</p>
+                  </div>
+                </div>
+                {/* Breakdown */}
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Active:</span>
+                    <span className="font-medium text-emerald-600">{stats.activePsychologists}</span>
+                  </div>
+                  <div className="flex justify-between text-sm mt-1">
+                    <span className="text-gray-600">Inactive:</span>
+                    <span className="font-medium text-gray-500">{stats.inactivePsychologists}</span>
+                  </div>
+                </div>
+              </div>
+
               <StatCard
                 title="Total Patients"
                 value={stats.totalPatients}
@@ -1398,13 +1498,7 @@ const AdminPanelNew = () => {
                     {(() => {
                       // First filter by search term
                       let filteredPatients = patients.filter((patient) => {
-                        const patientName =
-                          patient.name ||
-                          `${patient.first_name || ""} ${
-                            patient.last_name || ""
-                          }`.trim() ||
-                          patient.email?.split("@")[0] ||
-                          "Unknown";
+                        const patientName = getFullName(patient);
 
                         return patientName
                           .toLowerCase()
@@ -1490,23 +1584,19 @@ const AdminPanelNew = () => {
                                 </div>
                                 <div>
                                   <div className="text-sm font-medium text-gray-900">
-                                    {patient.name ||
-                                      `${patient.first_name || ""} ${
-                                        patient.last_name || ""
-                                      }`.trim() ||
-                                      patient.email?.split("@")[0] ||
-                                      "Unknown"}
+                                    {getFullName(patient)}
                                   </div>
                                 </div>
                               </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="text-sm text-gray-900">
-                                {patient.assigned_psychologist_name ? (
+                                {patient.assigned_psychologist_id ? (
                                   <div className="flex items-center space-x-2">
                                     <UserCheck className="h-4 w-4 text-green-600" />
                                     <span className="text-green-600 font-medium">
-                                      {patient.assigned_psychologist_name}
+                                      {getFullName(psychologists.find(p => p.id === patient.assigned_psychologist_id)) || 
+                                        "Unknown Psychologist"}
                                     </span>
                                   </div>
                                 ) : (
@@ -1614,9 +1704,62 @@ const AdminPanelNew = () => {
         {/* Activity Tab */}
         {activeTab === "activity" && (
           <div className="space-y-6">
-            <h2 className="text-xl font-semibold text-gray-900">
-              Recent Activity
-            </h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-gray-900">
+                Recent Activity
+              </h2>
+              
+              {/* Date Filter and Sort Controls */}
+              <div className="flex items-center space-x-4">
+                <div className="relative">
+                  <label htmlFor="activityDateFilter" className="sr-only">
+                    Filter by date
+                  </label>
+                  <input
+                    type="date"
+                    id="activityDateFilter"
+                    value={activityDateFilter || ""}
+                    onChange={(e) => {
+                      setActivityDateFilter(e.target.value || null);
+                      setCurrentPage(1); // Reset to first page when filtering
+                    }}
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  />
+                </div>
+                
+                <button
+                  onClick={() => {
+                    setActivitySortOrder(
+                      activitySortOrder === "desc" ? "asc" : "desc"
+                    );
+                  }}
+                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                >
+                  <Calendar className="w-4 h-4" />
+                  <span>
+                    {activitySortOrder === "desc" ? "Newest First" : "Oldest First"}
+                  </span>
+                  <ChevronDown 
+                    className={`w-4 h-4 transition-transform ${
+                      activitySortOrder === "desc" ? "" : "rotate-180"
+                    }`} 
+                  />
+                </button>
+                
+                {activityDateFilter && (
+                  <button
+                    onClick={() => {
+                      setActivityDateFilter(null);
+                      setCurrentPage(1);
+                    }}
+                    className="flex items-center space-x-1 px-2 py-1 text-xs font-medium text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200"
+                  >
+                    <X className="w-3 h-3" />
+                    <span>Clear</span>
+                  </button>
+                )}
+              </div>
+            </div>
             <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
               {loading ? (
                 <div className="text-center py-8">
@@ -1625,13 +1768,36 @@ const AdminPanelNew = () => {
                 </div>
               ) : activityLogs.length > 0 ? (
                 (() => {
-                  // Calculate pagination
+                  // Apply date filtering and sorting
+                  let filteredAndSortedLogs = [...activityLogs];
+                  
+                  // Apply date filter
+                  if (activityDateFilter) {
+                    const filterDate = new Date(activityDateFilter);
+                    filteredAndSortedLogs = filteredAndSortedLogs.filter((log) => {
+                      const logDate = new Date(log.timestamp);
+                      return (
+                        logDate.getDate() === filterDate.getDate() &&
+                        logDate.getMonth() === filterDate.getMonth() &&
+                        logDate.getFullYear() === filterDate.getFullYear()
+                      );
+                    });
+                  }
+                  
+                  // Apply sorting
+                  filteredAndSortedLogs.sort((a, b) => {
+                    const dateA = new Date(a.timestamp);
+                    const dateB = new Date(b.timestamp);
+                    return activitySortOrder === "desc" ? dateB - dateA : dateA - dateB;
+                  });
+                  
+                  // Calculate pagination based on filtered results
                   const totalPages = Math.ceil(
-                    activityLogs.length / itemsPerPage
+                    filteredAndSortedLogs.length / itemsPerPage
                   );
                   const startIndex = (currentPage - 1) * itemsPerPage;
                   const endIndex = startIndex + itemsPerPage;
-                  const currentLogs = activityLogs.slice(startIndex, endIndex);
+                  const currentLogs = filteredAndSortedLogs.slice(startIndex, endIndex);
 
                   return (
                     <>
@@ -1675,8 +1841,13 @@ const AdminPanelNew = () => {
                         <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-200">
                           <div className="text-sm text-gray-500">
                             Showing {startIndex + 1} to{" "}
-                            {Math.min(endIndex, activityLogs.length)} of{" "}
-                            {activityLogs.length} activity logs
+                            {Math.min(endIndex, filteredAndSortedLogs.length)} of{" "}
+                            {filteredAndSortedLogs.length} activity logs
+                            {activityDateFilter && (
+                              <span className="ml-2 text-emerald-600">
+                                (filtered by {new Date(activityDateFilter).toLocaleDateString()})
+                              </span>
+                            )}
                           </div>
                           <div className="flex items-center space-x-2">
                             <button
@@ -1768,13 +1939,33 @@ const AdminPanelNew = () => {
                     </>
                   );
                 })()
-              ) : (
+              ) : activityLogs.length === 0 ? (
                 <div className="text-center py-8">
                   <Activity className="h-12 w-12 text-gray-300 mx-auto mb-4" />
                   <p className="text-gray-500">No activity logs found</p>
                   <p className="text-sm text-gray-400 mt-1">
                     Activity will appear here as users interact with the system
                   </p>
+                </div>
+              ) : (
+                // No results after filtering
+                <div className="text-center py-8">
+                  <Calendar className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500">
+                    No activity found for {new Date(activityDateFilter).toLocaleDateString()}
+                  </p>
+                  <p className="text-sm text-gray-400 mt-1">
+                    Try selecting a different date or clear the filter
+                  </p>
+                  <button
+                    onClick={() => {
+                      setActivityDateFilter(null);
+                      setCurrentPage(1);
+                    }}
+                    className="mt-2 text-emerald-600 hover:text-emerald-700 text-sm font-medium"
+                  >
+                    Clear date filter
+                  </button>
                 </div>
               )}
             </div>
@@ -1800,182 +1991,271 @@ const AdminPanelNew = () => {
         type="success"
       />
 
-      {/* View Psychologist Modal */}
+      {/* Enhanced View Psychologist Modal */}
       {showViewModal && selectedPsychologist && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-gray-900">
-                Psychologist Details
-              </h2>
-              <button
-                onClick={() => setShowViewModal(false)}
-                className="p-2 hover:bg-gray-100 rounded-lg"
-              >
-                <X className="h-5 w-5 text-gray-500" />
-              </button>
-            </div>
-
-            <div className="space-y-6">
-              <div className="flex items-center space-x-4">
-                <ProfilePicture
-                  patient={selectedPsychologist}
-                  size={64}
-                  className=""
-                />
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">
-                    {selectedPsychologist.name}
-                  </h3>
-                  {selectedPsychologist.specialization && (
-                    <p className="text-gray-600">
-                      {selectedPsychologist.specialization}
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[95vh] overflow-hidden">
+            {/* Enhanced Header with modern gradient */}
+            <div className="relative bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-600 px-8 py-8">
+              {/* Background decoration */}
+              <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent"></div>
+              <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-32 translate-x-32"></div>
+              
+              <div className="relative flex items-start justify-between">
+                <div className="flex items-center space-x-2">
+                  <div className="p-3 bg-white/20 backdrop-blur-sm rounded-2xl">
+                    <Users className="h-7 w-7 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-3xl font-bold text-white tracking-tight">
+                      Psychologist Details
+                    </h2>
+                    <p className="text-emerald-100 text-lg font-medium mt-1">
+                      Complete professional information
                     </p>
-                  )}
-                  <span
-                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium mt-2 ${
-                      selectedPsychologist.is_active
-                        ? "bg-green-100 text-green-800"
-                        : "bg-yellow-100 text-yellow-800"
-                    }`}
-                  >
-                    {selectedPsychologist.is_active
-                      ? "Active"
-                      : "Pending Email Verification"}
-                  </span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <h4 className="font-medium text-gray-900 mb-3">
-                    Contact Information
-                  </h4>
-                  <div className="space-y-2">
-                    <div className="flex items-center text-sm">
-                      <Mail className="h-4 w-4 mr-2 text-gray-400" />
-                      <span className="text-gray-600">
-                        {selectedPsychologist.email}
-                      </span>
-                    </div>
-                    <div className="flex items-center text-sm">
-                      <Phone className="h-4 w-4 mr-2 text-gray-400" />
-                      <span className="text-gray-600">
-                        {selectedPsychologist.contact || "Not provided"}
-                      </span>
-                    </div>
                   </div>
                 </div>
-
-                <div>
-                  <h4 className="font-medium text-gray-900 mb-3">
-                    Account Information
-                  </h4>
-                  <div className="space-y-2">
-                    <div className="flex items-center text-sm">
-                      <Calendar className="h-4 w-4 mr-2 text-gray-400" />
-                      <span className="text-gray-600">
-                        Joined{" "}
-                        {new Date(
-                          selectedPsychologist.created_at
-                        ).toLocaleDateString()}
-                      </span>
-                    </div>
-                    <div className="flex items-center text-sm">
-                      <Users className="h-4 w-4 mr-2 text-gray-400" />
-                      <span className="text-gray-600">
-                        Sex: {selectedPsychologist.sex}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Assigned Patients Section */}
-              <div>
-                <h4 className="font-medium text-gray-900 mb-3 flex items-center">
-                  <Users className="h-5 w-5 mr-2 text-emerald-600" />
-                  Assigned Patients
-                </h4>
-                {(() => {
-                  const assignedPatients = patients.filter(
-                    (patient) =>
-                      patient.assigned_psychologist_id ===
-                      selectedPsychologist.id
-                  );
-
-                  if (assignedPatients.length === 0) {
-                    return (
-                      <div className="bg-gray-50 rounded-lg p-4 text-center">
-                        <div className="text-gray-400 mb-2">
-                          <Users className="h-8 w-8 mx-auto" />
-                        </div>
-                        <p className="text-gray-600 text-sm">
-                          No patients assigned yet
-                        </p>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <div className="space-y-3">
-                      {assignedPatients.map((patient, index) => (
-                        <div
-                          key={patient.id}
-                          className="bg-blue-50 border border-blue-200 rounded-lg p-3"
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-3">
-                              <ProfilePicture
-                                patient={patient}
-                                size={32}
-                                className=""
-                              />
-                              <div>
-                                <p className="font-medium text-blue-900">
-                                  {patient.name ||
-                                    `${patient.first_name || ""} ${
-                                      patient.last_name || ""
-                                    }`.trim() ||
-                                    patient.email?.split("@")[0] ||
-                                    "Unknown Patient"}
-                                </p>
-                                <p className="text-xs text-blue-600">
-                                  {patient.email}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                Assigned
-                              </span>
-                              {patient.created_at && (
-                                <p className="text-xs text-blue-600 mt-1">
-                                  Since{" "}
-                                  {new Date(
-                                    patient.created_at
-                                  ).toLocaleDateString()}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                      <div className="text-center pt-2">
-                        <p className="text-sm text-gray-600">
-                          Total: {assignedPatients.length} patient
-                          {assignedPatients.length !== 1 ? "s" : ""}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-
-              <div className="flex justify-end pt-4 border-t">
                 <button
                   onClick={() => setShowViewModal(false)}
-                  className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  className="p-3 hover:bg-white/20 rounded-xl transition-all duration-200 group"
+                >
+                  <X className="h-6 w-6 text-white group-hover:scale-110 transition-transform" />
+                </button>
+              </div>
+            </div>
+
+            {/* Scrollable Content */}
+            <div className="overflow-y-auto max-h-[calc(95vh-140px)] px-8 py-8 custom-scrollbar">
+              <div className="space-y-8">
+                {/* Enhanced Profile Section */}
+                <div className="relative">
+                  <div className="bg-gradient-to-br from-gray-50 via-white to-emerald-50/30 rounded-3xl p-8 border border-gray-100 shadow-sm">
+                    <div className="flex flex-col md:flex-row items-center md:items-start space-y-6 md:space-y-0 md:space-x-8">
+                      <div className="relative group">
+                        <div className="relative">
+                          <ProfilePicture
+                            patient={selectedPsychologist}
+                            size={128}
+                            className="ring-4 ring-white shadow-xl"
+                          />
+                        </div>
+                        <div className={`absolute -bottom-2 -right-2 w-10 h-10 rounded-full border-4 border-white shadow-lg flex items-center justify-center ${
+                          selectedPsychologist.is_active 
+                            ? "bg-gradient-to-r from-green-400 to-green-500" 
+                            : "bg-gradient-to-r from-amber-400 to-yellow-500"
+                        }`}>
+                          {selectedPsychologist.is_active ? (
+                            <CheckCircle className="h-5 w-5 text-white" />
+                          ) : (
+                            <Clock className="h-5 w-5 text-white" />
+                          )}
+                        </div>
+                      </div>
+                      
+                      <div className="flex-1 text-center md:text-left">
+                        <h3 className="text-3xl font-bold text-gray-900 mb-2">
+                          {getFullName(selectedPsychologist)}
+                        </h3>
+                        {selectedPsychologist.specialization && (
+                          <p className="text-emerald-700 font-semibold text-lg mb-4 bg-emerald-50 px-4 py-2 rounded-xl inline-block">
+                            {selectedPsychologist.specialization}
+                          </p>
+                        )}
+                        <div className="flex flex-wrap gap-3 justify-center md:justify-start">
+                          <span className={`inline-flex items-center px-4 py-2 rounded-xl text-sm font-semibold shadow-sm ${
+                            selectedPsychologist.is_active
+                              ? "bg-gradient-to-r from-green-50 to-green-100 text-green-800 border border-green-200"
+                              : "bg-gradient-to-r from-amber-50 to-yellow-100 text-amber-800 border border-amber-200"
+                          }`}>
+                            <div className={`w-2 h-2 rounded-full mr-2 ${
+                              selectedPsychologist.is_active ? "bg-green-500" : "bg-amber-500"
+                            }`}></div>
+                            {selectedPsychologist.is_active ? "Active" : "Pending Verification"}
+                          </span>
+                          <span className="inline-flex items-center px-4 py-2 rounded-xl text-sm font-medium bg-gray-100 text-gray-700 border border-gray-200">
+                            <Calendar className="w-4 h-4 mr-2" />
+                            Joined {new Date(selectedPsychologist.created_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Enhanced Information Grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Contact Information */}
+                  <div className="group hover:scale-[1.02] transition-transform duration-300">
+                    <div className="bg-white rounded-2xl p-6 border border-gray-200 h-full hover:shadow-lg transition-shadow">
+                      <div className="flex items-center mb-6">
+                        <div className="w-12 h-12 bg-emerald-500 rounded-xl flex items-center justify-center mr-4 shadow-lg">
+                          <Mail className="h-6 w-6 text-white" />
+                        </div>
+                        <h4 className="text-xl font-bold text-gray-900">Contact Information</h4>
+                      </div>
+                      <div className="space-y-4">
+                        <div className="flex items-start space-x-4 p-4 bg-gray-50 rounded-xl border border-gray-100">
+                          <Mail className="h-5 w-5 text-emerald-600 mt-0.5 flex-shrink-0" />
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-700">Email Address</p>
+                            <p className="text-gray-900 font-semibold break-all">{selectedPsychologist.email}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-start space-x-4 p-4 bg-gray-50 rounded-xl border border-gray-100">
+                          <Phone className="h-5 w-5 text-emerald-600 mt-0.5 flex-shrink-0" />
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-700">Contact Number</p>
+                            <p className="text-gray-900 font-semibold">
+                              {selectedPsychologist.contact || (
+                                <span className="text-gray-500 italic">Not provided</span>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Account Information */}
+                  <div className="group hover:scale-[1.02] transition-transform duration-300">
+                    <div className="bg-white rounded-2xl p-6 border border-gray-200 h-full hover:shadow-lg transition-shadow">
+                      <div className="flex items-center mb-6">
+                        <div className="w-12 h-12 bg-emerald-500 rounded-xl flex items-center justify-center mr-4 shadow-lg">
+                          <Calendar className="h-6 w-6 text-white" />
+                        </div>
+                        <h4 className="text-xl font-bold text-gray-900">Account Information</h4>
+                      </div>
+                      <div className="space-y-4">
+                        <div className="flex items-start space-x-4 p-4 bg-gray-50 rounded-xl border border-gray-100">
+                          <Calendar className="h-5 w-5 text-emerald-600 mt-0.5 flex-shrink-0" />
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-700">Join Date</p>
+                            <p className="text-gray-900 font-semibold">
+                              {new Date(selectedPsychologist.created_at).toLocaleDateString("en-US", {
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric'
+                              })}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-start space-x-4 p-4 bg-gray-50 rounded-xl border border-gray-100">
+                          <Users className="h-5 w-5 text-emerald-600 mt-0.5 flex-shrink-0" />
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-700">Gender</p>
+                            <p className="text-gray-900 font-semibold">
+                              {selectedPsychologist.sex || (
+                                <span className="text-gray-500 italic">Not specified</span>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Enhanced Assigned Patients Section */}
+                <div className="bg-white rounded-3xl p-8 border border-gray-200 shadow-sm">
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center">
+                      <div className="w-12 h-12 bg-emerald-500 rounded-xl flex items-center justify-center mr-4 shadow-lg">
+                        <Users className="h-6 w-6 text-white" />
+                      </div>
+                      <h4 className="text-2xl font-bold text-gray-900">Assigned Patients</h4>
+                    </div>
+                    {(() => {
+                      const assignedPatients = patients.filter(
+                        (patient) => patient.assigned_psychologist_id === selectedPsychologist.id
+                      );
+                      return assignedPatients.length > 0 && (
+                        <div className="bg-emerald-100 px-4 py-2 rounded-xl">
+                          <span className="text-emerald-800 font-semibold text-sm">
+                            {assignedPatients.length} patient{assignedPatients.length !== 1 ? "s" : ""}
+                          </span>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                  
+                  {(() => {
+                    const assignedPatients = patients.filter(
+                      (patient) => patient.assigned_psychologist_id === selectedPsychologist.id
+                    );
+
+                    if (assignedPatients.length === 0) {
+                      return (
+                        <div className="bg-gray-50 rounded-2xl p-12 text-center border border-gray-200">
+                          <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <Users className="h-10 w-10 text-gray-400" />
+                          </div>
+                          <h5 className="text-xl font-semibold text-gray-700 mb-2">No Patients Yet</h5>
+                          <p className="text-gray-500 max-w-sm mx-auto">
+                            This psychologist hasn't been assigned any patients yet. Patients will appear here once assigned.
+                          </p>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="max-h-80 overflow-y-auto pr-2 custom-scrollbar">
+                        <div className="space-y-4">
+                          {assignedPatients.map((patient, index) => (
+                            <div
+                              key={patient.id}
+                              className="bg-gray-50 border border-gray-200 rounded-2xl p-5 hover:bg-gray-100 hover:shadow-md hover:scale-[1.01] transition-all duration-200 group"
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-4">
+                                  <div className="relative">
+                                    <ProfilePicture
+                                      patient={patient}
+                                      size={48}
+                                      className="ring-2 ring-gray-300 group-hover:ring-emerald-300 transition-colors"
+                                    />
+                                    <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center ring-2 ring-white">
+                                      <CheckCircle className="h-3 w-3 text-white" />
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <p className="font-bold text-gray-900 text-lg">
+                                      {getFullName(patient)}
+                                    </p>
+                                    <p className="text-gray-600 font-medium">
+                                      {patient.email}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <span className="inline-flex items-center px-4 py-2 rounded-xl text-sm font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                    <CheckCircle className="w-4 h-4 mr-2" />
+                                    Assigned
+                                  </span>
+                                  {patient.created_at && (
+                                    <p className="text-xs text-gray-500 mt-2 font-medium">
+                                      Since {new Date(patient.created_at).toLocaleDateString("en-US", {
+                                        month: 'short',
+                                        day: 'numeric',
+                                        year: 'numeric'
+                                      })}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              {/* Enhanced Footer */}
+              <div className="bg-gray-50 px-8 py-6 flex justify-end border-t border-gray-200">
+                <button
+                  onClick={() => setShowViewModal(false)}
+                  className="px-8 py-3 bg-gradient-to-r from-gray-800 to-gray-900 text-white rounded-2xl hover:from-gray-900 hover:to-black transition-all duration-200 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
                 >
                   Close
                 </button>
@@ -1985,100 +2265,119 @@ const AdminPanelNew = () => {
         </div>
       )}
 
-      {/* Edit Psychologist Modal */}
+      {/* Enhanced Edit Psychologist Modal */}
       {showEditModal && selectedPsychologist && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 shadow-2xl max-w-lg w-full mx-4">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-gray-900">
-                Edit Psychologist
-              </h2>
-              <button
-                onClick={() => setShowEditModal(false)}
-                className="p-2 hover:bg-gray-100 rounded-lg"
-              >
-                <X className="h-5 w-5 text-gray-500" />
-              </button>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-md flex items-center justify-center z-50">
+          <div className="bg-white/95 backdrop-blur-md rounded-2xl p-8 shadow-2xl max-w-lg w-full mx-4 border border-white/20">
+            {/* Header with gradient background */}
+            <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 -m-8 mb-8 p-6 rounded-t-2xl">
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold text-white tracking-tight">
+                  Edit Psychologist
+                </h2>
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  className="p-2 hover:bg-white/20 rounded-lg transition-all duration-200"
+                >
+                  <X className="h-6 w-6 text-white" />
+                </button>
+              </div>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Name
+                <label className="block text-sm font-bold text-gray-700 mb-2">
+                  Name *
                 </label>
                 <input
                   type="text"
-                  defaultValue={selectedPsychologist.name}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  value={editFormData.name}
+                  onChange={(e) => setEditFormData({...editFormData, name: e.target.value})}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-gray-50/50 transition-all duration-200 hover:bg-white"
+                  required
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email
+                <label className="block text-sm font-bold text-gray-700 mb-2">
+                  Email Address *
                 </label>
                 <input
                   type="email"
-                  defaultValue={selectedPsychologist.email}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  value={editFormData.email}
+                  onChange={(e) => setEditFormData({...editFormData, email: e.target.value})}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-gray-50/50 transition-all duration-200 hover:bg-white"
+                  required
                 />
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-2">
+                  <p className="text-xs text-blue-700 font-medium">
+                    💡 Changing email will require the psychologist to verify their new email address.
+                  </p>
+                </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-bold text-gray-700 mb-2">
                   Contact Number
                 </label>
                 <input
                   type="tel"
-                  defaultValue={selectedPsychologist.contact || ""}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  value={editFormData.contact}
+                  onChange={(e) => setEditFormData({...editFormData, contact: e.target.value})}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-gray-50/50 transition-all duration-200 hover:bg-white"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-bold text-gray-700 mb-2">
                   Specialization
                 </label>
                 <input
                   type="text"
-                  defaultValue={selectedPsychologist.specialization || ""}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  value={editFormData.specialization}
+                  onChange={(e) => setEditFormData({...editFormData, specialization: e.target.value})}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-gray-50/50 transition-all duration-200 hover:bg-white"
+                  placeholder="e.g., Anxiety Disorders, Depression, PTSD"
                 />
               </div>
             </div>
 
-            <div className="flex justify-end space-x-3 pt-6 border-t mt-6">
+            <div className="flex justify-end space-x-4 pt-8 border-t border-gray-200 mt-8">
               <button
                 onClick={() => setShowEditModal(false)}
-                className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+                className="px-6 py-3 text-gray-700 bg-gradient-to-r from-gray-100 to-gray-200 border border-gray-300 rounded-xl hover:from-gray-200 hover:to-gray-300 hover:shadow-md transition-all duration-200 font-medium"
+                disabled={isUpdatingPsychologist}
               >
                 Cancel
               </button>
               <button
-                onClick={() => {
-                  // Add save functionality here
-                  alert("Save functionality coming soon!");
-                  setShowEditModal(false);
-                }}
-                className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+                onClick={handleSavePsychologistChanges}
+                disabled={isUpdatingPsychologist || !editFormData.name.trim() || !editFormData.email.trim()}
+                className="px-6 py-3 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-xl hover:from-emerald-700 hover:to-emerald-800 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center transition-all duration-200 font-medium"
               >
-                Save Changes
+                {isUpdatingPsychologist && (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-3"></div>
+                )}
+                {isUpdatingPsychologist ? "Saving..." : "Save Changes"}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Loading Overlay for Creating Psychologist */}
+      {/* Enhanced Loading Overlay for Creating Psychologist */}
       {isCreatingPsychologist && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-8 shadow-2xl flex flex-col items-center space-y-4 max-w-sm mx-4">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-md flex items-center justify-center z-50">
+          <div className="bg-white/95 backdrop-blur-md rounded-2xl p-8 shadow-2xl flex flex-col items-center space-y-6 max-w-sm mx-4 border border-white/20">
+            <div className="relative">
+              <div className="animate-spin rounded-full h-16 w-16 border-4 border-gray-200"></div>
+              <div className="animate-spin rounded-full h-16 w-16 border-4 border-emerald-600 border-t-transparent absolute top-0 left-0"></div>
+            </div>
             <div className="text-center">
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              <h3 className="text-xl font-bold text-gray-900 mb-3 tracking-tight">
                 Creating Psychologist Account
               </h3>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-gray-600 leading-relaxed">
                 Please wait while we set up the account and send the invitation
                 email...
               </p>
@@ -2087,101 +2386,141 @@ const AdminPanelNew = () => {
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
+      {/* Enhanced Delete Confirmation Modal */}
       {showDeleteConfirmModal && psychologistToDelete && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 shadow-2xl max-w-md w-full mx-4">
-            <div className="flex items-center justify-center mb-6">
-              <div className="bg-red-100 p-3 rounded-full">
-                <svg
-                  className="h-6 w-6 text-red-600"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.888-.833-2.664 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"
-                  />
-                </svg>
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-md"
+            onClick={() => {
+              setShowDeleteConfirmModal(false);
+              setPsychologistToDelete(null);
+            }}
+          ></div>
+
+          {/* Modal content */}
+          <div className="relative bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden border border-white/20">
+            <div className="p-6">
+              {/* Warning icon and title */}
+              <div className="flex items-center mb-6">
+                <div className="flex-shrink-0 w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                  <svg
+                    className="h-6 w-6 text-red-600"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.888-.833-2.664 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"
+                    />
+                  </svg>
+                </div>
+                <div className="ml-4">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Delete Psychologist Account
+                  </h3>
+                  <p className="text-sm text-gray-500 mt-1">
+                    This action cannot be undone
+                  </p>
+                </div>
               </div>
-            </div>
 
-            <div className="text-center mb-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                Delete Psychologist
-              </h3>
-              <p className="text-sm text-gray-600 mb-4">
-                Are you sure you want to delete{" "}
-                <strong>{psychologistToDelete.name}</strong>?
-              </p>
-              <p className="text-xs text-red-600">
-                This action cannot be undone. All patient assignments and
-                records will be removed.
-              </p>
-            </div>
+              {/* Content */}
+              <div className="mb-6">
+                <p className="text-gray-600 mb-3">
+                  Are you sure you want to permanently delete{" "}
+                  <strong className="text-gray-900">{psychologistToDelete.name}</strong>'s account?
+                </p>
+                
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                  <div className="flex items-start">
+                    <svg className="w-4 h-4 text-red-600 mt-0.5 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                    <div className="text-sm text-red-700">
+                      <p className="font-medium">This will permanently:</p>
+                      <ul className="mt-1 list-disc list-inside space-y-1">
+                        <li>Delete the psychologist's account</li>
+                        <li>Remove all patient assignments</li>
+                        <li>Clear appointment history</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
-            <div className="flex space-x-3">
-              <button
-                onClick={() => {
-                  setShowDeleteConfirmModal(false);
-                  setPsychologistToDelete(null);
-                }}
-                className="flex-1 bg-gray-100 text-gray-900 py-2.5 px-4 rounded-lg hover:bg-gray-200 transition-colors font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={async () => {
-                  try {
-                    console.log(
-                      "Deleting psychologist:",
-                      psychologistToDelete.id
-                    );
+              {/* Action buttons */}
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => {
+                    setShowDeleteConfirmModal(false);
+                    setPsychologistToDelete(null);
+                  }}
+                  className="flex-1 bg-gray-100 text-gray-900 py-3 px-4 rounded-lg hover:bg-gray-200 transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-gray-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+          try {
+            console.log("Deleting psychologist:", psychologistToDelete.id);
 
-                    // Call the delete function
-                    const success =
-                      await psychologistService.deletePsychologist(
-                        psychologistToDelete.id
-                      );
+            // Call the delete function
+            const success = await psychologistService.deletePsychologist(psychologistToDelete.id);
 
-                    if (success) {
-                      // Log the activity
-                      await adminService.logActivity(
-                        user?.id,
-                        "Delete Psychologist",
-                        `Deleted psychologist: ${psychologistToDelete.name} (ID: ${psychologistToDelete.id})`
-                      );
+            if (success) {
+              // Log the activity
+              await adminService.logActivity(
+                user?.id,
+                "Delete Psychologist",
+                `Deleted psychologist: ${psychologistToDelete.name} (ID: ${psychologistToDelete.id})`
+              );
 
-                      // Refresh the psychologists list
-                      const updatedPsychologists =
-                        await psychologistService.getAllPsychologists();
-                      setPsychologists(updatedPsychologists);
+              // Refresh the psychologists list and activity logs
+              const [updatedPsychologists, updatedLogs] = await Promise.all([
+                psychologistService.getAllPsychologists(),
+                adminService.getActivityLogs(),
+              ]);
+              setPsychologists(updatedPsychologists);
+              setActivityLogs(updatedLogs);
 
-                      // Show success feedback
-                      alert(
-                        `${psychologistToDelete.name} has been successfully deleted.`
-                      );
-                    } else {
-                      alert("Failed to delete psychologist. Please try again.");
-                    }
-                  } catch (error) {
-                    console.error("Delete error:", error);
-                    alert(
-                      "An error occurred while deleting the psychologist. Please try again."
-                    );
-                  }
+              // Show success modal
+              setDeleteResult({
+                success: true,
+                message: "The psychologist account has been successfully deleted from the system.",
+                psychologistName: psychologistToDelete.name
+              });
+            } else {
+              // Show error modal
+              setDeleteResult({
+                success: false,
+                message: "Failed to delete psychologist. Please try again or contact support if the issue persists.",
+                psychologistName: psychologistToDelete.name
+              });
+            }
+          } catch (error) {
+            console.error("Delete error:", error);
+            // Show error modal
+            setDeleteResult({
+              success: false,
+              message: `An error occurred while deleting the psychologist: ${error.message}. Please try again.`,
+              psychologistName: psychologistToDelete.name
+            });
+          }
 
-                  // Close the modal
-                  setShowDeleteConfirmModal(false);
-                  setPsychologistToDelete(null);
-                }}
-                className="flex-1 bg-red-600 text-white py-2.5 px-4 rounded-lg hover:bg-red-700 transition-colors font-medium"
-              >
-                Delete
-              </button>
+          // Close the confirmation modal and show result modal
+          setShowDeleteConfirmModal(false);
+          setPsychologistToDelete(null);
+          setShowDeleteSuccessModal(true);
+                  }}
+                  className="flex-1 bg-red-600 text-white py-3 px-4 rounded-lg hover:bg-red-700 transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-red-500"
+                >
+                  Delete Permanently
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -2374,165 +2713,197 @@ const AdminPanelNew = () => {
         </div>
       )}
 
-      {/* Patient View Modal */}
+      {/* Enhanced Patient View Modal */}
       {showPatientViewModal && selectedPatient && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full mx-4 overflow-hidden">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-emerald-600 to-emerald-700 px-6 py-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
-                    <Users className="h-5 w-5 text-white" />
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <div className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl max-w-2xl w-full mx-4 overflow-hidden border border-white/20 animate-in zoom-in-95 duration-300">
+            {/* Enhanced Header with Gradient */}
+            <div className="relative bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-700 px-8 py-6">
+              {/* Decorative Elements */}
+              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-16 translate-x-16"></div>
+              <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full translate-y-12 -translate-x-12"></div>
+              
+              <div className="relative flex items-center justify-between">
+                <div className="flex items-center space-x-4">
+                  <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center ring-2 ring-white/30">
+                    <Users className="h-6 w-6 text-white" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-white">
+                    <h3 className="text-xl font-bold text-white tracking-tight">
                       Patient Details
                     </h3>
-                    <p className="text-emerald-100 text-sm">
+                    <p className="text-emerald-100 text-sm font-medium">
                       Complete patient information
                     </p>
                   </div>
                 </div>
                 <button
                   onClick={() => setShowPatientViewModal(false)}
-                  className="text-white/80 hover:text-white transition-colors p-1"
+                  className="text-white/70 hover:text-white hover:bg-white/20 transition-all duration-200 p-2 rounded-xl"
                 >
                   <X className="h-6 w-6" />
                 </button>
               </div>
             </div>
 
-            {/* Content */}
-            <div className="p-6">
-              {/* Patient Name - Featured */}
-              <div className="text-center mb-6 pb-4 border-b border-gray-200">
-                <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-3 overflow-hidden ring-2 ring-white shadow-sm">
-                  <ProfilePicture
-                    patient={selectedPatient}
-                    size={64}
-                    className="h-16 w-16 block"
-                  />
+            {/* Enhanced Content */}
+            <div className="p-8">
+              {/* Enhanced Patient Profile Section */}
+              <div className="text-center mb-8 pb-6 border-b border-gray-200">
+                <div className="relative inline-block mb-4">
+                  <div className="w-24 h-24 bg-gradient-to-br from-emerald-100 to-teal-100 rounded-full flex items-center justify-center mx-auto overflow-hidden ring-4 ring-white shadow-xl">
+                    <ProfilePicture
+                      patient={selectedPatient}
+                      size={96}
+                      className="h-24 w-24 block rounded-full"
+                    />
+                  </div>
+                  <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center ring-4 ring-white">
+                    <UserCheck className="h-4 w-4 text-white" />
+                  </div>
                 </div>
-                <h2 className="text-xl font-bold text-gray-900">
-                  {selectedPatient.name}
+                <h2 className="text-2xl font-bold text-gray-900 mb-1 tracking-tight">
+                  {getFullName(selectedPatient)}
                 </h2>
-                <p className="text-gray-500 text-sm mt-1">Patient Profile</p>
+                <p className="text-gray-500 text-sm font-medium bg-gray-100 px-3 py-1 rounded-full inline-block">
+                  Patient Profile
+                </p>
               </div>
 
-              {/* Information Grid */}
-              <div className="grid grid-cols-1 gap-4">
-                {/* Email */}
-                <div className="flex items-start space-x-3 p-3 bg-blue-50 rounded-lg">
-                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <Mail className="h-4 w-4 text-blue-600" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <label className="block text-sm font-medium text-blue-900 mb-1">
-                      Email Address
-                    </label>
-                    <p className="text-blue-800 break-all">
-                      {selectedPatient.email}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Contact Number */}
-                <div className="flex items-start space-x-3 p-3 bg-green-50 rounded-lg">
-                  <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <Phone className="h-4 w-4 text-green-600" />
-                  </div>
-                  <div className="flex-1">
-                    <label className="block text-sm font-medium text-green-900 mb-1">
-                      Contact Number
-                    </label>
-                    <p className="text-green-800">
-                      {selectedPatient.contact_number || "No contact number"}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Personal Information Row */}
-                <div className="grid grid-cols-2 gap-3">
-                  {/* Gender */}
-                  <div className="flex items-start space-x-2 p-3 bg-purple-50 rounded-lg">
-                    <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <Users className="h-4 w-4 text-purple-600" />
+              {/* Enhanced Information Grid */}
+              <div className="space-y-4">
+                {/* Contact Information */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Email */}
+                  <div className="group hover:scale-[1.02] transition-transform duration-200">
+                    <div className="flex items-start space-x-4 p-4 bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl border border-emerald-200/50 hover:shadow-md transition-shadow">
+                      <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm">
+                        <Mail className="h-5 w-5 text-white" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <label className="block text-sm font-semibold text-emerald-900 mb-1">
+                          Email Address
+                        </label>
+                        <p className="text-emerald-800 text-sm break-all font-medium">
+                          {selectedPatient.email}
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-purple-900 mb-1">
-                        Gender
-                      </label>
-                      <p className="text-purple-800">
-                        {selectedPatient.gender || "Not specified"}
-                      </p>
+                  </div>
+
+                  {/* Contact Number */}
+                  <div className="group hover:scale-[1.02] transition-transform duration-200">
+                    <div className="flex items-start space-x-4 p-4 bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl border border-emerald-200/50 hover:shadow-md transition-shadow">
+                      <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm">
+                        <Phone className="h-5 w-5 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-sm font-semibold text-emerald-900 mb-1">
+                          Contact Number
+                        </label>
+                        <p className="text-emerald-800 text-sm font-medium">
+                          {selectedPatient.contact_number || (
+                            <span className="text-gray-500 italic">No contact number</span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Personal Information */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Gender */}
+                  <div className="group hover:scale-[1.02] transition-transform duration-200">
+                    <div className="flex items-start space-x-4 p-4 bg-gradient-to-br from-teal-50 to-emerald-50 rounded-2xl border border-teal-200/50 hover:shadow-md transition-shadow">
+                      <div className="w-10 h-10 bg-teal-500 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm">
+                        <Users className="h-5 w-5 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-sm font-semibold text-teal-900 mb-1">
+                          Gender
+                        </label>
+                        <p className="text-teal-800 text-sm font-medium">
+                          {selectedPatient.gender || (
+                            <span className="text-gray-500 italic">Not specified</span>
+                          )}
+                        </p>
+                      </div>
                     </div>
                   </div>
 
                   {/* Birth Date */}
-                  <div className="flex items-start space-x-2 p-3 bg-orange-50 rounded-lg">
-                    <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <Calendar className="h-4 w-4 text-orange-600" />
-                    </div>
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-orange-900 mb-1">
-                        Birth Date
-                      </label>
-                      <p className="text-orange-800">
-                        {selectedPatient.birth_date
-                          ? new Date(
-                              selectedPatient.birth_date
-                            ).toLocaleDateString("en-GB")
-                          : "Not specified"}
-                      </p>
+                  <div className="group hover:scale-[1.02] transition-transform duration-200">
+                    <div className="flex items-start space-x-4 p-4 bg-gradient-to-br from-teal-50 to-emerald-50 rounded-2xl border border-teal-200/50 hover:shadow-md transition-shadow">
+                      <div className="w-10 h-10 bg-teal-600 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm">
+                        <Calendar className="h-5 w-5 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-sm font-semibold text-teal-900 mb-1">
+                          Birth Date
+                        </label>
+                        <p className="text-teal-800 text-sm font-medium">
+                          {selectedPatient.birth_date
+                            ? new Date(selectedPatient.birth_date).toLocaleDateString("en-GB")
+                            : (
+                              <span className="text-gray-500 italic">Not specified</span>
+                            )}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                {/* System Information Row */}
-                <div className="grid grid-cols-2 gap-3">
+                {/* System Information */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Date Added */}
-                  <div className="flex items-start space-x-2 p-3 bg-gray-50 rounded-lg">
-                    <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <Clock className="h-4 w-4 text-gray-600" />
-                    </div>
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-900 mb-1">
-                        Date Added
-                      </label>
-                      <p className="text-gray-800">
-                        {selectedPatient.date_added}
-                      </p>
+                  <div className="group hover:scale-[1.02] transition-transform duration-200">
+                    <div className="flex items-start space-x-4 p-4 bg-gradient-to-br from-emerald-50 to-green-50 rounded-2xl border border-emerald-200/50 hover:shadow-md transition-shadow">
+                      <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm">
+                        <Clock className="h-5 w-5 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-sm font-semibold text-emerald-900 mb-1">
+                          Date Added
+                        </label>
+                        <p className="text-emerald-800 text-sm font-medium">
+                          {selectedPatient.date_added}
+                        </p>
+                      </div>
                     </div>
                   </div>
 
                   {/* Assigned Psychologist */}
-                  <div className="flex items-start space-x-2 p-3 bg-emerald-50 rounded-lg">
-                    <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <UserCheck className="h-4 w-4 text-emerald-600" />
-                    </div>
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-emerald-900 mb-1">
-                        Assigned Psychologist
-                      </label>
-                      <p className="text-emerald-800 font-medium">
-                        {selectedPatient.assigned_psychologist_name || (
-                          <span className="text-gray-500 font-normal italic">
-                            Unassigned
-                          </span>
-                        )}
-                      </p>
+                  <div className="group hover:scale-[1.02] transition-transform duration-200">
+                    <div className="flex items-start space-x-4 p-4 bg-gradient-to-br from-emerald-50 to-green-50 rounded-2xl border border-emerald-200/50 hover:shadow-md transition-shadow">
+                      <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm">
+                        <UserCheck className="h-5 w-5 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-sm font-semibold text-emerald-900 mb-1">
+                          Assigned Psychologist
+                        </label>
+                        <p className="text-emerald-800 text-sm font-bold">
+                          {selectedPatient.assigned_psychologist_id ? 
+                            getFullName(psychologists.find(p => p.id === selectedPatient.assigned_psychologist_id)) || "Unknown Psychologist"
+                            : (
+                            <span className="text-amber-600 font-medium bg-amber-100 px-2 py-1 rounded-lg">
+                              Unassigned
+                            </span>
+                          )}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Footer */}
-            <div className="bg-gray-50 px-6 py-4 flex justify-end">
+            {/* Enhanced Footer */}
+            <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-8 py-6 flex justify-end border-t border-gray-200">
               <button
                 onClick={() => setShowPatientViewModal(false)}
-                className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors font-medium"
+                className="px-8 py-3 bg-gradient-to-r from-gray-800 to-gray-900 text-white rounded-2xl hover:from-gray-900 hover:to-black transition-all duration-200 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
               >
                 Close
               </button>
@@ -2576,7 +2947,7 @@ const AdminPanelNew = () => {
                 </label>
                 <input
                   type="text"
-                  defaultValue={selectedPatient.name}
+                  defaultValue={getFullName(selectedPatient)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
@@ -2633,94 +3004,107 @@ const AdminPanelNew = () => {
         </div>
       )}
 
-      {/* Assignment Modal */}
+      {/* Enhanced Assignment Modal */}
       {showAssignmentModal && patientToAssign && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          {/* Backdrop */}
+          {/* Enhanced Backdrop */}
           <div
-            className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm transition-opacity"
+            className="absolute inset-0 bg-black/50 backdrop-blur-md transition-opacity"
             onClick={() => {
               setShowAssignmentModal(false);
               setPatientToAssign(null);
             }}
           ></div>
 
-          {/* Modal content */}
-          <div className="relative bg-white rounded-lg shadow-xl max-w-lg w-full overflow-hidden">
-            {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-900">
-                {patientToAssign.assigned_psychologist_id
-                  ? "Reassign Patient"
-                  : "Assign Patient"}
-              </h2>
-              <button
-                onClick={() => {
-                  setShowAssignmentModal(false);
-                  setPatientToAssign(null);
-                }}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <X className="h-6 w-6" />
-              </button>
+          {/* Enhanced Modal content */}
+          <div className="relative bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-white/20">
+            {/* Enhanced Header with gradient */}
+            <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 p-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-bold text-white tracking-tight">
+                  {patientToAssign.assigned_psychologist_id
+                    ? "Reassign Patient"
+                    : "Assign Patient"}
+                </h2>
+                <button
+                  onClick={() => {
+                    setShowAssignmentModal(false);
+                    setPatientToAssign(null);
+                  }}
+                  className="p-2 hover:bg-white/20 rounded-lg transition-all duration-200"
+                >
+                  <X className="h-5 w-5 text-white" />
+                </button>
+              </div>
             </div>
 
-            <div className="p-6">
-              {/* Patient Info Header */}
-              <div className="flex items-center space-x-4 mb-6">
-                <ProfilePicture
-                  userId={patientToAssign.user_id || patientToAssign.id}
-                  name={
-                    patientToAssign.name ||
-                    `${patientToAssign.first_name || ""} ${
-                      patientToAssign.last_name || ""
-                    }`.trim() ||
-                    patientToAssign.email?.split("@")[0] ||
-                    "Unknown Patient"
-                  }
-                  size={48}
-                />
-                <div>
-                  <h3 className="text-lg font-medium text-gray-900">
-                    {patientToAssign.name ||
-                      `${patientToAssign.first_name || ""} ${
-                        patientToAssign.last_name || ""
-                      }`.trim() ||
-                      patientToAssign.email?.split("@")[0] ||
-                      "Unknown Patient"}
-                  </h3>
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                    Patient
-                  </span>
+            <div className="p-4">
+              {/* Enhanced Patient Info Header */}
+              <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-4 mb-4 border border-emerald-100">
+                <div className="flex items-center space-x-3">
+                  <div className="relative">
+                    <ProfilePicture
+                      patient={patientToAssign}
+                      size={48}
+                      className="ring-2 ring-white shadow-md"
+                    />
+                    <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center ring-2 ring-white">
+                      <User className="h-2 w-2 text-white" />
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-bold text-gray-900 mb-1">
+                      {getFullName(patientToAssign)}
+                    </h3>
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 shadow-sm">
+                      Patient
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              {/* Current Assignment */}
+              {/* Enhanced Current Assignment */}
               {patientToAssign.assigned_psychologist_id && (
-                <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
-                  <div className="flex items-center space-x-2 mb-2">
-                    <UserCheck className="h-5 w-5 text-blue-600" />
-                    <span className="text-sm font-semibold text-blue-800">
+                <div className="mb-4 p-4 bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl">
+                  <div className="flex items-center space-x-2 mb-3">
+                    <div className="p-1 bg-blue-100 rounded-lg">
+                      <UserCheck className="h-4 w-4 text-blue-600" />
+                    </div>
+                    <span className="text-sm font-bold text-blue-900">
                       Currently Assigned
                     </span>
                   </div>
-                  <p className="text-blue-700 font-medium ml-7">
-                    {patientToAssign.assigned_psychologist_name ||
-                      "Unknown Psychologist"}
-                  </p>
+                  <div className="flex items-center space-x-3 bg-white/60 rounded-lg p-3">
+                    <ProfilePicture
+                      patient={psychologists.find(p => p.id === patientToAssign.assigned_psychologist_id)}
+                      size={32}
+                      className="ring-1 ring-blue-200"
+                    />
+                    <div>
+                      <p className="text-blue-900 font-bold text-sm">
+                        {getFullName(psychologists.find(p => p.id === patientToAssign.assigned_psychologist_id)) || 
+                          "Unknown Psychologist"}
+                      </p>
+                      <p className="text-blue-600 text-xs font-medium">
+                        Psychologist
+                      </p>
+                    </div>
+                  </div>
                 </div>
               )}
 
-              {/* Psychologist Selection */}
+              {/* Enhanced Psychologist Selection */}
               <div className="space-y-4">
-                <h4 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                  <User className="h-5 w-5 text-gray-600 mr-2" />
+                <h4 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
+                  <div className="p-1 bg-emerald-100 rounded-lg mr-2">
+                    <User className="h-4 w-4 text-emerald-600" />
+                  </div>
                   {patientToAssign.assigned_psychologist_id
                     ? "Choose New Assignment"
                     : "Choose Psychologist"}
                 </h4>
 
-                {/* Unassign option (only if currently assigned) */}
+                {/* Enhanced Unassign option */}
                 {patientToAssign.assigned_psychologist_id && (
                   <button
                     onClick={() =>
@@ -2731,17 +3115,17 @@ const AdminPanelNew = () => {
                         true
                       )
                     }
-                    className="w-full text-left p-4 border-2 border-red-200 rounded-xl hover:bg-red-50 hover:border-red-300 transition-all duration-200 group"
+                    className="w-full text-left p-3 border-2 border-red-200 rounded-xl hover:bg-red-50 hover:border-red-300 hover:shadow-lg transition-all duration-200 group bg-gradient-to-br from-red-50 to-pink-50"
                   >
                     <div className="flex items-center space-x-3">
-                      <div className="flex-shrink-0 w-10 h-10 bg-red-100 rounded-full flex items-center justify-center group-hover:bg-red-200 transition-colors">
-                        <UserX className="h-5 w-5 text-red-600" />
+                      <div className="flex-shrink-0 w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center group-hover:bg-red-200 transition-colors shadow-sm">
+                        <UserX className="h-4 w-4 text-red-600" />
                       </div>
-                      <div>
-                        <div className="text-sm font-semibold text-red-700">
+                      <div className="flex-1">
+                        <div className="text-sm font-bold text-red-700">
                           Remove Assignment
                         </div>
-                        <div className="text-xs text-red-600">
+                        <div className="text-xs text-red-600 font-medium">
                           Patient will become unassigned
                         </div>
                       </div>
@@ -2749,8 +3133,8 @@ const AdminPanelNew = () => {
                   </button>
                 )}
 
-                {/* List of available psychologists */}
-                <div className="space-y-3 max-h-64 overflow-y-auto">
+                {/* Enhanced List of available psychologists */}
+                <div className="space-y-3 max-h-80 overflow-y-auto">
                   {psychologists
                     .filter(
                       (p) =>
@@ -2766,34 +3150,36 @@ const AdminPanelNew = () => {
                           handleAssignmentConfirmation(
                             patientToAssign.id,
                             psychologist.id,
-                            psychologist.name ||
-                              `${psychologist.first_name || ""} ${
-                                psychologist.last_name || ""
-                              }`.trim() ||
-                              "Unnamed Psychologist",
+                            getFullName(psychologist),
                             false
                           )
                         }
-                        className="w-full text-left p-4 border-2 border-gray-200 rounded-xl hover:bg-emerald-50 hover:border-emerald-300 hover:shadow-md transition-all duration-200 group"
+                        className="w-full text-left p-3 border-2 border-emerald-200 rounded-xl hover:bg-emerald-50 hover:border-emerald-300 hover:shadow-lg hover:scale-[1.02] transition-all duration-200 group bg-gradient-to-br from-emerald-50 to-teal-50"
                       >
                         <div className="flex items-center space-x-3">
-                          <div className="flex-shrink-0 w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center group-hover:bg-emerald-200 transition-colors">
-                            <UserCheck className="h-5 w-5 text-emerald-600" />
+                          <div className="relative">
+                            <ProfilePicture
+                              patient={psychologist}
+                              size={40}
+                              className="ring-1 ring-emerald-200 group-hover:ring-emerald-300 transition-all"
+                            />
+                            <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full flex items-center justify-center ring-1 ring-white">
+                              <UserCheck className="h-2 w-2 text-white" />
+                            </div>
                           </div>
                           <div className="flex-1">
-                            <div className="text-sm font-semibold text-gray-900">
-                              {psychologist.name ||
-                                `${psychologist.first_name || ""} ${
-                                  psychologist.last_name || ""
-                                }`.trim() ||
-                                "Unnamed Psychologist"}
+                            <div className="text-sm font-bold text-gray-900 mb-1">
+                              {getFullName(psychologist)}
                             </div>
-                            <div className="text-xs text-gray-500 mt-1">
+                            <div className="text-xs text-emerald-600 font-medium mb-1">
+                              {psychologist.specialization || "Psychologist"}
+                            </div>
+                            <div className="text-xs text-gray-500">
                               {psychologist.email}
                             </div>
                           </div>
                           <div className="flex-shrink-0">
-                            <div className="w-6 h-6 bg-emerald-600 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="w-6 h-6 bg-emerald-600 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">
                               <svg
                                 className="w-3 h-3 text-white"
                                 fill="currentColor"
@@ -2812,7 +3198,7 @@ const AdminPanelNew = () => {
                     ))}
                 </div>
 
-                {/* No psychologists available */}
+                {/* Enhanced No psychologists available */}
                 {psychologists.filter(
                   (p) =>
                     (p.status === "active" ||
@@ -2820,16 +3206,16 @@ const AdminPanelNew = () => {
                       !p.hasOwnProperty("status")) &&
                     p.id !== patientToAssign.assigned_psychologist_id
                 ).length === 0 && (
-                  <div className="text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
+                  <div className="text-center py-12 bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl border-2 border-dashed border-gray-300">
                     <div className="flex flex-col items-center space-y-3">
-                      <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center">
+                      <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center shadow-lg">
                         <UserX className="h-8 w-8 text-gray-400" />
                       </div>
                       <div>
-                        <p className="text-lg font-medium text-gray-600">
+                        <p className="text-lg font-bold text-gray-600 mb-2">
                           No Available Psychologists
                         </p>
-                        <p className="text-sm text-gray-400 mt-1 max-w-xs">
+                        <p className="text-xs text-gray-500 max-w-xs leading-relaxed">
                           All psychologists may be inactive or this patient may
                           already be assigned to all available psychologists
                         </p>
@@ -2840,15 +3226,15 @@ const AdminPanelNew = () => {
               </div>
             </div>
 
-            {/* Footer */}
-            <div className="bg-gray-50 px-6 py-4 border-t border-gray-200">
+            {/* Enhanced Footer */}
+            <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-4 py-3 border-t border-gray-200">
               <div className="flex justify-end space-x-3">
                 <button
                   onClick={() => {
                     setShowAssignmentModal(false);
                     setPatientToAssign(null);
                   }}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors"
+                  className="px-4 py-2 text-sm font-bold text-gray-700 bg-gradient-to-r from-gray-100 to-gray-200 border border-gray-300 rounded-lg hover:from-gray-200 hover:to-gray-300 hover:shadow-md transition-all duration-200"
                 >
                   Close
                 </button>
@@ -2895,8 +3281,7 @@ const AdminPanelNew = () => {
               {/* Patient Info Header */}
               <div className="flex items-center space-x-4 mb-6">
                 <ProfilePicture
-                  userId={pendingAssignment.patientId}
-                  name={pendingAssignment.patientName}
+                  patient={pendingAssignment.patientData}
                   size={48}
                 />
                 <div>
@@ -2983,6 +3368,158 @@ const AdminPanelNew = () => {
                   {pendingAssignment.isUnassign
                     ? "Confirm Unassignment"
                     : "Confirm Assignment"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Enhanced Delete Success/Error Modal */}
+      {showDeleteSuccessModal && deleteResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-md"
+            onClick={() => setShowDeleteSuccessModal(false)}
+          ></div>
+
+          {/* Modal content */}
+          <div className="relative bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden border border-white/20">
+            <div className="p-6">
+              {/* Success/Error icon and title */}
+              <div className="flex items-center mb-4">
+                <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
+                  deleteResult.success 
+                    ? "bg-green-100" 
+                    : "bg-red-100"
+                }`}>
+                  {deleteResult.success ? (
+                    <CheckCircle className="h-6 w-6 text-green-600" />
+                  ) : (
+                    <X className="h-6 w-6 text-red-600" />
+                  )}
+                </div>
+                <h3 className="ml-3 text-lg font-semibold text-gray-900">
+                  {deleteResult.success 
+                    ? "Psychologist Deleted Successfully" 
+                    : "Deletion Failed"
+                  }
+                </h3>
+              </div>
+
+              {/* Message */}
+              <div className="mb-6">
+                {deleteResult.success ? (
+                  <div>
+                    <p className="text-gray-600 mb-3">
+                      <strong>{deleteResult.psychologistName}</strong> has been successfully removed from the system.
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      {deleteResult.message}
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-gray-600 mb-3">
+                      Unable to delete <strong>{deleteResult.psychologistName}</strong>.
+                    </p>
+                    <p className="text-sm text-red-600">
+                      {deleteResult.message}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Action button */}
+              <div className="flex justify-end">
+                <button
+                  onClick={() => setShowDeleteSuccessModal(false)}
+                  className={`px-6 py-2 rounded-lg text-sm font-medium transition-colors focus:outline-none focus:ring-2 ${
+                    deleteResult.success
+                      ? "bg-green-600 hover:bg-green-700 text-white focus:ring-green-500"
+                      : "bg-red-600 hover:bg-red-700 text-white focus:ring-red-500"
+                  }`}
+                >
+                  {deleteResult.success ? "Got it" : "Try Again"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Enhanced Deactivate Blocked Modal */}
+      {showDeactivateBlockedModal && deactivateBlockedData.psychologist && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-md"
+            onClick={() => {
+              setShowDeactivateBlockedModal(false);
+              setDeactivateBlockedData({ psychologist: null, errorMessage: "" });
+            }}
+          ></div>
+
+          {/* Modal content */}
+          <div className="relative bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden border border-white/20">
+            <div className="p-6">
+              {/* Warning icon and title */}
+              <div className="flex items-center mb-6">
+                <div className="flex-shrink-0 w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
+                  <AlertTriangle className="h-6 w-6 text-orange-600" />
+                </div>
+                <div className="ml-4">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Cannot Deactivate Psychologist
+                  </h3>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Active patient assignments found
+                  </p>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="mb-6">
+                <p className="text-gray-600 mb-4">
+                  <strong className="text-gray-900">{deactivateBlockedData.psychologist.name}</strong> cannot be deactivated because they have active patient assignments.
+                </p>
+                
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                  <div className="flex items-start">
+                    <Users className="w-5 h-5 text-orange-600 mt-0.5 mr-3 flex-shrink-0" />
+                    <div className="text-sm text-orange-800">
+                      <p className="font-medium mb-2">Required Action:</p>
+                      <p className="mb-3">{deactivateBlockedData.errorMessage}</p>
+                      <p className="text-orange-700">
+                        Please go to the <strong>Patients tab</strong> to reassign these patients to another psychologist first.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => {
+                    setShowDeactivateBlockedModal(false);
+                    setDeactivateBlockedData({ psychologist: null, errorMessage: "" });
+                  }}
+                  className="flex-1 bg-gray-100 text-gray-900 py-3 px-4 rounded-lg hover:bg-gray-200 transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-gray-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    setShowDeactivateBlockedModal(false);
+                    setDeactivateBlockedData({ psychologist: null, errorMessage: "" });
+                    // Switch to patients tab when "Go to Patients Tab" is clicked
+                    setActiveTab("patients");
+                  }}
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3 px-4 rounded-lg text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  Go to Patients Tab
                 </button>
               </div>
             </div>

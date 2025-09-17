@@ -260,6 +260,12 @@ export const adminService = {
             details: await this.replaceIdsWithNames(log.details),
           }))
         );
+
+        // Sort by timestamp descending (newest first) by default
+        processedLogs.sort(
+          (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
+        );
+
         return processedLogs;
       }
 
@@ -335,20 +341,27 @@ export const adminService = {
   // Get dashboard statistics
   async getDashboardStats() {
     try {
-      // Get count of active psychologists
-      const { data: psychologistsCount, error: psychologistsError } =
+      // Get count of ALL psychologists (active + inactive)
+      const { data: allPsychologists, error: allPsychError } = await supabase
+        .from("psychologists")
+        .select("id", { count: "exact" });
+
+      // Get count of ACTIVE psychologists only
+      const { data: activePsychologists, error: activePsychError } =
         await supabase
           .from("psychologists")
           .select("id", { count: "exact" })
           .eq("is_active", true);
 
-      if (psychologistsError) {
+      if (allPsychError || activePsychError) {
         console.error(
           "Error fetching psychologists count:",
-          psychologistsError.message
+          allPsychError?.message || activePsychError?.message
         );
         return {
           psychologistsCount: 0,
+          activePsychologistsCount: 0,
+          inactivePsychologistsCount: 0,
           patientsCount: 0,
           unassignedPatientsCount: 0,
         };
@@ -363,7 +376,10 @@ export const adminService = {
       if (patientsError) {
         console.error("Error fetching patients count:", patientsError.message);
         return {
-          psychologistsCount: psychologistsCount.length,
+          psychologistsCount: allPsychologists.length,
+          activePsychologistsCount: activePsychologists.length,
+          inactivePsychologistsCount:
+            allPsychologists.length - activePsychologists.length,
           patientsCount: 0,
           unassignedPatientsCount: 0,
         };
@@ -382,14 +398,20 @@ export const adminService = {
           unassignedError.message
         );
         return {
-          psychologistsCount: psychologistsCount.length,
+          psychologistsCount: allPsychologists.length,
+          activePsychologistsCount: activePsychologists.length,
+          inactivePsychologistsCount:
+            allPsychologists.length - activePsychologists.length,
           patientsCount: patientsCount.length,
           unassignedPatientsCount: 0,
         };
       }
 
       return {
-        psychologistsCount: psychologistsCount.length,
+        psychologistsCount: allPsychologists.length,
+        activePsychologistsCount: activePsychologists.length,
+        inactivePsychologistsCount:
+          allPsychologists.length - activePsychologists.length,
         patientsCount: patientsCount.length,
         unassignedPatientsCount: unassignedCount.length,
       };
@@ -397,6 +419,8 @@ export const adminService = {
       console.error("Get dashboard stats error:", error.message);
       return {
         psychologistsCount: 0,
+        activePsychologistsCount: 0,
+        inactivePsychologistsCount: 0,
         patientsCount: 0,
         unassignedPatientsCount: 0,
       };
@@ -422,8 +446,7 @@ export const adminService = {
       return data.map((patient) => ({
         id: patient.id,
         email:
-          patient.email ||
-          `user-${patient.id.substring(0, 8)}@anxieease.com`,
+          patient.email || `user-${patient.id.substring(0, 8)}@anxieease.com`,
         name:
           `${patient.first_name || ""} ${patient.last_name || ""}`.trim() ||
           "Unknown",
@@ -448,14 +471,12 @@ export const adminService = {
   async getAllUsers() {
     try {
       // Fetch from user_profiles without strict role filter
-      const { data, error } = await supabase
-        .from("user_profiles")
-        .select(
-          `
+      const { data, error } = await supabase.from("user_profiles").select(
+        `
           *,
           psychologists:assigned_psychologist_id(name)
         `
-        );
+      );
 
       if (error) {
         console.error("Get patients error:", error.message);
@@ -473,7 +494,10 @@ export const adminService = {
         .select("id,email");
 
       if (psychErr) {
-        console.log("getAllUsers: psychologists lookup failed:", psychErr.message);
+        console.log(
+          "getAllUsers: psychologists lookup failed:",
+          psychErr.message
+        );
       }
 
       const psychIdSet = new Set((psychRows || []).map((p) => p.id));
@@ -491,11 +515,13 @@ export const adminService = {
         const isPsychById = psychIdSet.has(u.id);
         const isPsychByEmail = email && psychEmailSet.has(email);
         const classifyAsPatient = role === "patient" || role === "";
-        
+
         return !isPsychById && !isPsychByEmail && classifyAsPatient;
       });
 
-      console.log(`getAllUsers: Found ${patients.length} patients from ${data.length} user_profiles`);
+      console.log(
+        `getAllUsers: Found ${patients.length} patients from ${data.length} user_profiles`
+      );
 
       return patients.map((patient) => ({
         id: patient.id,

@@ -18,6 +18,45 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Cache helpers: bind role to specific userId to avoid leaking roles across sessions
+  const loadCachedRole = (userId) => {
+    try {
+      // Prefer new binding format
+      const bindingRaw = localStorage.getItem("userRoleBinding");
+      if (bindingRaw) {
+        const binding = JSON.parse(bindingRaw);
+        if (binding?.userId === userId && binding?.role) {
+          return binding.role;
+        }
+      }
+      // Legacy key cleanup (unbound role)
+      const legacy = localStorage.getItem("userRole");
+      if (legacy) {
+        localStorage.removeItem("userRole");
+      }
+      return null;
+    } catch (e) {
+      console.warn("Failed to load role cache:", e?.message);
+      return null;
+    }
+  };
+
+  const saveCachedRole = (userId, role) => {
+    try {
+      localStorage.setItem(
+        "userRoleBinding",
+        JSON.stringify({ userId, role })
+      );
+    } catch (e) {
+      console.warn("Failed to save role cache:", e?.message);
+    }
+  };
+
+  const clearCachedRole = () => {
+    localStorage.removeItem("userRoleBinding");
+    localStorage.removeItem("userRole"); // legacy
+  };
+
   // Initialize auth state
   useEffect(() => {
     const initializeAuth = async () => {
@@ -47,12 +86,17 @@ export const AuthProvider = ({ children }) => {
           console.log("Found existing session for:", session.user.email);
           // Set user immediately so UI can proceed
           setUser(session.user);
-          // Apply cached role immediately if present to preserve correct routing
-          const cachedRole = localStorage.getItem("userRole");
+
+          // Apply cached role ONLY if it's bound to this userId
+          const cachedRole = loadCachedRole(session.user.id);
           if (cachedRole) {
-            console.log("Using cached role:", cachedRole);
+            console.log("Using cached role for user:", cachedRole);
             setUserRole(cachedRole);
+          } else {
+            // Ensure we don't carry over any stale role
+            setUserRole(null);
           }
+
           // Fetch role in background; don't block UI
           (async () => {
             try {
@@ -60,17 +104,20 @@ export const AuthProvider = ({ children }) => {
               console.log("Initial role retrieved:", role);
               if (role) {
                 setUserRole(role);
-                localStorage.setItem("userRole", role);
+                saveCachedRole(session.user.id, role);
               } else {
                 setUserRole(null);
+                clearCachedRole();
               }
             } catch (roleError) {
               console.error("Error getting initial role:", roleError);
               setUserRole(null);
+              clearCachedRole();
             }
           })();
         } else {
           console.log("No existing session found");
+          clearCachedRole();
         }
 
         setLoading(false);
@@ -93,8 +140,10 @@ export const AuthProvider = ({ children }) => {
 
       if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
         if (session?.user) {
-          // Set user immediately; don't block on role
+          // New session: set user and clear any cached role first
           setUser(session.user);
+          setUserRole(null);
+          clearCachedRole();
           setLoading(false);
           console.log("Getting user role for:", session.user.id);
           (async () => {
@@ -103,20 +152,22 @@ export const AuthProvider = ({ children }) => {
               console.log("User role retrieved:", role);
               if (role) {
                 setUserRole(role);
-                localStorage.setItem("userRole", role);
+                saveCachedRole(session.user.id, role);
               } else {
                 setUserRole(null);
+                clearCachedRole();
               }
             } catch (error) {
               console.error("Error getting user role:", error);
               setUserRole(null);
+              clearCachedRole();
             }
           })();
         }
       } else if (event === "SIGNED_OUT") {
         setUser(null);
         setUserRole(null);
-        localStorage.removeItem("userRole");
+        clearCachedRole();
         setLoading(false);
       }
     });

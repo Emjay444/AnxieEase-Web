@@ -2,8 +2,9 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { psychologistAuthService } from "../services/psychologistAuthService";
 import { psychologistService } from "../services/psychologistService";
+import { psychologistSetupService } from "../services/psychologistSetupService";
 import { supabase } from "../services/supabaseClient";
-import { Brain } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, AlertCircle, Loader2, CheckCircle, X } from "lucide-react";
 
 const PsychologistSetupPage = () => {
   const { email, inviteCode } = useParams();
@@ -16,70 +17,118 @@ const PsychologistSetupPage = () => {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
+  const [sessionData, setSessionData] = useState(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   useEffect(() => {
-    // Supabase magic-link redirects to this page with tokens in the URL hash.
-    // The supabase-js client automatically picks up the hash and restores a session.
-    const initializeAuth = async () => {
+    const initializeSetup = async () => {
       try {
-        // First, attempt to recover an existing session (after magic link it should exist)
-        const {
-          data: { session },
-          error: sessionError,
-        } = await supabase.auth.getSession();
-
-        if (sessionError) throw sessionError;
-
-        // If session is present, bind the user id to psychologist row
-        if (session?.user) {
+        // Handle magic link auth callback first
+        const { data: authCallbackData, error: callbackError } = await supabase.auth.getSession();
+        
+        if (callbackError) {
+          console.error("Auth callback error:", callbackError);
+        }
+        
+        // Check for URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlEmail = urlParams.get('email');
+        const urlPsychId = urlParams.get('psychologist_id');
+        
+        let workingEmail = null;
+        let psychologistId = null;
+        
+        // Try to get session and email from multiple sources
+        const currentSession = authCallbackData?.session;
+        
+        if (currentSession && currentSession.user.email) {
+          workingEmail = currentSession.user.email;
+          setSessionData(currentSession);
+          
+          console.log("Found active session for:", workingEmail);
+          
+          // Store session data for persistence
+          localStorage.setItem('setupEmail', workingEmail);
+          
+          // Try to update psychologist user_id
           try {
             await psychologistService.updatePsychologistUserId(
-              session.user.email,
-              session.user.id
+              workingEmail,
+              currentSession.user.id
             );
           } catch (updateError) {
-            console.error(
-              "Failed to update psychologist user_id:",
-              updateError
-            );
+            console.error("Failed to update psychologist user_id:", updateError);
           }
+        } else {
+          // Fallback to URL params or localStorage
+          workingEmail = urlEmail || localStorage.getItem('setupEmail');
+          psychologistId = urlPsychId || localStorage.getItem('setupPsychologistId');
+          
+          console.log("No active session found, using fallback email:", workingEmail);
         }
 
-        // Prefer the authenticated user's email; fallback to route param for legacy links
+        // Set the email in the form
         setFormData((prev) => ({
           ...prev,
-          email: session?.user?.email || email || "",
+          email: workingEmail || "",
         }));
+
+        // Store email for later use even if session is lost
+        if (workingEmail) {
+          localStorage.setItem('setupEmail', workingEmail);
+        }
 
         setLoading(false);
       } catch (error) {
-        console.error("Auth initialization error:", error);
+        console.error("Setup initialization error:", error);
+        
+        // Try to recover email from localStorage as last resort
+        const storedEmail = localStorage.getItem('setupEmail');
+        if (storedEmail) {
+          setFormData((prev) => ({
+            ...prev,
+            email: storedEmail,
+          }));
+        }
+        
         setErrors({
           general:
-            "Authentication failed. Please open the link from your email again.",
+            "Setup session expired or invalid. Please use the setup link from your email again.",
         });
         setLoading(false);
       }
     };
 
-    initializeAuth();
+    initializeSetup();
   }, [email, inviteCode]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+
+    // Clear specific error when user starts typing
     if (errors[name]) {
-      setErrors({ ...errors, [name]: "" });
+      setErrors((prev) => ({
+        ...prev,
+        [name]: "",
+      }));
     }
   };
 
   const validateForm = () => {
     const newErrors = {};
 
+    if (!formData.email) {
+      newErrors.email = "Email is required";
+    }
+
     if (!formData.password) {
       newErrors.password = "Password is required";
-    } else if (formData.password.length < 8) {
-      newErrors.password = "Password must be at least 8 characters";
+    } else if (formData.password.length < 6) {
+      newErrors.password = "Password must be at least 6 characters";
     }
 
     if (!formData.confirmPassword) {
@@ -100,23 +149,18 @@ const PsychologistSetupPage = () => {
     try {
       setLoading(true);
 
-      // Complete the signup process
-      await psychologistAuthService.completeSignup(
+      // Use the dedicated setup service to complete setup
+      await psychologistSetupService.completeSetup(
         formData.email,
         formData.password,
-        inviteCode
+        sessionData
       );
 
-      // Success! Redirect to login page
-      alert(
-        "Account setup complete! You can now log in with your credentials."
-      );
+      // Clear setup data from localStorage
+      await psychologistSetupService.cleanupSetupSession();
 
-      // Sign out any existing session
-      await supabase.auth.signOut();
-
-      // Redirect to login
-      navigate("/login");
+      // Success! Show success modal
+      setShowSuccessModal(true);
     } catch (error) {
       console.error("Setup error:", error);
       setErrors({
@@ -135,128 +179,249 @@ const PsychologistSetupPage = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-app flex items-center justify-center">
-        <div className="w-full max-w-md glass rounded-2xl shadow-xl border border-white/40 p-8 text-center">
-          <div className="inline-flex items-center justify-center h-12 w-12 rounded-xl bg-emerald-100 text-emerald-700 mb-3">
-            ⏳
-          </div>
-          <h2 className="text-gray-800 font-semibold">Loading...</h2>
+      <div className="min-h-screen animated-bg flex items-center justify-center p-4 relative">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-white mx-auto mb-4" />
+          <p className="text-white text-lg">Setting up your account...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-app flex items-center justify-center relative overflow-hidden px-4">
-      <div className="blob -top-10 -left-10 w-72 h-72 bg-emerald-200/40 rounded-full"></div>
-      <div className="blob -bottom-16 -right-10 w-80 h-80 bg-teal-200/40 rounded-full"></div>
-      <div className="w-full max-w-lg glass rounded-2xl shadow-xl border border-white/40 p-8 relative">
-        <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center h-12 w-12 rounded-xl bg-emerald-100 text-emerald-700 mb-3">
-            <Brain className="h-5 w-5" />
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900">
-            Complete Your Account Setup
-          </h2>
-          <p className="text-gray-600 mt-1">
-            Create a password to finish setting up your account
+    <div className="min-h-screen animated-bg flex items-center justify-center p-4 relative">
+      {/* Floating shapes for enhanced animation */}
+      <div className="floating-shapes">
+        <div className="shape"></div>
+        <div className="shape"></div>
+        <div className="shape"></div>
+      </div>
+
+      <div className="w-full max-w-md relative z-10">
+        {/* Header with AnxieEase branding */}
+        <div className="text-center mb-8">
+          <img
+            src="/anxieease-logo.png"
+            alt="AnxieEase"
+            className="mx-auto mb-3 h-16 w-16 drop-shadow-lg logo-breathe"
+          />
+          <h1 className="text-4xl font-extrabold text-white tracking-tight drop-shadow-lg">
+            Anxie<span className="text-emerald-300">Ease</span>
+          </h1>
+          <p className="mt-1 text-emerald-100/90 drop-shadow-sm">
+            Complete your psychologist account setup
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Setup Form */}
+        <div className="glass rounded-2xl p-8 shadow-2xl">
+          {/* Email Info */}
+          <div className="mb-6 p-4 bg-emerald-50 rounded-lg border border-emerald-200">
+            <div className="flex items-center gap-2">
+              <Mail className="w-5 h-5 text-emerald-600" />
+              <div>
+                <p className="text-sm font-medium text-emerald-700">
+                  Setting up account for:
+                </p>
+                <p className="text-sm text-emerald-600 font-semibold">
+                  {formData.email}
+                </p>
+              </div>
+            </div>
+            <p className="text-xs text-emerald-600 mt-2">
+              This email was invited by an administrator
+            </p>
+          </div>
+
+          {/* General Error */}
           {errors.general && (
-            <div className="rounded-lg border border-red-200 bg-red-50 text-red-700 p-3 text-sm">
-              {errors.general}
+            <div className="mb-6 p-4 border rounded-lg flex items-center gap-2 bg-red-50 border-red-200">
+              <AlertCircle className="w-5 h-5 text-red-600" />
+              <div className="flex-1">
+                <span className="text-red-700">{errors.general}</span>
+              </div>
             </div>
           )}
 
-          <div>
-            <label
-              htmlFor="email"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              Email
-            </label>
-            <input
-              type="email"
-              id="email"
-              name="email"
-              value={formData.email}
-              disabled
-              className="w-full px-4 py-2.5 rounded-lg border border-gray-300 bg-gray-100 text-gray-600"
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="password"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              Create Password
-            </label>
-            <div className="relative">
-              <input
-                type={showPassword ? "text" : "password"}
-                id="password"
-                name="password"
-                value={formData.password}
-                onChange={handleInputChange}
-                aria-label="Create password"
-                className={`w-full px-4 py-2.5 rounded-lg border bg-white/70 focus:outline-none focus:ring-2 focus:border-transparent ${
-                  errors.password
-                    ? "border-red-300 focus:ring-red-300"
-                    : "border-gray-300 focus:ring-emerald-300"
-                }`}
-              />
-              <button
-                type="button"
-                className="absolute inset-y-0 right-0 px-3 text-sm text-gray-600 hover:text-gray-900"
-                onClick={togglePasswordVisibility}
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Email Field (disabled) */}
+            <div>
+              <label
+                htmlFor="email"
+                className="block text-sm font-medium text-gray-700 mb-2"
               >
-                {showPassword ? "Hide" : "Show"}
-              </button>
-            </div>
-            {errors.password && (
-              <div className="mt-2 text-sm text-red-600">{errors.password}</div>
-            )}
-          </div>
-
-          <div>
-            <label
-              htmlFor="confirmPassword"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              Confirm Password
-            </label>
-            <input
-              type={showPassword ? "text" : "password"}
-              id="confirmPassword"
-              name="confirmPassword"
-              value={formData.confirmPassword}
-              onChange={handleInputChange}
-              aria-label="Confirm password"
-              className={`w-full px-4 py-2.5 rounded-lg border bg-white/70 focus:outline-none focus:ring-2 focus:border-transparent ${
-                errors.confirmPassword
-                  ? "border-red-300 focus:ring-red-300"
-                  : "border-gray-300 focus:ring-emerald-300"
-              }`}
-            />
-            {errors.confirmPassword && (
-              <div className="mt-2 text-sm text-red-600">
-                {errors.confirmPassword}
+                Email Address
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <input
+                  type="email"
+                  id="email"
+                  name="email"
+                  value={formData.email}
+                  disabled
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg shadow-sm bg-gray-50 text-gray-500 cursor-not-allowed focus:outline-none"
+                />
               </div>
-            )}
-          </div>
+            </div>
 
-          <button
-            type="submit"
-            className="w-full py-2.5 rounded-lg text-white font-medium shadow-sm btn-gradient hover:opacity-95 active:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
-            disabled={loading}
-          >
-            {loading ? "Setting up..." : "Complete Setup"}
-          </button>
-        </form>
+            {/* Password Field */}
+            <div>
+              <label
+                htmlFor="password"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
+                Password
+              </label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <input
+                  type={showPassword ? "text" : "password"}
+                  id="password"
+                  name="password"
+                  value={formData.password}
+                  onChange={handleInputChange}
+                  className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition duration-200"
+                  placeholder="Enter your password"
+                />
+                <button
+                  type="button"
+                  onClick={togglePasswordVisibility}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 transition duration-200"
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-5 h-5" />
+                  ) : (
+                    <Eye className="w-5 h-5" />
+                  )}
+                </button>
+              </div>
+              {errors.password && (
+                <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
+                  <AlertCircle className="w-4 h-4" />
+                  {errors.password}
+                </p>
+              )}
+            </div>
+
+            {/* Confirm Password Field */}
+            <div>
+              <label
+                htmlFor="confirmPassword"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
+                Confirm Password
+              </label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <input
+                  type={showPassword ? "text" : "password"}
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  value={formData.confirmPassword}
+                  onChange={handleInputChange}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition duration-200"
+                  placeholder="Confirm your password"
+                />
+              </div>
+              {errors.confirmPassword && (
+                <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
+                  <AlertCircle className="w-4 h-4" />
+                  {errors.confirmPassword}
+                </p>
+              )}
+            </div>
+
+            {/* Submit Button */}
+            <button
+              type="submit"
+              disabled={loading}
+              className={`w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white transition duration-200 ${
+                loading
+                  ? "bg-gray-400 cursor-not-allowed"
+                  : "btn-gradient hover:shadow-lg transform hover:scale-[1.02]"
+              }`}
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  Setting up...
+                </>
+              ) : (
+                "Complete Setup"
+              )}
+            </button>
+          </form>
+
+          {/* Help Text */}
+          <div className="mt-6 p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
+            <h4 className="text-sm font-semibold text-emerald-800 mb-2">
+              🔐 Setup Instructions:
+            </h4>
+            <ul className="text-xs text-emerald-700 space-y-1">
+              <li>• Create a secure password (minimum 6 characters)</li>
+              <li>• You'll be able to log in after completing setup</li>
+              <li>• If you encounter issues, contact your administrator</li>
+            </ul>
+          </div>
+        </div>
       </div>
+
+      {/* Enhanced Success Modal */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-md"></div>
+
+          {/* Modal content */}
+          <div className="relative bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden border border-white/20">
+            <div className="p-8">
+              {/* Success icon and title */}
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <CheckCircle className="h-8 w-8 text-emerald-600" />
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                  🎉 Setup Complete!
+                </h3>
+                <p className="text-gray-600">
+                  Your psychologist account has been successfully set up.
+                </p>
+              </div>
+
+              {/* Success message */}
+              <div className="mb-8">
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+                  <div className="flex items-start">
+                    <CheckCircle className="w-5 h-5 text-emerald-600 mt-0.5 mr-3 flex-shrink-0" />
+                    <div className="text-sm text-emerald-800">
+                      <p className="font-medium mb-2">What's Next:</p>
+                      <ul className="space-y-1">
+                        <li>✅ Your account is now active</li>
+                        <li>✅ You can log in with your email and password</li>
+                        <li>✅ Start managing your patients and appointments</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action button */}
+              <div className="flex justify-center">
+                <button
+                  onClick={() => {
+                    setShowSuccessModal(false);
+                    navigate("/login");
+                  }}
+                  className="px-8 py-3 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-xl hover:from-emerald-700 hover:to-emerald-800 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
+                >
+                  Continue to Login
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

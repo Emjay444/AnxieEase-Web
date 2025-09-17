@@ -174,14 +174,21 @@ export const psychologistService = {
         supabase.auth.signInWithOtp({
           email: psychologistData.email,
           options: {
-            // Always redirect to a clean setup route; Supabase will attach tokens in the URL hash
+            // Include query parameters in the redirect URL for better persistence
             emailRedirectTo: `${
               import.meta.env.VITE_APP_URL || window.location.origin
-            }/psychologist-setup`,
+            }/psychologist-setup?email=${encodeURIComponent(
+              psychologistData.email
+            )}&psychologist_id=${encodeURIComponent(
+              psychologistId
+            )}&source=admin_invite`,
+            // Magic link expires in 1 hour (3600 seconds) - Supabase default
+            // You can customize this by adding: shouldCreateUser: false, expiry: 7200 (for 2 hours)
             data: {
               role: "psychologist",
               psychologistId: psychologistId,
               name: psychologistData.name,
+              email: psychologistData.email,
             },
           },
         }),
@@ -217,6 +224,29 @@ export const psychologistService = {
         };
       }
 
+      // Log the activity for admin tracking
+      try {
+        const { data: currentUser } = await supabase.auth.getUser();
+        const currentUserId = currentUser?.user?.id;
+
+        if (currentUserId) {
+          await adminService.logActivity(
+            currentUserId,
+            "Create Psychologist Account",
+            `Created psychologist account for ${psychologistData.name} (${
+              psychologistData.email
+            }). Status: ${
+              psychologistData.is_active ? "Active" : "Pending Setup"
+            }`
+          );
+        }
+      } catch (logError) {
+        console.warn(
+          "Failed to log psychologist creation activity:",
+          logError.message
+        );
+      }
+
       return {
         ...psychResult.value.data[0],
         message:
@@ -232,14 +262,50 @@ export const psychologistService = {
   // Update psychologist information
   async updatePsychologist(id, updates) {
     try {
-      const { data, error } = await supabase
+      // First update the psychologists table
+      const { data: psychData, error: psychError } = await supabase
         .from("psychologists")
         .update(updates)
         .eq("id", id)
         .select();
 
-      if (error) {
-        console.log("Database error:", error.message);
+      if (psychError) {
+        console.log("Psychologists table error:", psychError.message);
+      }
+
+      // Also try to update user_profiles table if it exists
+      try {
+        const { error: userProfileError } = await supabase
+          .from("user_profiles")
+          .update({
+            email: updates.email,
+            contact_number: updates.contact,
+            specialization: updates.specialization,
+            // Parse name into components if provided
+            ...(updates.name && {
+              first_name: updates.name.split(" ")[0] || "",
+              last_name: updates.name.split(" ").slice(1).join(" ") || "",
+            }),
+          })
+          .eq("id", id);
+
+        if (userProfileError) {
+          console.log("User profiles update info:", userProfileError.message);
+        }
+      } catch (userError) {
+        console.log(
+          "User profiles table might not exist or user not found:",
+          userError.message
+        );
+      }
+
+      // Return the psychologists table data
+      if (psychData && psychData.length > 0) {
+        return psychData[0];
+      }
+
+      // Fallback to mock storage if database fails
+      if (psychError) {
         const index = mockStorage.psychologists.findIndex((p) => p.id === id);
         if (index !== -1) {
           mockStorage.psychologists[index] = {
@@ -248,10 +314,9 @@ export const psychologistService = {
           };
           return mockStorage.psychologists[index];
         }
-        return null;
       }
 
-      return data[0];
+      return null;
     } catch (error) {
       console.error("Update psychologist error:", error.message);
       const index = mockStorage.psychologists.findIndex((p) => p.id === id);
@@ -546,8 +611,8 @@ export const psychologistService = {
     try {
       const { error } = await supabase
         .from("psychologists")
-        // Link the auth user and mark as active once setup is complete
-        .update({ user_id: userId, is_active: true })
+        // Link the auth user but keep inactive until setup is complete
+        .update({ user_id: userId })
         .eq("email", email);
 
       if (error) {

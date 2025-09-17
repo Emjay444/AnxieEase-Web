@@ -283,8 +283,8 @@ const DashboardNew = () => {
 
               {/* Admin Dashboard Access - Header Button */}
               {hasAdminPrivileges() && (
-                <button 
-                  onClick={() => navigate('/admin')}
+                <button
+                  onClick={() => navigate("/admin")}
                   className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
                 >
                   <Settings className="h-4 w-4" />
@@ -464,8 +464,8 @@ const DashboardNew = () => {
 
                 {/* Admin Dashboard Access - Show only if user has admin privileges */}
                 {hasAdminPrivileges() && (
-                  <button 
-                    onClick={() => navigate('/admin')}
+                  <button
+                    onClick={() => navigate("/admin")}
                     className="w-full flex items-center p-3 text-left border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-colors"
                   >
                     <Settings className="h-5 w-5 text-blue-600 mr-3" />

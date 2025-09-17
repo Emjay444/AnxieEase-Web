@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { generateAvatar } from '../utils/helpers';
+import { generateAvatar, getFullName } from '../utils/helpers';
 import { supabase } from '../services/supabaseClient';
 
 /*
@@ -20,6 +20,7 @@ const ProfilePicture = ({
   debug = false
 }) => {
   const [imgError, setImgError] = useState(false);
+  const [avatarServiceError, setAvatarServiceError] = useState(false);
   const [resolved, setResolved] = useState(() => {
     if (patient) return patient;
     return { id: userId, name: name, avatar_url: directAvatarUrl };
@@ -34,10 +35,27 @@ const ProfilePicture = ({
     }
   }, [patient, userId, name, directAvatarUrl]);
 
-  const sizeClasses = { 32: 'h-8 w-8', 40: 'h-10 w-10', 48: 'h-12 w-12', 64: 'h-16 w-16' };
-  const textSizeClasses = { 32: 'text-sm', 40: 'text-base', 48: 'text-lg', 64: 'text-xl' };
+  const sizeClasses = { 
+    32: 'h-8 w-8', 
+    40: 'h-10 w-10', 
+    48: 'h-12 w-12', 
+    64: 'h-16 w-16',
+    96: 'h-24 w-24',
+    128: 'h-32 w-32'
+  };
+  const textSizeClasses = { 
+    32: 'text-sm', 
+    40: 'text-base', 
+    48: 'text-lg', 
+    64: 'text-xl',
+    96: 'text-2xl',
+    128: 'text-3xl'
+  };
 
-  useEffect(() => { setImgError(false); }, [resolved?.avatar_url]);
+  useEffect(() => { 
+    setImgError(false); 
+    setAvatarServiceError(false);
+  }, [resolved?.avatar_url]);
 
   const getAvatarUrl = (avatarUrl) => {
     if (!avatarUrl || avatarUrl === 'NULL') return null;
@@ -51,7 +69,7 @@ const ProfilePicture = ({
     }
   };
 
-  if (!resolved || !resolved.name) {
+  if (!resolved) {
     return (
       <div className={`${sizeClasses[size] || 'h-12 w-12'} rounded-full bg-gray-200 flex items-center justify-center ${className}`}>
         <span className={`text-gray-500 font-medium ${textSizeClasses[size] || 'text-lg'}`}>?</span>
@@ -59,32 +77,54 @@ const ProfilePicture = ({
     );
   }
 
+  const fullName = getFullName(resolved);
+
   const customAvatarUrl = getAvatarUrl(resolved.avatar_url);
   const hasCustomAvatar = !!customAvatarUrl;
-  const finalUrl = hasCustomAvatar ? customAvatarUrl : generateAvatar(resolved.name || 'Unknown User', size);
+  const generatedAvatarUrl = !hasCustomAvatar ? generateAvatar(fullName, size) : null;
 
   if (debug) {
-    console.log('[ProfilePicture]', { name: resolved.name, avatar: resolved.avatar_url, customAvatarUrl, hasCustomAvatar, finalUrl });
+    console.log('[ProfilePicture]', { 
+      fullName, 
+      avatar: resolved.avatar_url, 
+      customAvatarUrl, 
+      hasCustomAvatar, 
+      generatedAvatarUrl,
+      imgError,
+      avatarServiceError 
+    });
   }
 
   const sizeClass = sizeClasses[size] || 'h-12 w-12';
   const textSizeClass = textSizeClasses[size] || 'text-lg';
 
-  if (imgError || (!hasCustomAvatar && showInitials && !resolved.name)) {
+  // Show initials if: custom avatar failed, external service failed, or no avatar available
+  if (imgError || avatarServiceError || (!hasCustomAvatar && !generatedAvatarUrl)) {
+    const initials = fullName && fullName !== 'Unknown' 
+      ? fullName.split(' ').map(n => n.charAt(0)).join('').toUpperCase().substring(0, 2) 
+      : '?';
     return (
-      <div className={`${sizeClass} rounded-full bg-emerald-50 ring-1 ring-emerald-200 flex items-center justify-center ${className}`}>
-        <span className={`text-emerald-600 font-medium ${textSizeClass}`}>{resolved.name ? resolved.name.charAt(0).toUpperCase() : '?'}</span>
+      <div className={`${sizeClass} rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center ${className}`}>
+        <span className={`text-white font-bold ${textSizeClass}`}>{initials}</span>
       </div>
     );
   }
+
+  const finalUrl = hasCustomAvatar ? customAvatarUrl : generatedAvatarUrl;
 
   return (
     <div className={`relative ${className}`}>
       <img
         src={finalUrl}
-        alt={`${resolved.name} profile`}
+        alt={`${fullName} profile`}
         className={`${sizeClass} rounded-full object-cover`}
-        onError={() => setImgError(true)}
+        onError={() => {
+          if (hasCustomAvatar) {
+            setImgError(true);
+          } else {
+            setAvatarServiceError(true);
+          }
+        }}
         loading="lazy"
       />
     </div>

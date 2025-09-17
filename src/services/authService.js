@@ -265,16 +265,18 @@ export const authService = {
 
       console.log("User metadata role:", metaRole);
 
-      // Prefer explicit role from metadata first, and short-circuit admin
-      if (metaRole === "admin") return "admin";
-      if (metaRole === "psychologist") return "psychologist";
-      if (metaRole) return metaRole;
+  // Prefer explicit role from metadata for admin only.
+  // Do NOT trust 'psychologist' in metadata because invite/magic-link
+  // may attach it before setup completion. We'll verify via DB below.
+  if (metaRole === "admin") return "admin";
+  // ignore psychologist metadata here; fall through to DB check
+  if (metaRole && metaRole !== "psychologist") return metaRole;
 
       // If no metadata role, check if user exists in psychologists table
       console.log("Checking psychologists table for user:", userId);
       const { data: psychologist, error } = await supabase
         .from("psychologists")
-        .select("id")
+        .select("id, is_active")
         .eq("user_id", userId)
         .single();
 
@@ -284,10 +286,18 @@ export const authService = {
         return null;
       }
 
-      // If found in psychologists table, they're a psychologist
+      // If found in psychologists table, check if they're active
       if (psychologist) {
-        console.log("User found in psychologists table");
-        return "psychologist";
+        console.log("User found in psychologists table, is_active:", psychologist.is_active);
+        
+        // Only return psychologist role if they're active (completed setup)
+        if (psychologist.is_active) {
+          return "psychologist";
+        } else {
+          // Psychologist exists but hasn't completed setup - return null
+          console.log("Psychologist found but not active - access denied");
+          return null;
+        }
       }
 
       // Default fallback: unknown
