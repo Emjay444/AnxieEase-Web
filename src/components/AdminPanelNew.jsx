@@ -168,11 +168,11 @@ const AdminPanelNew = () => {
   const [patients, setPatients] = useState([]);
   const [unassignedPatients, setUnassignedPatients] = useState([]);
   const [activityLogs, setActivityLogs] = useState([]);
-  
+
   // Activity logs filtering and sorting state
   const [activityDateFilter, setActivityDateFilter] = useState(null);
   const [activitySortOrder, setActivitySortOrder] = useState("desc"); // "desc" for newest first, "asc" for oldest first
-  
+
   const [analyticsData, setAnalyticsData] = useState({
     genderDistribution: { male: 0, female: 0, other: 0 },
     ageDistribution: { "18-25": 0, "26-35": 0, "36-45": 0, "46+": 0 },
@@ -202,23 +202,31 @@ const AdminPanelNew = () => {
     name: "",
     email: "",
     contact: "",
-    specialization: ""
+    specialization: "",
   });
   const [isUpdatingPsychologist, setIsUpdatingPsychologist] = useState(false);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   const [psychologistToDelete, setPsychologistToDelete] = useState(null);
   const [showDeleteSuccessModal, setShowDeleteSuccessModal] = useState(false);
-  const [deleteResult, setDeleteResult] = useState({ success: false, message: "", psychologistName: "" });
+  const [deleteResult, setDeleteResult] = useState({
+    success: false,
+    message: "",
+    psychologistName: "",
+  });
   const [showActivateConfirmModal, setShowActivateConfirmModal] =
     useState(false);
   const [psychologistToToggle, setPsychologistToToggle] = useState(null);
   const [showResetEmailModal, setShowResetEmailModal] = useState(false);
   const [psychologistToReset, setPsychologistToReset] = useState(null);
   const [isSendingResetEmail, setIsSendingResetEmail] = useState(false);
-  
+
   // State for deactivate blocked modal
-  const [showDeactivateBlockedModal, setShowDeactivateBlockedModal] = useState(false);
-  const [deactivateBlockedData, setDeactivateBlockedData] = useState({ psychologist: null, errorMessage: "" });
+  const [showDeactivateBlockedModal, setShowDeactivateBlockedModal] =
+    useState(false);
+  const [deactivateBlockedData, setDeactivateBlockedData] = useState({
+    psychologist: null,
+    errorMessage: "",
+  });
 
   // State for patient actions
   const [selectedPatient, setSelectedPatient] = useState(null);
@@ -353,7 +361,7 @@ const AdminPanelNew = () => {
           statsData.patientsCount - statsData.unassignedPatientsCount || 0,
         pendingRequests: 0,
       });
-      
+
       // Update activity logs with the new entry
       setActivityLogs(updatedLogs);
 
@@ -402,7 +410,7 @@ const AdminPanelNew = () => {
       name: psychologist.name || "",
       email: psychologist.email || "",
       contact: psychologist.contact || "",
-      specialization: psychologist.specialization || ""
+      specialization: psychologist.specialization || "",
     });
     setShowEditModal(true);
   };
@@ -410,7 +418,7 @@ const AdminPanelNew = () => {
   const handleSavePsychologistChanges = async () => {
     try {
       setIsUpdatingPsychologist(true);
-      
+
       // Update in the database
       const updatedPsychologist = await psychologistService.updatePsychologist(
         selectedPsychologist.id,
@@ -425,9 +433,7 @@ const AdminPanelNew = () => {
       // Update local state
       setPsychologists((prev) =>
         prev.map((p) =>
-          p.id === selectedPsychologist.id
-            ? { ...p, ...editFormData }
-            : p
+          p.id === selectedPsychologist.id ? { ...p, ...editFormData } : p
         )
       );
 
@@ -496,7 +502,7 @@ const AdminPanelNew = () => {
         // Show custom modal instead of browser alert
         setDeactivateBlockedData({
           psychologist: psychologist,
-          errorMessage: error.message
+          errorMessage: error.message,
         });
         setShowDeactivateBlockedModal(true);
       } else {
@@ -602,7 +608,9 @@ const AdminPanelNew = () => {
                   ...patient,
                   assigned_psychologist_id: psychologistId,
                   assigned_psychologist_name: psychologistId
-                    ? getFullName(psychologists.find((p) => p.id === psychologistId)) || null
+                    ? getFullName(
+                        psychologists.find((p) => p.id === psychologistId)
+                      ) || null
                     : null,
                 }
               : patient
@@ -908,19 +916,27 @@ const AdminPanelNew = () => {
                     <Users className="h-6 w-6 text-emerald-600" />
                   </div>
                   <div className="ml-4 flex-1">
-                    <p className="text-sm font-medium text-gray-600">Total Psychologists</p>
-                    <p className="text-2xl font-bold text-gray-900">{stats.totalPsychologists}</p>
+                    <p className="text-sm font-medium text-gray-600">
+                      Total Psychologists
+                    </p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {stats.totalPsychologists}
+                    </p>
                   </div>
                 </div>
                 {/* Breakdown */}
                 <div className="mt-4 pt-4 border-t border-gray-100">
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Active:</span>
-                    <span className="font-medium text-emerald-600">{stats.activePsychologists}</span>
+                    <span className="font-medium text-emerald-600">
+                      {stats.activePsychologists}
+                    </span>
                   </div>
                   <div className="flex justify-between text-sm mt-1">
                     <span className="text-gray-600">Inactive:</span>
-                    <span className="font-medium text-gray-500">{stats.inactivePsychologists}</span>
+                    <span className="font-medium text-gray-500">
+                      {stats.inactivePsychologists}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -1595,8 +1611,13 @@ const AdminPanelNew = () => {
                                   <div className="flex items-center space-x-2">
                                     <UserCheck className="h-4 w-4 text-green-600" />
                                     <span className="text-green-600 font-medium">
-                                      {getFullName(psychologists.find(p => p.id === patient.assigned_psychologist_id)) || 
-                                        "Unknown Psychologist"}
+                                      {getFullName(
+                                        psychologists.find(
+                                          (p) =>
+                                            p.id ===
+                                            patient.assigned_psychologist_id
+                                        )
+                                      ) || "Unknown Psychologist"}
                                     </span>
                                   </div>
                                 ) : (
@@ -1708,7 +1729,7 @@ const AdminPanelNew = () => {
               <h2 className="text-xl font-semibold text-gray-900">
                 Recent Activity
               </h2>
-              
+
               {/* Date Filter and Sort Controls */}
               <div className="flex items-center space-x-4">
                 <div className="relative">
@@ -1726,7 +1747,7 @@ const AdminPanelNew = () => {
                     className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                   />
                 </div>
-                
+
                 <button
                   onClick={() => {
                     setActivitySortOrder(
@@ -1737,15 +1758,17 @@ const AdminPanelNew = () => {
                 >
                   <Calendar className="w-4 h-4" />
                   <span>
-                    {activitySortOrder === "desc" ? "Newest First" : "Oldest First"}
+                    {activitySortOrder === "desc"
+                      ? "Newest First"
+                      : "Oldest First"}
                   </span>
-                  <ChevronDown 
+                  <ChevronDown
                     className={`w-4 h-4 transition-transform ${
                       activitySortOrder === "desc" ? "" : "rotate-180"
-                    }`} 
+                    }`}
                   />
                 </button>
-                
+
                 {activityDateFilter && (
                   <button
                     onClick={() => {
@@ -1770,34 +1793,41 @@ const AdminPanelNew = () => {
                 (() => {
                   // Apply date filtering and sorting
                   let filteredAndSortedLogs = [...activityLogs];
-                  
+
                   // Apply date filter
                   if (activityDateFilter) {
                     const filterDate = new Date(activityDateFilter);
-                    filteredAndSortedLogs = filteredAndSortedLogs.filter((log) => {
-                      const logDate = new Date(log.timestamp);
-                      return (
-                        logDate.getDate() === filterDate.getDate() &&
-                        logDate.getMonth() === filterDate.getMonth() &&
-                        logDate.getFullYear() === filterDate.getFullYear()
-                      );
-                    });
+                    filteredAndSortedLogs = filteredAndSortedLogs.filter(
+                      (log) => {
+                        const logDate = new Date(log.timestamp);
+                        return (
+                          logDate.getDate() === filterDate.getDate() &&
+                          logDate.getMonth() === filterDate.getMonth() &&
+                          logDate.getFullYear() === filterDate.getFullYear()
+                        );
+                      }
+                    );
                   }
-                  
+
                   // Apply sorting
                   filteredAndSortedLogs.sort((a, b) => {
                     const dateA = new Date(a.timestamp);
                     const dateB = new Date(b.timestamp);
-                    return activitySortOrder === "desc" ? dateB - dateA : dateA - dateB;
+                    return activitySortOrder === "desc"
+                      ? dateB - dateA
+                      : dateA - dateB;
                   });
-                  
+
                   // Calculate pagination based on filtered results
                   const totalPages = Math.ceil(
                     filteredAndSortedLogs.length / itemsPerPage
                   );
                   const startIndex = (currentPage - 1) * itemsPerPage;
                   const endIndex = startIndex + itemsPerPage;
-                  const currentLogs = filteredAndSortedLogs.slice(startIndex, endIndex);
+                  const currentLogs = filteredAndSortedLogs.slice(
+                    startIndex,
+                    endIndex
+                  );
 
                   return (
                     <>
@@ -1841,11 +1871,15 @@ const AdminPanelNew = () => {
                         <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-200">
                           <div className="text-sm text-gray-500">
                             Showing {startIndex + 1} to{" "}
-                            {Math.min(endIndex, filteredAndSortedLogs.length)} of{" "}
-                            {filteredAndSortedLogs.length} activity logs
+                            {Math.min(endIndex, filteredAndSortedLogs.length)}{" "}
+                            of {filteredAndSortedLogs.length} activity logs
                             {activityDateFilter && (
                               <span className="ml-2 text-emerald-600">
-                                (filtered by {new Date(activityDateFilter).toLocaleDateString()})
+                                (filtered by{" "}
+                                {new Date(
+                                  activityDateFilter
+                                ).toLocaleDateString()}
+                                )
                               </span>
                             )}
                           </div>
@@ -1952,7 +1986,8 @@ const AdminPanelNew = () => {
                 <div className="text-center py-8">
                   <Calendar className="h-12 w-12 text-gray-300 mx-auto mb-4" />
                   <p className="text-gray-500">
-                    No activity found for {new Date(activityDateFilter).toLocaleDateString()}
+                    No activity found for{" "}
+                    {new Date(activityDateFilter).toLocaleDateString()}
                   </p>
                   <p className="text-sm text-gray-400 mt-1">
                     Try selecting a different date or clear the filter
@@ -2000,7 +2035,7 @@ const AdminPanelNew = () => {
               {/* Background decoration */}
               <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent"></div>
               <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-32 translate-x-32"></div>
-              
+
               <div className="relative flex items-start justify-between">
                 <div className="flex items-center space-x-2">
                   <div className="p-3 bg-white/20 backdrop-blur-sm rounded-2xl">
@@ -2039,11 +2074,13 @@ const AdminPanelNew = () => {
                             className="ring-4 ring-white shadow-xl"
                           />
                         </div>
-                        <div className={`absolute -bottom-2 -right-2 w-10 h-10 rounded-full border-4 border-white shadow-lg flex items-center justify-center ${
-                          selectedPsychologist.is_active 
-                            ? "bg-gradient-to-r from-green-400 to-green-500" 
-                            : "bg-gradient-to-r from-amber-400 to-yellow-500"
-                        }`}>
+                        <div
+                          className={`absolute -bottom-2 -right-2 w-10 h-10 rounded-full border-4 border-white shadow-lg flex items-center justify-center ${
+                            selectedPsychologist.is_active
+                              ? "bg-gradient-to-r from-green-400 to-green-500"
+                              : "bg-gradient-to-r from-amber-400 to-yellow-500"
+                          }`}
+                        >
                           {selectedPsychologist.is_active ? (
                             <CheckCircle className="h-5 w-5 text-white" />
                           ) : (
@@ -2051,7 +2088,7 @@ const AdminPanelNew = () => {
                           )}
                         </div>
                       </div>
-                      
+
                       <div className="flex-1 text-center md:text-left">
                         <h3 className="text-3xl font-bold text-gray-900 mb-2">
                           {getFullName(selectedPsychologist)}
@@ -2062,19 +2099,30 @@ const AdminPanelNew = () => {
                           </p>
                         )}
                         <div className="flex flex-wrap gap-3 justify-center md:justify-start">
-                          <span className={`inline-flex items-center px-4 py-2 rounded-xl text-sm font-semibold shadow-sm ${
-                            selectedPsychologist.is_active
-                              ? "bg-gradient-to-r from-green-50 to-green-100 text-green-800 border border-green-200"
-                              : "bg-gradient-to-r from-amber-50 to-yellow-100 text-amber-800 border border-amber-200"
-                          }`}>
-                            <div className={`w-2 h-2 rounded-full mr-2 ${
-                              selectedPsychologist.is_active ? "bg-green-500" : "bg-amber-500"
-                            }`}></div>
-                            {selectedPsychologist.is_active ? "Active" : "Pending Verification"}
+                          <span
+                            className={`inline-flex items-center px-4 py-2 rounded-xl text-sm font-semibold shadow-sm ${
+                              selectedPsychologist.is_active
+                                ? "bg-gradient-to-r from-green-50 to-green-100 text-green-800 border border-green-200"
+                                : "bg-gradient-to-r from-amber-50 to-yellow-100 text-amber-800 border border-amber-200"
+                            }`}
+                          >
+                            <div
+                              className={`w-2 h-2 rounded-full mr-2 ${
+                                selectedPsychologist.is_active
+                                  ? "bg-green-500"
+                                  : "bg-amber-500"
+                              }`}
+                            ></div>
+                            {selectedPsychologist.is_active
+                              ? "Active"
+                              : "Pending Verification"}
                           </span>
                           <span className="inline-flex items-center px-4 py-2 rounded-xl text-sm font-medium bg-gray-100 text-gray-700 border border-gray-200">
                             <Calendar className="w-4 h-4 mr-2" />
-                            Joined {new Date(selectedPsychologist.created_at).toLocaleDateString()}
+                            Joined{" "}
+                            {new Date(
+                              selectedPsychologist.created_at
+                            ).toLocaleDateString()}
                           </span>
                         </div>
                       </div>
@@ -2091,23 +2139,33 @@ const AdminPanelNew = () => {
                         <div className="w-12 h-12 bg-emerald-500 rounded-xl flex items-center justify-center mr-4 shadow-lg">
                           <Mail className="h-6 w-6 text-white" />
                         </div>
-                        <h4 className="text-xl font-bold text-gray-900">Contact Information</h4>
+                        <h4 className="text-xl font-bold text-gray-900">
+                          Contact Information
+                        </h4>
                       </div>
                       <div className="space-y-4">
                         <div className="flex items-start space-x-4 p-4 bg-gray-50 rounded-xl border border-gray-100">
                           <Mail className="h-5 w-5 text-emerald-600 mt-0.5 flex-shrink-0" />
                           <div className="flex-1">
-                            <p className="text-sm font-medium text-gray-700">Email Address</p>
-                            <p className="text-gray-900 font-semibold break-all">{selectedPsychologist.email}</p>
+                            <p className="text-sm font-medium text-gray-700">
+                              Email Address
+                            </p>
+                            <p className="text-gray-900 font-semibold break-all">
+                              {selectedPsychologist.email}
+                            </p>
                           </div>
                         </div>
                         <div className="flex items-start space-x-4 p-4 bg-gray-50 rounded-xl border border-gray-100">
                           <Phone className="h-5 w-5 text-emerald-600 mt-0.5 flex-shrink-0" />
                           <div className="flex-1">
-                            <p className="text-sm font-medium text-gray-700">Contact Number</p>
+                            <p className="text-sm font-medium text-gray-700">
+                              Contact Number
+                            </p>
                             <p className="text-gray-900 font-semibold">
                               {selectedPsychologist.contact || (
-                                <span className="text-gray-500 italic">Not provided</span>
+                                <span className="text-gray-500 italic">
+                                  Not provided
+                                </span>
                               )}
                             </p>
                           </div>
@@ -2123,18 +2181,24 @@ const AdminPanelNew = () => {
                         <div className="w-12 h-12 bg-emerald-500 rounded-xl flex items-center justify-center mr-4 shadow-lg">
                           <Calendar className="h-6 w-6 text-white" />
                         </div>
-                        <h4 className="text-xl font-bold text-gray-900">Account Information</h4>
+                        <h4 className="text-xl font-bold text-gray-900">
+                          Account Information
+                        </h4>
                       </div>
                       <div className="space-y-4">
                         <div className="flex items-start space-x-4 p-4 bg-gray-50 rounded-xl border border-gray-100">
                           <Calendar className="h-5 w-5 text-emerald-600 mt-0.5 flex-shrink-0" />
                           <div className="flex-1">
-                            <p className="text-sm font-medium text-gray-700">Join Date</p>
+                            <p className="text-sm font-medium text-gray-700">
+                              Join Date
+                            </p>
                             <p className="text-gray-900 font-semibold">
-                              {new Date(selectedPsychologist.created_at).toLocaleDateString("en-US", {
-                                year: 'numeric',
-                                month: 'long',
-                                day: 'numeric'
+                              {new Date(
+                                selectedPsychologist.created_at
+                              ).toLocaleDateString("en-US", {
+                                year: "numeric",
+                                month: "long",
+                                day: "numeric",
                               })}
                             </p>
                           </div>
@@ -2142,10 +2206,14 @@ const AdminPanelNew = () => {
                         <div className="flex items-start space-x-4 p-4 bg-gray-50 rounded-xl border border-gray-100">
                           <Users className="h-5 w-5 text-emerald-600 mt-0.5 flex-shrink-0" />
                           <div className="flex-1">
-                            <p className="text-sm font-medium text-gray-700">Gender</p>
+                            <p className="text-sm font-medium text-gray-700">
+                              Gender
+                            </p>
                             <p className="text-gray-900 font-semibold">
                               {selectedPsychologist.sex || (
-                                <span className="text-gray-500 italic">Not specified</span>
+                                <span className="text-gray-500 italic">
+                                  Not specified
+                                </span>
                               )}
                             </p>
                           </div>
@@ -2162,25 +2230,34 @@ const AdminPanelNew = () => {
                       <div className="w-12 h-12 bg-emerald-500 rounded-xl flex items-center justify-center mr-4 shadow-lg">
                         <Users className="h-6 w-6 text-white" />
                       </div>
-                      <h4 className="text-2xl font-bold text-gray-900">Assigned Patients</h4>
+                      <h4 className="text-2xl font-bold text-gray-900">
+                        Assigned Patients
+                      </h4>
                     </div>
                     {(() => {
                       const assignedPatients = patients.filter(
-                        (patient) => patient.assigned_psychologist_id === selectedPsychologist.id
+                        (patient) =>
+                          patient.assigned_psychologist_id ===
+                          selectedPsychologist.id
                       );
-                      return assignedPatients.length > 0 && (
-                        <div className="bg-emerald-100 px-4 py-2 rounded-xl">
-                          <span className="text-emerald-800 font-semibold text-sm">
-                            {assignedPatients.length} patient{assignedPatients.length !== 1 ? "s" : ""}
-                          </span>
-                        </div>
+                      return (
+                        assignedPatients.length > 0 && (
+                          <div className="bg-emerald-100 px-4 py-2 rounded-xl">
+                            <span className="text-emerald-800 font-semibold text-sm">
+                              {assignedPatients.length} patient
+                              {assignedPatients.length !== 1 ? "s" : ""}
+                            </span>
+                          </div>
+                        )
                       );
                     })()}
                   </div>
-                  
+
                   {(() => {
                     const assignedPatients = patients.filter(
-                      (patient) => patient.assigned_psychologist_id === selectedPsychologist.id
+                      (patient) =>
+                        patient.assigned_psychologist_id ===
+                        selectedPsychologist.id
                     );
 
                     if (assignedPatients.length === 0) {
@@ -2189,9 +2266,12 @@ const AdminPanelNew = () => {
                           <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
                             <Users className="h-10 w-10 text-gray-400" />
                           </div>
-                          <h5 className="text-xl font-semibold text-gray-700 mb-2">No Patients Yet</h5>
+                          <h5 className="text-xl font-semibold text-gray-700 mb-2">
+                            No Patients Yet
+                          </h5>
                           <p className="text-gray-500 max-w-sm mx-auto">
-                            This psychologist hasn't been assigned any patients yet. Patients will appear here once assigned.
+                            This psychologist hasn't been assigned any patients
+                            yet. Patients will appear here once assigned.
                           </p>
                         </div>
                       );
@@ -2233,10 +2313,13 @@ const AdminPanelNew = () => {
                                   </span>
                                   {patient.created_at && (
                                     <p className="text-xs text-gray-500 mt-2 font-medium">
-                                      Since {new Date(patient.created_at).toLocaleDateString("en-US", {
-                                        month: 'short',
-                                        day: 'numeric',
-                                        year: 'numeric'
+                                      Since{" "}
+                                      {new Date(
+                                        patient.created_at
+                                      ).toLocaleDateString("en-US", {
+                                        month: "short",
+                                        day: "numeric",
+                                        year: "numeric",
                                       })}
                                     </p>
                                   )}
@@ -2292,7 +2375,9 @@ const AdminPanelNew = () => {
                 <input
                   type="text"
                   value={editFormData.name}
-                  onChange={(e) => setEditFormData({...editFormData, name: e.target.value})}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, name: e.target.value })
+                  }
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-gray-50/50 transition-all duration-200 hover:bg-white"
                   required
                 />
@@ -2305,13 +2390,16 @@ const AdminPanelNew = () => {
                 <input
                   type="email"
                   value={editFormData.email}
-                  onChange={(e) => setEditFormData({...editFormData, email: e.target.value})}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, email: e.target.value })
+                  }
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-gray-50/50 transition-all duration-200 hover:bg-white"
                   required
                 />
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-2">
                   <p className="text-xs text-blue-700 font-medium">
-                    💡 Changing email will require the psychologist to verify their new email address.
+                    💡 Changing email will require the psychologist to verify
+                    their new email address.
                   </p>
                 </div>
               </div>
@@ -2323,7 +2411,12 @@ const AdminPanelNew = () => {
                 <input
                   type="tel"
                   value={editFormData.contact}
-                  onChange={(e) => setEditFormData({...editFormData, contact: e.target.value})}
+                  onChange={(e) =>
+                    setEditFormData({
+                      ...editFormData,
+                      contact: e.target.value,
+                    })
+                  }
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-gray-50/50 transition-all duration-200 hover:bg-white"
                 />
               </div>
@@ -2335,7 +2428,12 @@ const AdminPanelNew = () => {
                 <input
                   type="text"
                   value={editFormData.specialization}
-                  onChange={(e) => setEditFormData({...editFormData, specialization: e.target.value})}
+                  onChange={(e) =>
+                    setEditFormData({
+                      ...editFormData,
+                      specialization: e.target.value,
+                    })
+                  }
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-gray-50/50 transition-all duration-200 hover:bg-white"
                   placeholder="e.g., Anxiety Disorders, Depression, PTSD"
                 />
@@ -2352,7 +2450,11 @@ const AdminPanelNew = () => {
               </button>
               <button
                 onClick={handleSavePsychologistChanges}
-                disabled={isUpdatingPsychologist || !editFormData.name.trim() || !editFormData.email.trim()}
+                disabled={
+                  isUpdatingPsychologist ||
+                  !editFormData.name.trim() ||
+                  !editFormData.email.trim()
+                }
                 className="px-6 py-3 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-xl hover:from-emerald-700 hover:to-emerald-800 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center transition-all duration-200 font-medium"
               >
                 {isUpdatingPsychologist && (
@@ -2432,13 +2534,24 @@ const AdminPanelNew = () => {
               <div className="mb-6">
                 <p className="text-gray-600 mb-3">
                   Are you sure you want to permanently delete{" "}
-                  <strong className="text-gray-900">{psychologistToDelete.name}</strong>'s account?
+                  <strong className="text-gray-900">
+                    {psychologistToDelete.name}
+                  </strong>
+                  's account?
                 </p>
-                
+
                 <div className="bg-red-50 border border-red-200 rounded-lg p-3">
                   <div className="flex items-start">
-                    <svg className="w-4 h-4 text-red-600 mt-0.5 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    <svg
+                      className="w-4 h-4 text-red-600 mt-0.5 mr-2 flex-shrink-0"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                        clipRule="evenodd"
+                      />
                     </svg>
                     <div className="text-sm text-red-700">
                       <p className="font-medium">This will permanently:</p>
@@ -2465,56 +2578,65 @@ const AdminPanelNew = () => {
                 </button>
                 <button
                   onClick={async () => {
-          try {
-            console.log("Deleting psychologist:", psychologistToDelete.id);
+                    try {
+                      console.log(
+                        "Deleting psychologist:",
+                        psychologistToDelete.id
+                      );
 
-            // Call the delete function
-            const success = await psychologistService.deletePsychologist(psychologistToDelete.id);
+                      // Call the delete function
+                      const success =
+                        await psychologistService.deletePsychologist(
+                          psychologistToDelete.id
+                        );
 
-            if (success) {
-              // Log the activity
-              await adminService.logActivity(
-                user?.id,
-                "Delete Psychologist",
-                `Deleted psychologist: ${psychologistToDelete.name} (ID: ${psychologistToDelete.id})`
-              );
+                      if (success) {
+                        // Log the activity
+                        await adminService.logActivity(
+                          user?.id,
+                          "Delete Psychologist",
+                          `Deleted psychologist: ${psychologistToDelete.name} (ID: ${psychologistToDelete.id})`
+                        );
 
-              // Refresh the psychologists list and activity logs
-              const [updatedPsychologists, updatedLogs] = await Promise.all([
-                psychologistService.getAllPsychologists(),
-                adminService.getActivityLogs(),
-              ]);
-              setPsychologists(updatedPsychologists);
-              setActivityLogs(updatedLogs);
+                        // Refresh the psychologists list and activity logs
+                        const [updatedPsychologists, updatedLogs] =
+                          await Promise.all([
+                            psychologistService.getAllPsychologists(),
+                            adminService.getActivityLogs(),
+                          ]);
+                        setPsychologists(updatedPsychologists);
+                        setActivityLogs(updatedLogs);
 
-              // Show success modal
-              setDeleteResult({
-                success: true,
-                message: "The psychologist account has been successfully deleted from the system.",
-                psychologistName: psychologistToDelete.name
-              });
-            } else {
-              // Show error modal
-              setDeleteResult({
-                success: false,
-                message: "Failed to delete psychologist. Please try again or contact support if the issue persists.",
-                psychologistName: psychologistToDelete.name
-              });
-            }
-          } catch (error) {
-            console.error("Delete error:", error);
-            // Show error modal
-            setDeleteResult({
-              success: false,
-              message: `An error occurred while deleting the psychologist: ${error.message}. Please try again.`,
-              psychologistName: psychologistToDelete.name
-            });
-          }
+                        // Show success modal
+                        setDeleteResult({
+                          success: true,
+                          message:
+                            "The psychologist account has been successfully deleted from the system.",
+                          psychologistName: psychologistToDelete.name,
+                        });
+                      } else {
+                        // Show error modal
+                        setDeleteResult({
+                          success: false,
+                          message:
+                            "Failed to delete psychologist. Please try again or contact support if the issue persists.",
+                          psychologistName: psychologistToDelete.name,
+                        });
+                      }
+                    } catch (error) {
+                      console.error("Delete error:", error);
+                      // Show error modal
+                      setDeleteResult({
+                        success: false,
+                        message: `An error occurred while deleting the psychologist: ${error.message}. Please try again.`,
+                        psychologistName: psychologistToDelete.name,
+                      });
+                    }
 
-          // Close the confirmation modal and show result modal
-          setShowDeleteConfirmModal(false);
-          setPsychologistToDelete(null);
-          setShowDeleteSuccessModal(true);
+                    // Close the confirmation modal and show result modal
+                    setShowDeleteConfirmModal(false);
+                    setPsychologistToDelete(null);
+                    setShowDeleteSuccessModal(true);
                   }}
                   className="flex-1 bg-red-600 text-white py-3 px-4 rounded-lg hover:bg-red-700 transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-red-500"
                 >
@@ -2722,7 +2844,7 @@ const AdminPanelNew = () => {
               {/* Decorative Elements */}
               <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-16 translate-x-16"></div>
               <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full translate-y-12 -translate-x-12"></div>
-              
+
               <div className="relative flex items-center justify-between">
                 <div className="flex items-center space-x-4">
                   <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center ring-2 ring-white/30">
@@ -2803,7 +2925,9 @@ const AdminPanelNew = () => {
                         </label>
                         <p className="text-emerald-800 text-sm font-medium">
                           {selectedPatient.contact_number || (
-                            <span className="text-gray-500 italic">No contact number</span>
+                            <span className="text-gray-500 italic">
+                              No contact number
+                            </span>
                           )}
                         </p>
                       </div>
@@ -2825,7 +2949,9 @@ const AdminPanelNew = () => {
                         </label>
                         <p className="text-teal-800 text-sm font-medium">
                           {selectedPatient.gender || (
-                            <span className="text-gray-500 italic">Not specified</span>
+                            <span className="text-gray-500 italic">
+                              Not specified
+                            </span>
                           )}
                         </p>
                       </div>
@@ -2843,11 +2969,15 @@ const AdminPanelNew = () => {
                           Birth Date
                         </label>
                         <p className="text-teal-800 text-sm font-medium">
-                          {selectedPatient.birth_date
-                            ? new Date(selectedPatient.birth_date).toLocaleDateString("en-GB")
-                            : (
-                              <span className="text-gray-500 italic">Not specified</span>
-                            )}
+                          {selectedPatient.birth_date ? (
+                            new Date(
+                              selectedPatient.birth_date
+                            ).toLocaleDateString("en-GB")
+                          ) : (
+                            <span className="text-gray-500 italic">
+                              Not specified
+                            </span>
+                          )}
                         </p>
                       </div>
                     </div>
@@ -2884,9 +3014,15 @@ const AdminPanelNew = () => {
                           Assigned Psychologist
                         </label>
                         <p className="text-emerald-800 text-sm font-bold">
-                          {selectedPatient.assigned_psychologist_id ? 
-                            getFullName(psychologists.find(p => p.id === selectedPatient.assigned_psychologist_id)) || "Unknown Psychologist"
-                            : (
+                          {selectedPatient.assigned_psychologist_id ? (
+                            getFullName(
+                              psychologists.find(
+                                (p) =>
+                                  p.id ===
+                                  selectedPatient.assigned_psychologist_id
+                              )
+                            ) || "Unknown Psychologist"
+                          ) : (
                             <span className="text-amber-600 font-medium bg-amber-100 px-2 py-1 rounded-lg">
                               Unassigned
                             </span>
@@ -3076,14 +3212,20 @@ const AdminPanelNew = () => {
                   </div>
                   <div className="flex items-center space-x-3 bg-white/60 rounded-lg p-3">
                     <ProfilePicture
-                      patient={psychologists.find(p => p.id === patientToAssign.assigned_psychologist_id)}
+                      patient={psychologists.find(
+                        (p) => p.id === patientToAssign.assigned_psychologist_id
+                      )}
                       size={32}
                       className="ring-1 ring-blue-200"
                     />
                     <div>
                       <p className="text-blue-900 font-bold text-sm">
-                        {getFullName(psychologists.find(p => p.id === patientToAssign.assigned_psychologist_id)) || 
-                          "Unknown Psychologist"}
+                        {getFullName(
+                          psychologists.find(
+                            (p) =>
+                              p.id === patientToAssign.assigned_psychologist_id
+                          )
+                        ) || "Unknown Psychologist"}
                       </p>
                       <p className="text-blue-600 text-xs font-medium">
                         Psychologist
@@ -3389,11 +3531,11 @@ const AdminPanelNew = () => {
             <div className="p-6">
               {/* Success/Error icon and title */}
               <div className="flex items-center mb-4">
-                <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
-                  deleteResult.success 
-                    ? "bg-green-100" 
-                    : "bg-red-100"
-                }`}>
+                <div
+                  className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
+                    deleteResult.success ? "bg-green-100" : "bg-red-100"
+                  }`}
+                >
                   {deleteResult.success ? (
                     <CheckCircle className="h-6 w-6 text-green-600" />
                   ) : (
@@ -3401,10 +3543,9 @@ const AdminPanelNew = () => {
                   )}
                 </div>
                 <h3 className="ml-3 text-lg font-semibold text-gray-900">
-                  {deleteResult.success 
-                    ? "Psychologist Deleted Successfully" 
-                    : "Deletion Failed"
-                  }
+                  {deleteResult.success
+                    ? "Psychologist Deleted Successfully"
+                    : "Deletion Failed"}
                 </h3>
               </div>
 
@@ -3413,7 +3554,8 @@ const AdminPanelNew = () => {
                 {deleteResult.success ? (
                   <div>
                     <p className="text-gray-600 mb-3">
-                      <strong>{deleteResult.psychologistName}</strong> has been successfully removed from the system.
+                      <strong>{deleteResult.psychologistName}</strong> has been
+                      successfully removed from the system.
                     </p>
                     <p className="text-sm text-gray-500">
                       {deleteResult.message}
@@ -3422,7 +3564,8 @@ const AdminPanelNew = () => {
                 ) : (
                   <div>
                     <p className="text-gray-600 mb-3">
-                      Unable to delete <strong>{deleteResult.psychologistName}</strong>.
+                      Unable to delete{" "}
+                      <strong>{deleteResult.psychologistName}</strong>.
                     </p>
                     <p className="text-sm text-red-600">
                       {deleteResult.message}
@@ -3457,7 +3600,10 @@ const AdminPanelNew = () => {
             className="absolute inset-0 bg-black/50 backdrop-blur-md"
             onClick={() => {
               setShowDeactivateBlockedModal(false);
-              setDeactivateBlockedData({ psychologist: null, errorMessage: "" });
+              setDeactivateBlockedData({
+                psychologist: null,
+                errorMessage: "",
+              });
             }}
           ></div>
 
@@ -3482,17 +3628,24 @@ const AdminPanelNew = () => {
               {/* Content */}
               <div className="mb-6">
                 <p className="text-gray-600 mb-4">
-                  <strong className="text-gray-900">{deactivateBlockedData.psychologist.name}</strong> cannot be deactivated because they have active patient assignments.
+                  <strong className="text-gray-900">
+                    {deactivateBlockedData.psychologist.name}
+                  </strong>{" "}
+                  cannot be deactivated because they have active patient
+                  assignments.
                 </p>
-                
+
                 <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
                   <div className="flex items-start">
                     <Users className="w-5 h-5 text-orange-600 mt-0.5 mr-3 flex-shrink-0" />
                     <div className="text-sm text-orange-800">
                       <p className="font-medium mb-2">Required Action:</p>
-                      <p className="mb-3">{deactivateBlockedData.errorMessage}</p>
+                      <p className="mb-3">
+                        {deactivateBlockedData.errorMessage}
+                      </p>
                       <p className="text-orange-700">
-                        Please go to the <strong>Patients tab</strong> to reassign these patients to another psychologist first.
+                        Please go to the <strong>Patients tab</strong> to
+                        reassign these patients to another psychologist first.
                       </p>
                     </div>
                   </div>
@@ -3504,7 +3657,10 @@ const AdminPanelNew = () => {
                 <button
                   onClick={() => {
                     setShowDeactivateBlockedModal(false);
-                    setDeactivateBlockedData({ psychologist: null, errorMessage: "" });
+                    setDeactivateBlockedData({
+                      psychologist: null,
+                      errorMessage: "",
+                    });
                   }}
                   className="flex-1 bg-gray-100 text-gray-900 py-3 px-4 rounded-lg hover:bg-gray-200 transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-gray-500"
                 >
@@ -3513,7 +3669,10 @@ const AdminPanelNew = () => {
                 <button
                   onClick={() => {
                     setShowDeactivateBlockedModal(false);
-                    setDeactivateBlockedData({ psychologist: null, errorMessage: "" });
+                    setDeactivateBlockedData({
+                      psychologist: null,
+                      errorMessage: "",
+                    });
                     // Switch to patients tab when "Go to Patients Tab" is clicked
                     setActiveTab("patients");
                   }}

@@ -29,7 +29,7 @@ export const psychologistSetupService = {
   async completeSetup(email, password, existingSession = null) {
     try {
       let session = existingSession;
-      
+
       // If no session provided, try to get current session
       if (!session) {
         const {
@@ -38,9 +38,11 @@ export const psychologistSetupService = {
         } = await supabase.auth.getSession();
 
         if (sessionError || !currentSession) {
-          throw new Error("No valid session found. Please use the setup link from your email.");
+          throw new Error(
+            "No valid session found. Please use the setup link from your email."
+          );
         }
-        
+
         session = currentSession;
       }
 
@@ -56,10 +58,10 @@ export const psychologistSetupService = {
       // Activate the psychologist account
       const { error: activateError } = await supabase
         .from("psychologists")
-        .update({ 
+        .update({
           is_active: true,
           user_id: session.user.id,
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         })
         .eq("email", email);
 
@@ -76,12 +78,15 @@ export const psychologistSetupService = {
             `Psychologist account activated for ${email}. Setup completed successfully.`
           );
         } catch (logError) {
-          console.warn("Failed to log psychologist activation activity:", logError.message);
+          console.warn(
+            "Failed to log psychologist activation activity:",
+            logError.message
+          );
         }
       }
 
       // Clear the setup session
-  await supabase.auth.signOut();
+      await supabase.auth.signOut();
 
       return {
         success: true,
@@ -117,10 +122,10 @@ export const psychologistSetupService = {
   async cleanupSetupSession() {
     try {
       await supabase.auth.signOut();
-      localStorage.removeItem('setupEmail');
-      localStorage.removeItem('setupPsychologistId');
+      localStorage.removeItem("setupEmail");
+      localStorage.removeItem("setupPsychologistId");
     } catch (error) {
       console.error("Cleanup error:", error);
     }
-  }
+  },
 };

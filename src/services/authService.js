@@ -265,12 +265,12 @@ export const authService = {
 
       console.log("User metadata role:", metaRole);
 
-  // Prefer explicit role from metadata for admin only.
-  // Do NOT trust 'psychologist' in metadata because invite/magic-link
-  // may attach it before setup completion. We'll verify via DB below.
-  if (metaRole === "admin") return "admin";
-  // ignore psychologist metadata here; fall through to DB check
-  if (metaRole && metaRole !== "psychologist") return metaRole;
+      // Prefer explicit role from metadata for admin only.
+      // Do NOT trust 'psychologist' in metadata because invite/magic-link
+      // may attach it before setup completion. We'll verify via DB below.
+      if (metaRole === "admin") return "admin";
+      // ignore psychologist metadata here; fall through to DB check
+      if (metaRole && metaRole !== "psychologist") return metaRole;
 
       // If no metadata role, check if user exists in psychologists table
       console.log("Checking psychologists table for user:", userId);
@@ -288,8 +288,11 @@ export const authService = {
 
       // If found in psychologists table, check if they're active
       if (psychologist) {
-        console.log("User found in psychologists table, is_active:", psychologist.is_active);
-        
+        console.log(
+          "User found in psychologists table, is_active:",
+          psychologist.is_active
+        );
+
         // Only return psychologist role if they're active (completed setup)
         if (psychologist.is_active) {
           return "psychologist";

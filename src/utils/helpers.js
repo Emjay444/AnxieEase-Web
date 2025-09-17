@@ -84,18 +84,18 @@ export function truncateText(text, maxLength = 100) {
  */
 export function getFullName(person) {
   if (!person) return "Unknown";
-  
+
   // If there's already a name field, use it
   if (person.name) return person.name;
-  
+
   // Otherwise, construct from individual fields
   const parts = [];
   if (person.first_name) parts.push(person.first_name);
   if (person.middle_name) parts.push(person.middle_name);
   if (person.last_name) parts.push(person.last_name);
-  
+
   const fullName = parts.join(" ").trim();
-  
+
   // Fallback to email prefix if no name available
   return fullName || person.email?.split("@")[0] || "Unknown";
 }
@@ -159,8 +159,8 @@ export function debounce(func, wait) {
 export function generateAvatar(name, size = 150) {
   // Create a more reliable avatar using multiple fallback services
   const initials = getInitials(name);
-  const encodedName = encodeURIComponent(name || 'User');
-  
+  const encodedName = encodeURIComponent(name || "User");
+
   // Use DiceBear as primary (more reliable than ui-avatars)
   // Fallback to ui-avatars if needed
   return `https://api.dicebear.com/7.x/initials/svg?seed=${encodedName}&backgroundColor=10b981&textColor=ffffff&fontSize=40`;

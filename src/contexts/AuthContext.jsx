@@ -43,10 +43,7 @@ export const AuthProvider = ({ children }) => {
 
   const saveCachedRole = (userId, role) => {
     try {
-      localStorage.setItem(
-        "userRoleBinding",
-        JSON.stringify({ userId, role })
-      );
+      localStorage.setItem("userRoleBinding", JSON.stringify({ userId, role }));
     } catch (e) {
       console.warn("Failed to save role cache:", e?.message);
     }

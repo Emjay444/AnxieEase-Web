@@ -14,7 +14,7 @@
 }
 .tagline {
   font-size: 1.2em;
-  color: #10B981;
+  color: #10b981;
 }
 
 /* Custom Calendar Styling */
@@ -329,7 +329,8 @@
   animation: breathe 6s ease-in-out infinite;
 }
 @keyframes breathe {
-  0%, 100% {
+  0%,
+  100% {
     transform: translateY(0) scale(1);
   }
   50% {

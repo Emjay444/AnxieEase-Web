@@ -4,7 +4,16 @@ import { psychologistAuthService } from "../services/psychologistAuthService";
 import { psychologistService } from "../services/psychologistService";
 import { psychologistSetupService } from "../services/psychologistSetupService";
 import { supabase } from "../services/supabaseClient";
-import { Mail, Lock, Eye, EyeOff, AlertCircle, Loader2, CheckCircle, X } from "lucide-react";
+import {
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  AlertCircle,
+  Loader2,
+  CheckCircle,
+  X,
+} from "lucide-react";
 
 const PsychologistSetupPage = () => {
   const { email, inviteCode } = useParams();
@@ -24,32 +33,33 @@ const PsychologistSetupPage = () => {
     const initializeSetup = async () => {
       try {
         // Handle magic link auth callback first
-        const { data: authCallbackData, error: callbackError } = await supabase.auth.getSession();
-        
+        const { data: authCallbackData, error: callbackError } =
+          await supabase.auth.getSession();
+
         if (callbackError) {
           console.error("Auth callback error:", callbackError);
         }
-        
+
         // Check for URL parameters
         const urlParams = new URLSearchParams(window.location.search);
-        const urlEmail = urlParams.get('email');
-        const urlPsychId = urlParams.get('psychologist_id');
-        
+        const urlEmail = urlParams.get("email");
+        const urlPsychId = urlParams.get("psychologist_id");
+
         let workingEmail = null;
         let psychologistId = null;
-        
+
         // Try to get session and email from multiple sources
         const currentSession = authCallbackData?.session;
-        
+
         if (currentSession && currentSession.user.email) {
           workingEmail = currentSession.user.email;
           setSessionData(currentSession);
-          
+
           console.log("Found active session for:", workingEmail);
-          
+
           // Store session data for persistence
-          localStorage.setItem('setupEmail', workingEmail);
-          
+          localStorage.setItem("setupEmail", workingEmail);
+
           // Try to update psychologist user_id
           try {
             await psychologistService.updatePsychologistUserId(
@@ -57,14 +67,21 @@ const PsychologistSetupPage = () => {
               currentSession.user.id
             );
           } catch (updateError) {
-            console.error("Failed to update psychologist user_id:", updateError);
+            console.error(
+              "Failed to update psychologist user_id:",
+              updateError
+            );
           }
         } else {
           // Fallback to URL params or localStorage
-          workingEmail = urlEmail || localStorage.getItem('setupEmail');
-          psychologistId = urlPsychId || localStorage.getItem('setupPsychologistId');
-          
-          console.log("No active session found, using fallback email:", workingEmail);
+          workingEmail = urlEmail || localStorage.getItem("setupEmail");
+          psychologistId =
+            urlPsychId || localStorage.getItem("setupPsychologistId");
+
+          console.log(
+            "No active session found, using fallback email:",
+            workingEmail
+          );
         }
 
         // Set the email in the form
@@ -75,22 +92,22 @@ const PsychologistSetupPage = () => {
 
         // Store email for later use even if session is lost
         if (workingEmail) {
-          localStorage.setItem('setupEmail', workingEmail);
+          localStorage.setItem("setupEmail", workingEmail);
         }
 
         setLoading(false);
       } catch (error) {
         console.error("Setup initialization error:", error);
-        
+
         // Try to recover email from localStorage as last resort
-        const storedEmail = localStorage.getItem('setupEmail');
+        const storedEmail = localStorage.getItem("setupEmail");
         if (storedEmail) {
           setFormData((prev) => ({
             ...prev,
             email: storedEmail,
           }));
         }
-        
+
         setErrors({
           general:
             "Setup session expired or invalid. Please use the setup link from your email again.",
@@ -399,7 +416,9 @@ const PsychologistSetupPage = () => {
                       <ul className="space-y-1">
                         <li>✅ Your account is now active</li>
                         <li>✅ You can log in with your email and password</li>
-                        <li>✅ Start managing your patients and appointments</li>
+                        <li>
+                          ✅ Start managing your patients and appointments
+                        </li>
                       </ul>
                     </div>
                   </div>

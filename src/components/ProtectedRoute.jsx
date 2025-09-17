@@ -45,7 +45,13 @@ const ProtectedRoute = ({ requireAdmin = false }) => {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
-        <p className="mt-3 text-gray-600">{signingOut ? "Signing out..." : checkingUnknown ? "Checking access..." : "Loading..."}</p>
+        <p className="mt-3 text-gray-600">
+          {signingOut
+            ? "Signing out..."
+            : checkingUnknown
+            ? "Checking access..."
+            : "Loading..."}
+        </p>
       </div>
     );
   }
