@@ -11,7 +11,9 @@ export const psychologistService = {
   // Get all psychologists (admin only)
   async getAllPsychologists() {
     try {
-      // Try to get psychologists from user_profiles table (which has avatar_url)
+      let allPsychologists = [];
+
+      // First, try to get psychologists from user_profiles table (which has avatar_url)
       const { data: userProfiles, error: userProfilesError } = await supabase
         .from("user_profiles")
         .select("*")
@@ -20,7 +22,7 @@ export const psychologistService = {
 
       if (!userProfilesError && userProfiles && userProfiles.length > 0) {
         // Format user_profiles data to match expected psychologist structure
-        return userProfiles.map((user) => ({
+        const formattedUserProfiles = userProfiles.map((user) => ({
           id: user.id,
           user_id: user.id,
           name:
@@ -37,16 +39,30 @@ export const psychologistService = {
           updated_at: user.updated_at,
           avatar_url: user.avatar_url || null, // Include avatar_url from user_profiles
         }));
+        allPsychologists.push(...formattedUserProfiles);
       }
 
-      // Fallback to psychologists table
-      const { data, error } = await supabase
+      // Also get psychologists from psychologists table
+      const { data: psychologists, error: psychologistsError } = await supabase
         .from("psychologists")
         .select("*")
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
-      return data || [];
+      if (!psychologistsError && psychologists && psychologists.length > 0) {
+        // Add psychologists that are not already in the list (avoid duplicates by email)
+        const existingEmails = new Set(allPsychologists.map((p) => p.email));
+        const uniquePsychologists = psychologists.filter(
+          (p) => !existingEmails.has(p.email)
+        );
+        allPsychologists.push(...uniquePsychologists);
+      }
+
+      // Sort by creation date (newest first)
+      allPsychologists.sort(
+        (a, b) => new Date(b.created_at) - new Date(a.created_at)
+      );
+
+      return allPsychologists;
     } catch (error) {
       console.error("Get psychologists error:", error.message);
       throw error;
@@ -530,12 +546,24 @@ export const psychologistService = {
     try {
       const { error } = await supabase
         .from("psychologists")
-        .update({ user_id: userId })
+        // Link the auth user and mark as active once setup is complete
+        .update({ user_id: userId, is_active: true })
         .eq("email", email);
 
       if (error) {
         console.error("Update user_id error:", error.message);
         throw error;
+      }
+
+      // Best-effort: mark the profile as verified/role psychologist if present
+      try {
+        await supabase
+          .from("user_profiles")
+          .update({ is_email_verified: true, role: "psychologist" })
+          .eq("email", email);
+      } catch (e) {
+        // Non-fatal if profile row doesn’t exist yet; ignore
+        console.log("Optional profile update skipped:", e?.message);
       }
 
       return { success: true };

@@ -42,6 +42,7 @@ import {
   BarElement,
   PointElement,
   LineElement,
+  Filler,
 } from "chart.js";
 
 ChartJS.register(
@@ -52,7 +53,8 @@ ChartJS.register(
   LinearScale,
   BarElement,
   PointElement,
-  LineElement
+  LineElement,
+  Filler
 );
 
 // Success Modal Component
