@@ -354,11 +354,11 @@ export const adminService = {
         };
       }
 
-      // Get count of all patients from user_profiles table
+      // Get count of all patients from user_profiles table (role 'patient' or blank)
       const { data: patientsCount, error: patientsError } = await supabase
         .from("user_profiles")
         .select("id", { count: "exact" })
-        .eq("role", "patient");
+        .or("role.eq.patient,role.is.null,role.eq.");
 
       if (patientsError) {
         console.error("Error fetching patients count:", patientsError.message);
@@ -369,11 +369,11 @@ export const adminService = {
         };
       }
 
-      // Get count of unassigned patients
+      // Get count of unassigned patients (role 'patient' or blank)
       const { data: unassignedCount, error: unassignedError } = await supabase
         .from("user_profiles")
         .select("id", { count: "exact" })
-        .eq("role", "patient")
+        .or("role.eq.patient,role.is.null,role.eq.")
         .is("assigned_psychologist_id", null);
 
       if (unassignedError) {
@@ -410,7 +410,7 @@ export const adminService = {
       const { data, error } = await supabase
         .from("user_profiles")
         .select("*")
-        .eq("role", "patient")
+        .or("role.eq.patient,role.is.null,role.eq.")
         .is("assigned_psychologist_id", null);
 
       if (error) {
@@ -421,7 +421,9 @@ export const adminService = {
       // Process data to match expected format
       return data.map((patient) => ({
         id: patient.id,
-        email: `user-${patient.id.substring(0, 8)}@anxieease.com`, // Generate placeholder email
+        email:
+          patient.email ||
+          `user-${patient.id.substring(0, 8)}@anxieease.com`,
         name:
           `${patient.first_name || ""} ${patient.last_name || ""}`.trim() ||
           "Unknown",
@@ -445,7 +447,7 @@ export const adminService = {
   // Get all patients
   async getAllUsers() {
     try {
-      // Fetch from the user_profiles table with joined psychologist data
+      // Fetch from user_profiles without strict role filter
       const { data, error } = await supabase
         .from("user_profiles")
         .select(
@@ -453,19 +455,51 @@ export const adminService = {
           *,
           psychologists:assigned_psychologist_id(name)
         `
-        )
-        .eq("role", "patient");
+        );
 
       if (error) {
-        console.error("Error fetching patients:", error.message);
+        console.error("Get patients error:", error.message);
         return [];
       }
 
-      // Process data to match expected format
-      return data.map((patient) => ({
+      if (!data || data.length === 0) {
+        console.log("getAllUsers: user_profiles returned 0 rows");
+        return [];
+      }
+
+      // Also fetch psychologists to exclude them from patients list
+      const { data: psychRows, error: psychErr } = await supabase
+        .from("psychologists")
+        .select("id,email");
+
+      if (psychErr) {
+        console.log("getAllUsers: psychologists lookup failed:", psychErr.message);
+      }
+
+      const psychIdSet = new Set((psychRows || []).map((p) => p.id));
+      const psychEmailSet = new Set(
+        (psychRows || [])
+          .map((p) => (p.email || "").toLowerCase())
+          .filter(Boolean)
+      );
+
+      // Consider records with role 'patient' (case-insensitive) OR missing/blank role as patients
+      // Exclude records that match psychologists by id or email
+      const patients = data.filter((u) => {
+        const role = (u.role || "").toString().trim().toLowerCase();
+        const email = (u.email || "").toLowerCase();
+        const isPsychById = psychIdSet.has(u.id);
+        const isPsychByEmail = email && psychEmailSet.has(email);
+        const classifyAsPatient = role === "patient" || role === "";
+        
+        return !isPsychById && !isPsychByEmail && classifyAsPatient;
+      });
+
+      console.log(`getAllUsers: Found ${patients.length} patients from ${data.length} user_profiles`);
+
+      return patients.map((patient) => ({
         id: patient.id,
         avatar_url: patient.avatar_url || null,
-        // Use the email field from user_profiles, with fallback to generated email
         email:
           patient.email ||
           `${patient.first_name?.toLowerCase() || "user"}.${
