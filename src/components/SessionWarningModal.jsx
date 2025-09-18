@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import { AlertTriangle } from "lucide-react";
 
 const SessionWarningModal = ({ show, timeRemaining, onExtend, onLogout }) => {
   const [countdown, setCountdown] = useState(120); // Start with 2 minutes (120 seconds)
@@ -7,9 +7,9 @@ const SessionWarningModal = ({ show, timeRemaining, onExtend, onLogout }) => {
   useEffect(() => {
     if (show) {
       setCountdown(120); // Reset to 2 minutes when modal shows
-      
+
       const interval = setInterval(() => {
-        setCountdown(prev => {
+        setCountdown((prev) => {
           if (prev <= 1) {
             clearInterval(interval);
             onLogout();
@@ -33,13 +33,19 @@ const SessionWarningModal = ({ show, timeRemaining, onExtend, onLogout }) => {
       <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-2xl border border-gray-200">
         <div className="flex items-center gap-3 mb-4">
           <AlertTriangle className="w-6 h-6 text-yellow-500" />
-          <h3 className="text-lg font-semibold text-gray-900">Session Expiring</h3>
+          <h3 className="text-lg font-semibold text-gray-900">
+            Session Expiring
+          </h3>
         </div>
-        
+
         <p className="text-gray-600 mb-4">
-          Your session will expire in <strong>{minutes}:{seconds.toString().padStart(2, '0')}</strong> due to inactivity.
+          Your session will expire in{" "}
+          <strong>
+            {minutes}:{seconds.toString().padStart(2, "0")}
+          </strong>{" "}
+          due to inactivity.
         </p>
-        
+
         <div className="flex gap-3 justify-end">
           <button
             onClick={onLogout}

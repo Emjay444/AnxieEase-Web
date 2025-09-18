@@ -21,11 +21,16 @@ const NewPasswordPage = () => {
   useEffect(() => {
     const checkSession = async () => {
       try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.getSession();
+
         if (error) {
           console.error("Session error:", error);
-          setError("Invalid or expired reset link. Please try the reset password process again.");
+          setError(
+            "Invalid or expired reset link. Please try the reset password process again."
+          );
           return;
         }
 
@@ -43,7 +48,9 @@ const NewPasswordPage = () => {
             setToken(tokenFromUrl);
             setEmail(emailFromUrl);
           } else {
-            setError("Invalid or missing reset information. Please try the reset password process again.");
+            setError(
+              "Invalid or missing reset information. Please try the reset password process again."
+            );
           }
         }
       } catch (err) {
@@ -103,14 +110,18 @@ const NewPasswordPage = () => {
 
       // Use Supabase to update the password
       const { data, error } = await supabase.auth.updateUser({
-        password: password
+        password: password,
       });
 
       if (error) {
         console.error("Password update error:", error);
-        
+
         // Handle specific error cases
-        if (error.message && (error.message.includes("same") || error.message.includes("different from the old password"))) {
+        if (
+          error.message &&
+          (error.message.includes("same") ||
+            error.message.includes("different from the old password"))
+        ) {
           setError("New password must be different from your current password");
         } else if (error.message && error.message.includes("weak")) {
           setError("Password is too weak. Please choose a stronger password");

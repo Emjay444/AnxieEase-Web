@@ -133,7 +133,7 @@ export const authService = {
     try {
       // Use resetPasswordForEmail which sends an OTP for password recovery
       const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/new-password`
+        redirectTo: `${window.location.origin}/new-password`,
       });
 
       if (error) throw error;

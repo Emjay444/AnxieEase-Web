@@ -53,11 +53,14 @@ export const AuthProvider = ({ children }) => {
     try {
       // Only save if we have valid userId and role
       if (userId && role) {
-        localStorage.setItem("userRoleBinding", JSON.stringify({ 
-          userId, 
-          role, 
-          timestamp: Date.now() 
-        }));
+        localStorage.setItem(
+          "userRoleBinding",
+          JSON.stringify({
+            userId,
+            role,
+            timestamp: Date.now(),
+          })
+        );
       }
     } catch (e) {
       console.warn("Failed to save role cache:", e?.message);
@@ -97,13 +100,18 @@ export const AuthProvider = ({ children }) => {
 
         if (session?.user) {
           console.log("Found existing session for:", session.user.email);
-          
+
           // CRITICAL FIX: Always validate session is still valid before proceeding
           try {
             // Verify the session is actually valid by making an authenticated request
-            const { data: currentUser, error: userError } = await supabase.auth.getUser();
-            
-            if (userError || !currentUser?.user || currentUser.user.id !== session.user.id) {
+            const { data: currentUser, error: userError } =
+              await supabase.auth.getUser();
+
+            if (
+              userError ||
+              !currentUser?.user ||
+              currentUser.user.id !== session.user.id
+            ) {
               console.warn("Session validation failed, clearing auth state");
               setUser(null);
               setUserRole(null);
@@ -113,15 +121,18 @@ export const AuthProvider = ({ children }) => {
               }
               return;
             }
-            
+
             // Session is valid, proceed with setting user
             setUser(session.user);
 
             // Fetch role directly - don't rely on cache for authorization decisions
-            console.log("Fetching role for validated session:", session.user.id);
+            console.log(
+              "Fetching role for validated session:",
+              session.user.id
+            );
             const role = await authService.getUserRole(session.user.id);
             console.log("Initial role retrieved:", role);
-            
+
             if (role) {
               setUserRole(role);
               saveCachedRole(session.user.id, role);
@@ -129,7 +140,6 @@ export const AuthProvider = ({ children }) => {
               setUserRole(null);
               clearCachedRole();
             }
-            
           } catch (validationError) {
             console.error("Error validating session:", validationError);
             // Clear everything on validation error

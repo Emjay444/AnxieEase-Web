@@ -119,7 +119,9 @@ export default function ProtectedRoute({ requireAdmin = false }) {
   // CRITICAL: If we have a user but no role determined yet, wait for role resolution
   // This prevents bypass scenarios where user is set but role is still loading
   if (user && userRole === null && !loading && !checkingUnknown) {
-    console.log("🔒 ProtectedRoute: User exists but role not determined, waiting...");
+    console.log(
+      "🔒 ProtectedRoute: User exists but role not determined, waiting..."
+    );
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>

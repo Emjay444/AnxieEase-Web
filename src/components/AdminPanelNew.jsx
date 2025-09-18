@@ -1565,22 +1565,22 @@ const AdminPanelNew = () => {
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Assigned Psychologist
                       </th>
-                      <th 
+                      <th
                         className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
                         onClick={() => {
-                          if (patientSortBy === 'dateAsc') {
-                            setPatientSortBy('dateDesc');
+                          if (patientSortBy === "dateAsc") {
+                            setPatientSortBy("dateDesc");
                           } else {
-                            setPatientSortBy('dateAsc');
+                            setPatientSortBy("dateAsc");
                           }
                         }}
                       >
                         <div className="flex items-center space-x-1">
                           <span>Date Added</span>
-                          {patientSortBy === 'dateAsc' && (
+                          {patientSortBy === "dateAsc" && (
                             <ChevronDown className="h-4 w-4 rotate-180" />
                           )}
-                          {patientSortBy === 'dateDesc' && (
+                          {patientSortBy === "dateDesc" && (
                             <ChevronDown className="h-4 w-4" />
                           )}
                         </div>
@@ -1632,15 +1632,23 @@ const AdminPanelNew = () => {
                           break;
                         case "dateAsc":
                           filteredPatients = filteredPatients.sort((a, b) => {
-                            const dateA = new Date(a.created_at || a.date_added || 0);
-                            const dateB = new Date(b.created_at || b.date_added || 0);
+                            const dateA = new Date(
+                              a.created_at || a.date_added || 0
+                            );
+                            const dateB = new Date(
+                              b.created_at || b.date_added || 0
+                            );
                             return dateA - dateB; // Oldest first
                           });
                           break;
                         case "dateDesc":
                           filteredPatients = filteredPatients.sort((a, b) => {
-                            const dateA = new Date(a.created_at || a.date_added || 0);
-                            const dateB = new Date(b.created_at || b.date_added || 0);
+                            const dateA = new Date(
+                              a.created_at || a.date_added || 0
+                            );
+                            const dateB = new Date(
+                              b.created_at || b.date_added || 0
+                            );
                             return dateB - dateA; // Newest first
                           });
                           break;
@@ -1740,7 +1748,7 @@ const AdminPanelNew = () => {
                                   ).toLocaleDateString("en-US", {
                                     year: "numeric",
                                     month: "short",
-                                    day: "numeric"
+                                    day: "numeric",
                                   })
                                 : "N/A"}
                             </td>

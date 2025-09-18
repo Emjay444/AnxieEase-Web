@@ -1,5 +1,5 @@
-import { useEffect, useCallback, useRef, useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useEffect, useCallback, useRef, useState } from "react";
+import { useAuth } from "../contexts/AuthContext";
 
 const SESSION_TIMEOUT = 15 * 60 * 1000; // 15 minutes in milliseconds
 const WARNING_TIME = 2 * 60 * 1000; // Show warning 2 minutes before timeout
@@ -29,14 +29,14 @@ export const useSessionTimeout = () => {
 
     // Set warning timer (13 minutes)
     warningTimeoutRef.current = setTimeout(() => {
-      console.log('Session will expire in 2 minutes due to inactivity');
+      console.log("Session will expire in 2 minutes due to inactivity");
       setShowWarning(true);
       setWarningTimeRemaining(WARNING_TIME);
     }, SESSION_TIMEOUT - WARNING_TIME);
 
     // Set logout timer (15 minutes)
     timeoutRef.current = setTimeout(() => {
-      console.log('Session expired due to inactivity');
+      console.log("Session expired due to inactivity");
       setShowWarning(false);
       signOut();
     }, SESSION_TIMEOUT);
@@ -50,7 +50,14 @@ export const useSessionTimeout = () => {
   useEffect(() => {
     if (user) {
       // Events that indicate user activity
-      const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
+      const events = [
+        "mousedown",
+        "mousemove",
+        "keypress",
+        "scroll",
+        "touchstart",
+        "click",
+      ];
 
       // Throttle the activity handler to avoid excessive timer resets
       let throttleTimeout = null;
@@ -64,7 +71,7 @@ export const useSessionTimeout = () => {
       };
 
       // Add event listeners
-      events.forEach(event => {
+      events.forEach((event) => {
         document.addEventListener(event, throttledActivityHandler, true);
       });
 
@@ -73,10 +80,10 @@ export const useSessionTimeout = () => {
 
       // Cleanup
       return () => {
-        events.forEach(event => {
+        events.forEach((event) => {
           document.removeEventListener(event, throttledActivityHandler, true);
         });
-        
+
         if (timeoutRef.current) {
           clearTimeout(timeoutRef.current);
         }
@@ -96,10 +103,10 @@ export const useSessionTimeout = () => {
       if (user) {
         const now = Date.now();
         const timeSinceLastActivity = now - lastActivityRef.current;
-        
+
         // If more than 15 minutes have passed, sign out
         if (timeSinceLastActivity > SESSION_TIMEOUT) {
-          console.log('Session expired while window was not focused');
+          console.log("Session expired while window was not focused");
           signOut();
         } else {
           // Reset timer if still within timeout period
@@ -108,8 +115,8 @@ export const useSessionTimeout = () => {
       }
     };
 
-    window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
   }, [user, signOut, resetTimer]);
 
   const handleExtendSession = useCallback(() => {
@@ -131,6 +138,6 @@ export const useSessionTimeout = () => {
       if (!user) return null;
       const elapsed = Date.now() - lastActivityRef.current;
       return Math.max(0, SESSION_TIMEOUT - elapsed);
-    }
+    },
   };
 };

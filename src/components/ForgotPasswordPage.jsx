@@ -56,9 +56,7 @@ const ForgotPasswordPage = () => {
       await authService.requestPasswordReset(email);
       setOtpSent(true);
     } catch (error) {
-      setError(
-        error?.message || "Failed to send OTP. Please try again."
-      );
+      setError(error?.message || "Failed to send OTP. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -85,7 +83,7 @@ const ForgotPasswordPage = () => {
 
       // Verify OTP with Supabase
       await authService.verifyPasswordResetOtp(email, otp);
-      
+
       // Navigate to new password page
       navigate(`/new-password?email=${encodeURIComponent(email)}&token=${otp}`);
     } catch (error) {
@@ -111,10 +109,9 @@ const ForgotPasswordPage = () => {
             Reset Password
           </h1>
           <p className="text-emerald-100 drop-shadow-sm">
-            {!otpSent 
+            {!otpSent
               ? "Enter your email and we will send you a 6-digit OTP code."
-              : "Check your email and enter the 6-digit OTP code."
-            }
+              : "Check your email and enter the 6-digit OTP code."}
           </p>
         </div>
 
@@ -196,7 +193,9 @@ const ForgotPasswordPage = () => {
                     type="text"
                     id="otp"
                     value={otp}
-                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    onChange={(e) =>
+                      setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))
+                    }
                     disabled={isVerifying}
                     className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors text-center text-lg font-mono tracking-widest"
                     placeholder="511936"
