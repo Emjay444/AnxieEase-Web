@@ -25,8 +25,15 @@ export const AuthProvider = ({ children }) => {
       const bindingRaw = localStorage.getItem("userRoleBinding");
       if (bindingRaw) {
         const binding = JSON.parse(bindingRaw);
-        if (binding?.userId === userId && binding?.role) {
-          return binding.role;
+        if (binding?.userId === userId && binding?.role && binding?.timestamp) {
+          // Check if cache is expired (30 minutes)
+          const isExpired = Date.now() - binding.timestamp > 30 * 60 * 1000;
+          if (!isExpired) {
+            return binding.role;
+          } else {
+            // Clear expired cache
+            clearCachedRole();
+          }
         }
       }
       // Legacy key cleanup (unbound role)
@@ -37,13 +44,21 @@ export const AuthProvider = ({ children }) => {
       return null;
     } catch (e) {
       console.warn("Failed to load role cache:", e?.message);
+      clearCachedRole(); // Clear corrupted cache
       return null;
     }
   };
 
   const saveCachedRole = (userId, role) => {
     try {
-      localStorage.setItem("userRoleBinding", JSON.stringify({ userId, role }));
+      // Only save if we have valid userId and role
+      if (userId && role) {
+        localStorage.setItem("userRoleBinding", JSON.stringify({ 
+          userId, 
+          role, 
+          timestamp: Date.now() 
+        }));
+      }
     } catch (e) {
       console.warn("Failed to save role cache:", e?.message);
     }
@@ -56,13 +71,14 @@ export const AuthProvider = ({ children }) => {
 
   // Initialize auth state
   useEffect(() => {
+    let isMounted = true;
     const initializeAuth = async () => {
       try {
         console.log("Initializing auth...");
         // Safety: don't let loading hang forever
         let safetyCleared = false;
         const safetyTimer = setTimeout(() => {
-          if (!safetyCleared) {
+          if (!safetyCleared && isMounted) {
             console.warn("Auth loading safety timer fired; unblocking UI.");
             setLoading(false);
           }
@@ -81,49 +97,62 @@ export const AuthProvider = ({ children }) => {
 
         if (session?.user) {
           console.log("Found existing session for:", session.user.email);
-          // Set user immediately so UI can proceed
-          setUser(session.user);
-
-          // Apply cached role ONLY if it's bound to this userId
-          const cachedRole = loadCachedRole(session.user.id);
-          if (cachedRole) {
-            console.log("Using cached role for user:", cachedRole);
-            setUserRole(cachedRole);
-          } else {
-            // Ensure we don't carry over any stale role
-            setUserRole(null);
-          }
-
-          // Fetch role in background; don't block UI
-          (async () => {
-            try {
-              const role = await authService.getUserRole(session.user.id);
-              console.log("Initial role retrieved:", role);
-              if (role) {
-                setUserRole(role);
-                saveCachedRole(session.user.id, role);
-              } else {
-                setUserRole(null);
-                clearCachedRole();
+          
+          // CRITICAL FIX: Always validate session is still valid before proceeding
+          try {
+            // Verify the session is actually valid by making an authenticated request
+            const { data: currentUser, error: userError } = await supabase.auth.getUser();
+            
+            if (userError || !currentUser?.user || currentUser.user.id !== session.user.id) {
+              console.warn("Session validation failed, clearing auth state");
+              setUser(null);
+              setUserRole(null);
+              clearCachedRole();
+              if (isMounted) {
+                setLoading(false);
               }
-            } catch (roleError) {
-              console.error("Error getting initial role:", roleError);
+              return;
+            }
+            
+            // Session is valid, proceed with setting user
+            setUser(session.user);
+
+            // Fetch role directly - don't rely on cache for authorization decisions
+            console.log("Fetching role for validated session:", session.user.id);
+            const role = await authService.getUserRole(session.user.id);
+            console.log("Initial role retrieved:", role);
+            
+            if (role) {
+              setUserRole(role);
+              saveCachedRole(session.user.id, role);
+            } else {
               setUserRole(null);
               clearCachedRole();
             }
-          })();
+            
+          } catch (validationError) {
+            console.error("Error validating session:", validationError);
+            // Clear everything on validation error
+            setUser(null);
+            setUserRole(null);
+            clearCachedRole();
+          }
         } else {
           console.log("No existing session found");
           clearCachedRole();
         }
 
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
         safetyCleared = true;
         clearTimeout(safetyTimer);
       } catch (err) {
         console.error("Auth initialization error:", err.message);
-        setError(err.message);
-        setLoading(false);
+        if (isMounted) {
+          setError(err.message);
+          setLoading(false);
+        }
       }
     };
 
@@ -135,9 +164,9 @@ export const AuthProvider = ({ children }) => {
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log("Auth state changed:", event, session?.user?.email);
 
-      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+      if (event === "SIGNED_IN") {
         if (session?.user) {
-          // New session: set user and clear any cached role first
+          // New sign in: set user and clear any cached role first
           setUser(session.user);
           setUserRole(null);
           clearCachedRole();
@@ -161,6 +190,35 @@ export const AuthProvider = ({ children }) => {
             }
           })();
         }
+      } else if (event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION") {
+        // For token refresh or initial session, validate the session
+        if (session?.user) {
+          setUser(session.user);
+          setLoading(false);
+
+          // Always validate role for security - don't trust cache completely
+          console.log(
+            "Token refreshed/initial session - validating role for:",
+            session.user.id
+          );
+          (async () => {
+            try {
+              const role = await authService.getUserRole(session.user.id);
+              console.log("User role validated after refresh:", role);
+              if (role) {
+                setUserRole(role);
+                saveCachedRole(session.user.id, role);
+              } else {
+                setUserRole(null);
+                clearCachedRole();
+              }
+            } catch (error) {
+              console.error("Error validating user role after refresh:", error);
+              setUserRole(null);
+              clearCachedRole();
+            }
+          })();
+        }
       } else if (event === "SIGNED_OUT") {
         setUser(null);
         setUserRole(null);
@@ -171,6 +229,7 @@ export const AuthProvider = ({ children }) => {
 
     // Cleanup subscription on unmount
     return () => {
+      isMounted = false;
       subscription?.unsubscribe();
     };
   }, []);
@@ -206,8 +265,8 @@ export const AuthProvider = ({ children }) => {
       setUser(null);
       setUserRole(null);
 
-      // Clear user role from localStorage but preserve remember me settings
-      localStorage.removeItem("userRole");
+      // Clear all cached role data to prevent stale authentication
+      clearCachedRole();
     } catch (err) {
       console.error("Sign out error:", err.message);
       setError(err.message);

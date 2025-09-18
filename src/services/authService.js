@@ -131,9 +131,11 @@ export const authService = {
   // Send password reset OTP via Supabase
   async requestPasswordReset(email) {
     try {
+      // Use resetPasswordForEmail which sends an OTP for password recovery
       const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: undefined, // This will trigger OTP instead of magic link
+        redirectTo: `${window.location.origin}/new-password`
       });
+
       if (error) throw error;
       return true;
     } catch (error) {

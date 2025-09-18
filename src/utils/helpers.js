@@ -85,19 +85,55 @@ export function truncateText(text, maxLength = 100) {
 export function getFullName(person) {
   if (!person) return "Unknown";
 
-  // If there's already a name field, use it
-  if (person.name) return person.name;
-
-  // Otherwise, construct from individual fields
+  // Construct from individual fields first (new canonical source)
   const parts = [];
   if (person.first_name) parts.push(person.first_name);
   if (person.middle_name) parts.push(person.middle_name);
   if (person.last_name) parts.push(person.last_name);
 
-  const fullName = parts.join(" ").trim();
+  const fromParts = parts.join(" ").trim();
+  if (fromParts) return fromParts;
+
+  // Fallback to legacy combined `name` field
+  if (person.name && String(person.name).trim())
+    return String(person.name).trim();
 
   // Fallback to email prefix if no name available
-  return fullName || person.email?.split("@")[0] || "Unknown";
+  return person.email?.split("@")[0] || "Unknown";
+}
+
+/**
+ * Split a full name string into first/middle/last parts using a simple heuristic.
+ * Accepts either a string or an object with name fields.
+ */
+export function getFullNameParts(input) {
+  if (!input) return { first_name: "", middle_name: "", last_name: "" };
+  let full = "";
+  if (typeof input === "string") {
+    full = input;
+  } else if (typeof input === "object") {
+    // Prefer assembled parts; fallback to .name
+    const assembled = [input.first_name, input.middle_name, input.last_name]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    full = assembled || input.name || "";
+  }
+  const cleaned = String(full || "").trim();
+  if (!cleaned) return { first_name: "", middle_name: "", last_name: "" };
+
+  const parts = cleaned.split(/\s+/);
+  if (parts.length === 1) {
+    return { first_name: parts[0], middle_name: "", last_name: "" };
+  }
+  if (parts.length === 2) {
+    return { first_name: parts[0], middle_name: "", last_name: parts[1] };
+  }
+  return {
+    first_name: parts[0],
+    middle_name: parts.slice(1, -1).join(" "),
+    last_name: parts[parts.length - 1],
+  };
 }
 
 /**
@@ -156,10 +192,13 @@ export function debounce(func, wait) {
 /**
  * Generate random avatar URL or initials
  */
-export function generateAvatar(name, size = 150) {
+export function generateAvatar(nameOrPerson, size = 150) {
+  // Accept a string or an object with name parts
+  const fullName =
+    typeof nameOrPerson === "string" ? nameOrPerson : getFullName(nameOrPerson);
   // Create a more reliable avatar using multiple fallback services
-  const initials = getInitials(name);
-  const encodedName = encodeURIComponent(name || "User");
+  const initials = getInitials(fullName || "User");
+  const encodedName = encodeURIComponent(fullName || "User");
 
   // Use DiceBear as primary (more reliable than ui-avatars)
   // Fallback to ui-avatars if needed

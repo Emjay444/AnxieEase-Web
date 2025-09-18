@@ -31,6 +31,14 @@ import { supabase } from "../services/supabaseClient";
 import FullCalendar from "./FullCalendar";
 import PatientProfileView from "./PatientProfileView";
 
+// Helper function to construct full name from separate fields
+const buildFullName = (first_name, middle_name, last_name) => {
+  const parts = [first_name, middle_name, last_name].filter(
+    (part) => part && part.trim().length > 0
+  );
+  return parts.join(" ") || "Doctor";
+};
+
 const DashboardNew = () => {
   const { user, signOut } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -42,6 +50,7 @@ const DashboardNew = () => {
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [psychologistId, setPsychologistId] = useState(null); // Store psychologist ID
+  const [psychologistProfile, setPsychologistProfile] = useState(null); // Store full psychologist profile
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [pendingAction, setPendingAction] = useState(null);
   const [scheduledDate, setScheduledDate] = useState("");
@@ -59,7 +68,9 @@ const DashboardNew = () => {
 
   // Profile form states
   const [profileForm, setProfileForm] = useState({
-    name: "",
+    firstName: "",
+    middleName: "",
+    lastName: "",
     email: "",
     phone: "",
     specialization: "",
@@ -83,18 +94,74 @@ const DashboardNew = () => {
           return;
         }
 
+        console.log("=== DASHBOARD DEBUG ===");
         console.log("Loading dashboard data for auth user:", user.id);
+        console.log("User email:", user.email);
+        console.log("Full user object:", user);
+
+        // Debug: Check all psychologists to see if there's a match
+        const { data: allPsychologists, error: allPsychError } = await supabase
+          .from("psychologists")
+          .select(
+            "id, user_id, first_name, middle_name, last_name, email, is_active"
+          );
+
+        console.log("All psychologists in database:", allPsychologists);
+        console.log("Looking for user_id match:", user.id);
 
         // First, get the psychologist record using the auth user_id
         const { data: psychologist, error: psychError } = await supabase
           .from("psychologists")
-          .select("id, name, email")
+          .select("id, first_name, middle_name, last_name, email")
           .eq("user_id", user.id)
           .single();
 
         if (psychError || !psychologist) {
           console.error("Error fetching psychologist:", psychError);
           console.log("No psychologist found for user_id:", user.id);
+          console.log(
+            "Available psychologists with email",
+            user.email,
+            ":",
+            allPsychologists?.filter((p) => p.email === user.email)
+          );
+
+          // Try to find by email as fallback
+          const psychByEmail = allPsychologists?.find(
+            (p) => p.email === user.email && p.is_active
+          );
+          if (psychByEmail) {
+            console.log("Found psychologist by email instead:", psychByEmail);
+            console.log(
+              "user_id mismatch! Auth user_id:",
+              user.id,
+              "vs DB user_id:",
+              psychByEmail.user_id
+            );
+
+            // Fix the user_id mismatch by updating the psychologist record
+            console.log("Attempting to fix user_id mismatch...");
+            const { error: updateError } = await supabase
+              .from("psychologists")
+              .update({ user_id: user.id })
+              .eq("email", user.email)
+              .eq("is_active", true);
+
+            if (updateError) {
+              console.error(
+                "Failed to update psychologist user_id:",
+                updateError
+              );
+            } else {
+              console.log(
+                "Successfully updated psychologist user_id, reloading..."
+              );
+              // Recursively call the function to reload with fixed data
+              setTimeout(() => loadDashboardData(), 100);
+              return;
+            }
+          }
+
           return;
         }
 
@@ -103,6 +170,47 @@ const DashboardNew = () => {
         // Use the psychologist's ID to load their data
         const psychologistId = psychologist.id;
         setPsychologistId(psychologistId); // Store for later use
+
+        // Load complete psychologist profile data
+        const { data: fullPsychProfile, error: profileError } = await supabase
+          .from("psychologists")
+          .select("*")
+          .eq("id", psychologistId)
+          .single();
+
+        if (!profileError && fullPsychProfile) {
+          console.log("Loaded full psychologist profile:", fullPsychProfile);
+
+          // Construct full name from separate fields
+          const fullName = buildFullName(
+            fullPsychProfile.first_name,
+            fullPsychProfile.middle_name,
+            fullPsychProfile.last_name
+          );
+
+          // Store the complete profile data for use in header and forms
+          setPsychologistProfile({
+            ...fullPsychProfile,
+            fullName: fullName,
+          });
+
+          // Update profile form with real data from database
+          setProfileForm({
+            firstName: fullPsychProfile.first_name || "",
+            middleName: fullPsychProfile.middle_name || "",
+            lastName: fullPsychProfile.last_name || "",
+            email: fullPsychProfile.email || "",
+            phone: fullPsychProfile.phone || "",
+            specialization: fullPsychProfile.specialization || "",
+            bio: fullPsychProfile.bio || "",
+            currentPassword: "",
+            newPassword: "",
+            confirmPassword: "",
+            profilePicture: null,
+          });
+        } else {
+          console.error("Error loading psychologist profile:", profileError);
+        }
 
         // Load patients assigned to this psychologist
         const patientsData = await psychologistService.getPsychologistPatients(
@@ -169,19 +277,8 @@ const DashboardNew = () => {
     loadDashboardData();
   }, [user]);
 
-  // Initialize profile form when user data is available
-  useEffect(() => {
-    if (user) {
-      setProfileForm((prev) => ({
-        ...prev,
-        name: user.name || "",
-        email: user.email || "",
-        phone: user.phone || "",
-        specialization: user.specialization || "",
-        bio: user.bio || "",
-      }));
-    }
-  }, [user]);
+  // Profile form is now initialized in fetchPsychologistData with complete database profile
+  // This ensures we get the actual psychologist data like "Romeo Buagas" instead of auth user metadata
 
   // Profile form handlers
   const handleProfileFormChange = (field, value) => {
@@ -204,15 +301,41 @@ const DashboardNew = () => {
   const handleProfileUpdate = async () => {
     setProfileUpdateLoading(true);
     try {
-      // Here you would make API calls to update the profile
       console.log("Updating profile:", profileForm);
 
-      // Mock success
-      setTimeout(() => {
-        setProfileUpdateLoading(false);
-        setShowProfileModal(false);
-        alert("Profile updated successfully!");
-      }, 2000);
+      // Update psychologist profile with separate name fields
+      const updates = {
+        first_name: profileForm.firstName,
+        middle_name: profileForm.middleName || null,
+        last_name: profileForm.lastName,
+        phone: profileForm.phone,
+        specialization: profileForm.specialization,
+        bio: profileForm.bio,
+      };
+
+      const { error } = await supabase
+        .from("psychologists")
+        .update(updates)
+        .eq("id", psychologistId);
+
+      if (error) throw error;
+
+      // Update local state with new full name
+      const newFullName = buildFullName(
+        profileForm.firstName,
+        profileForm.middleName,
+        profileForm.lastName
+      );
+
+      setPsychologistProfile((prev) => ({
+        ...prev,
+        ...updates,
+        fullName: newFullName,
+      }));
+
+      setProfileUpdateLoading(false);
+      setShowProfileModal(false);
+      console.log("Profile updated successfully!");
     } catch (error) {
       console.error("Error updating profile:", error);
       setProfileUpdateLoading(false);
@@ -245,7 +368,7 @@ const DashboardNew = () => {
               <div className="relative">
                 <div className="h-20 w-20 rounded-full bg-emerald-100 flex items-center justify-center">
                   <span className="text-emerald-600 font-medium text-2xl">
-                    {profileForm.name.charAt(0) || user?.name?.charAt(0) || "D"}
+                    {profileForm.firstName?.charAt(0) || "D"}
                   </span>
                 </div>
                 <label className="absolute bottom-0 right-0 bg-emerald-500 text-white p-1.5 rounded-full cursor-pointer hover:bg-emerald-600 transition-colors">
@@ -267,22 +390,54 @@ const DashboardNew = () => {
             </div>
 
             {/* Basic Information */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Full Name
+                  First Name
                 </label>
                 <input
                   type="text"
-                  value={profileForm.name}
+                  value={profileForm.firstName}
                   onChange={(e) =>
-                    handleProfileFormChange("name", e.target.value)
+                    handleProfileFormChange("firstName", e.target.value)
                   }
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                  placeholder="Dr. John Doe"
+                  placeholder="First name"
                 />
               </div>
 
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Middle Name
+                </label>
+                <input
+                  type="text"
+                  value={profileForm.middleName}
+                  onChange={(e) =>
+                    handleProfileFormChange("middleName", e.target.value)
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  placeholder="Middle name (optional)"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Last Name
+                </label>
+                <input
+                  type="text"
+                  value={profileForm.lastName}
+                  onChange={(e) =>
+                    handleProfileFormChange("lastName", e.target.value)
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  placeholder="Last name"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Email Address
@@ -753,13 +908,15 @@ const DashboardNew = () => {
                     >
                       <div className="text-right">
                         <p className="text-sm font-medium text-gray-900">
-                          Dr. {user?.name || "Psychologist"}
+                          Dr. {psychologistProfile?.fullName || "Psychologist"}
                         </p>
-                        <p className="text-xs text-gray-500">{user?.email}</p>
+                        <p className="text-xs text-gray-500">
+                          {psychologistProfile?.email || user?.email}
+                        </p>
                       </div>
                       <div className="h-8 w-8 rounded-full bg-emerald-100 flex items-center justify-center">
                         <span className="text-emerald-600 font-medium text-sm">
-                          {user?.name?.charAt(0) || "D"}
+                          {psychologistProfile?.fullName?.charAt(0) || "D"}
                         </span>
                       </div>
                     </button>

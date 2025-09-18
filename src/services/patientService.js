@@ -89,7 +89,9 @@ export const patientService = {
           *,
           psychologists:assigned_psychologist_id (
             id,
-            name,
+            first_name,
+            middle_name,
+            last_name,
             email
           )
         `
@@ -153,8 +155,8 @@ export const patientService = {
   async getAllPatients() {
     try {
       const { data, error } = await supabase
-        .from("users")
-        .select("*, psychologists(name)")
+        .from("user_profiles")
+        .select("*, psychologists(first_name, middle_name, last_name, email)")
         .eq("role", "patient");
 
       if (error) {
@@ -178,7 +180,9 @@ export const patientService = {
           *,
           psychologists:assigned_psychologist_id (
             id,
-            name,
+            first_name,
+            middle_name,
+            last_name,
             email
           )
         `
@@ -206,11 +210,25 @@ export const patientService = {
           hour12: true,
         }),
         is_active: data.is_email_verified || true,
+        // Fix psychologist name if joined data exists
+        psychologists: data.psychologists
+          ? {
+              ...data.psychologists,
+              name:
+                `${data.psychologists.first_name || ""} ${
+                  data.psychologists.middle_name || ""
+                } ${data.psychologists.last_name || ""}`.trim() ||
+                data.psychologists.email?.split("@")[0],
+            }
+          : data.psychologists,
       };
 
-      console.log('PatientService - Raw data from DB:', data);
-      console.log('PatientService - Formatted data:', formattedData);
-      console.log('PatientService - Avatar URL in formatted data:', formattedData.avatar_url);
+      console.log("PatientService - Raw data from DB:", data);
+      console.log("PatientService - Formatted data:", formattedData);
+      console.log(
+        "PatientService - Avatar URL in formatted data:",
+        formattedData.avatar_url
+      );
 
       return formattedData;
     } catch (error) {
@@ -229,7 +247,9 @@ export const patientService = {
           *,
           psychologists:psychologist_id (
             id,
-            name,
+            first_name,
+            middle_name,
+            last_name,
             email
           )
         `

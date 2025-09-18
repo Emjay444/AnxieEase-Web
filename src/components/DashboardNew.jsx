@@ -896,27 +896,80 @@ const DashboardNew = () => {
           return;
         }
 
+        console.log("=== DASHBOARD DATA LOADING DEBUG ===");
         console.log("Loading dashboard data for auth user:", user.id);
+        console.log("User email:", user.email);
+
+        // Debug: Check all psychologists to see if there's a match
+        const { data: allPsychologists, error: allPsychError } = await supabase
+          .from("psychologists")
+          .select(
+            "id, user_id, first_name, middle_name, last_name, email, is_active"
+          );
+
+        console.log("All psychologists in database:", allPsychologists);
+        console.log("Looking for user_id match:", user.id);
 
         // First, get the psychologist record using the auth user_id
         const { data: psychologist, error: psychError } = await supabase
           .from("psychologists")
           .select(
-            "id, name, first_name, middle_name, last_name, email, contact, license_number, sex, avatar_url, bio"
+            "id, first_name, middle_name, last_name, email, contact, license_number, sex, avatar_url, bio, specialization, is_active"
           )
           .eq("user_id", user.id)
           .single();
 
         if (psychError || !psychologist) {
-          console.error("Error fetching psychologist:", psychError);
-          console.log("No psychologist found for user_id:", user.id);
+          console.error("❌ Error fetching psychologist:", psychError);
+          console.log("❌ No psychologist found for user_id:", user.id);
+
+          // Try to find by email as fallback
+          const psychByEmail = allPsychologists?.find(
+            (p) => p.email === user.email && p.is_active
+          );
+          if (psychByEmail) {
+            console.log(
+              "🔧 Found psychologist by email instead:",
+              psychByEmail
+            );
+            console.log(
+              "⚠️ user_id mismatch! Auth user_id:",
+              user.id,
+              "vs DB user_id:",
+              psychByEmail.user_id
+            );
+
+            // Fix the user_id mismatch by updating the psychologist record
+            console.log("🔧 Attempting to fix user_id mismatch...");
+            const { error: updateError } = await supabase
+              .from("psychologists")
+              .update({ user_id: user.id })
+              .eq("email", user.email)
+              .eq("is_active", true);
+
+            if (updateError) {
+              console.error(
+                "❌ Failed to update psychologist user_id:",
+                updateError
+              );
+            } else {
+              console.log(
+                "✅ Successfully updated psychologist user_id, reloading..."
+              );
+              // Recursively call the function to reload with fixed data
+              setTimeout(() => loadDashboardData(), 100);
+              return;
+            }
+          }
+
+          setLoading(false);
           return;
         }
 
         console.log("Found psychologist:", psychologist);
         console.log("Psychologist first_name:", psychologist.first_name);
         console.log("Psychologist last_name:", psychologist.last_name);
-        console.log("Psychologist name:", psychologist.name);
+        // Legacy `name` may be present during transition; prefer split fields
         console.log("Psychologist gender (sex) value:", psychologist.sex);
 
         // Use the psychologist's ID to load their data
@@ -930,7 +983,13 @@ const DashboardNew = () => {
         console.log("Loaded patients:", patientsData);
         console.log(
           "Patient avatar URLs:",
-          patientsData.map((p) => ({ name: p.name, avatar_url: p.avatar_url }))
+          patientsData.map((p) => ({
+            name:
+              [p.first_name, p.middle_name, p.last_name]
+                .filter(Boolean)
+                .join(" ") || p.name,
+            avatar_url: p.avatar_url,
+          }))
         );
         setPatients(patientsData);
 
@@ -962,25 +1021,29 @@ const DashboardNew = () => {
         setCalendarReloadKey((prev) => prev + 1);
 
         // Update profile form with psychologist data
-        console.log("Setting profile form sex to:", psychologist.sex);
-        setProfileForm((prev) => ({
-          ...prev,
-          first_name:
-            psychologist.first_name ||
-            (psychologist.name ? psychologist.name.split(" ")[0] : ""),
+        console.log("📋 Updating profile form with psychologist data:");
+        console.log("  - First Name:", psychologist.first_name);
+        console.log("  - Middle Name:", psychologist.middle_name);
+        console.log("  - Last Name:", psychologist.last_name);
+        console.log("  - Email:", psychologist.email);
+        console.log("  - Avatar URL:", psychologist.avatar_url);
+        console.log("  - Sex:", psychologist.sex);
+
+        const updatedProfileForm = {
+          first_name: psychologist.first_name || "",
           middle_name: psychologist.middle_name || "",
-          last_name:
-            psychologist.last_name ||
-            (psychologist.name
-              ? psychologist.name.split(" ").slice(1).join(" ")
-              : ""),
+          last_name: psychologist.last_name || "",
           email: psychologist.email || "",
           phone: psychologist.contact || "",
           license_number: psychologist.license_number || "",
           bio: psychologist.bio || "",
           sex: psychologist.sex || "",
           avatar_url: psychologist.avatar_url || "",
-        }));
+          profilePicture: null,
+        };
+
+        console.log("📋 Setting profileForm to:", updatedProfileForm);
+        setProfileForm(updatedProfileForm);
 
         // Load real appointment requests for this psychologist
         const pending =
@@ -1001,20 +1064,9 @@ const DashboardNew = () => {
     loadDashboardData();
   }, [user?.id]); // Only depend on user ID
 
-  // Initialize profile form when user data is available
-  useEffect(() => {
-    if (user?.id && !profileForm.email) {
-      // Only update if profileForm is empty
-      setProfileForm((prev) => ({
-        ...prev,
-        name: user.name || "",
-        email: user.email || "",
-        phone: user.phone || "",
-        license_number: user.license_number || "",
-        bio: user.bio || "",
-      }));
-    }
-  }, [user?.id]); // Only depend on user ID to prevent unnecessary re-renders
+  // Initialize profile form when user data is available - REMOVED
+  // This was conflicting with the psychologist data loading
+  // The main useEffect already populates profileForm with psychologist data
 
   // Notification helper function
   const showNotification = (type, title, message) => {
@@ -1183,7 +1235,7 @@ const DashboardNew = () => {
           const { data: psychologist } = await supabase
             .from("psychologists")
             .select(
-              "id, name, first_name, middle_name, last_name, email, contact, license_number, sex, avatar_url, bio"
+              "id, first_name, middle_name, last_name, email, contact, license_number, sex, avatar_url, bio"
             )
             .eq("user_id", user.id)
             .single();

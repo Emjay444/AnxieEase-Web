@@ -228,6 +228,21 @@ const AdminPanelNew = () => {
     errorMessage: "",
   });
 
+  // State for deactivation success modal
+  const [showDeactivateSuccessModal, setShowDeactivateSuccessModal] =
+    useState(false);
+  const [deactivateSuccessData, setDeactivateSuccessData] = useState({
+    psychologist: null,
+    action: "", // "activated" or "deactivated"
+  });
+
+  // State for general error modal
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorModalData, setErrorModalData] = useState({
+    title: "",
+    message: "",
+  });
+
   // State for patient actions
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [showPatientViewModal, setShowPatientViewModal] = useState(false);
@@ -264,16 +279,25 @@ const AdminPanelNew = () => {
       setPatients(patientsList);
 
       // Load psychologists
-      const psychologistsList = await psychologistService.getAllPsychologists();
-      console.log("Loaded psychologists:", psychologistsList);
-      console.log(
-        "Psychologist avatar URLs:",
-        psychologistsList.map((p) => ({
-          name: p.name,
-          avatar_url: p.avatar_url,
-        }))
-      );
-      setPsychologists(psychologistsList);
+      let psychologistsList = [];
+      try {
+        psychologistsList = await psychologistService.getAllPsychologists();
+        console.log("✅ Loaded psychologists:", psychologistsList);
+        console.log("✅ Psychologist count:", psychologistsList.length);
+        console.log(
+          "✅ Psychologist names:",
+          psychologistsList.map((p) => ({
+            name: getFullName(p),
+            email: p.email,
+            avatar_url: p.avatar_url,
+          }))
+        );
+        setPsychologists(psychologistsList);
+      } catch (psychError) {
+        console.error("❌ Error loading psychologists:", psychError);
+        // Set empty array as fallback
+        setPsychologists([]);
+      }
 
       // Load activity logs
       const logs = await adminService.getActivityLogs();
@@ -339,8 +363,24 @@ const AdminPanelNew = () => {
       // Close the modal immediately but keep loading state
       setShowAddPsychologistModal(false);
 
+      // Map the name fields from AddDoctorModal format to service format
+      const mappedPsychologist = {
+        ...psychologistWithStatus,
+        first_name:
+          psychologistWithStatus.firstName || psychologistWithStatus.first_name,
+        middle_name:
+          psychologistWithStatus.middleName ||
+          psychologistWithStatus.middle_name,
+        last_name:
+          psychologistWithStatus.lastName || psychologistWithStatus.last_name,
+        // Clean up the old format fields to avoid confusion
+        firstName: undefined,
+        middleName: undefined,
+        lastName: undefined,
+      };
+
       const newPsychologist = await psychologistService.createPsychologist(
-        psychologistWithStatus
+        mappedPsychologist
       );
 
       // Run these operations in parallel for better performance
@@ -407,8 +447,7 @@ const AdminPanelNew = () => {
   const handleEditPsychologist = (psychologist) => {
     setSelectedPsychologist(psychologist);
     setEditFormData({
-      name: psychologist.name || "",
-      email: psychologist.email || "",
+      name: getFullName(psychologist) || "",
       contact: psychologist.contact || "",
       specialization: psychologist.specialization || "",
     });
@@ -419,16 +458,25 @@ const AdminPanelNew = () => {
     try {
       setIsUpdatingPsychologist(true);
 
-      // Update in the database
-      const updatedPsychologist = await psychologistService.updatePsychologist(
+      // Update in the database with timeout
+      const updatePromise = psychologistService.updatePsychologist(
         selectedPsychologist.id,
         {
           name: editFormData.name,
-          email: editFormData.email,
           contact: editFormData.contact,
           specialization: editFormData.specialization,
         }
       );
+
+      // Add timeout to prevent UI hanging
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Update operation timed out")), 8000)
+      );
+
+      const updatedPsychologist = await Promise.race([
+        updatePromise,
+        timeoutPromise,
+      ]);
 
       // Update local state
       setPsychologists((prev) =>
@@ -441,13 +489,14 @@ const AdminPanelNew = () => {
       await adminService.logActivity(
         user?.id,
         "Edit Psychologist",
-        `Updated psychologist information: ${editFormData.name} (${editFormData.email})`
+        `Updated psychologist information: ${editFormData.name}`
       );
 
       // Refresh activity logs
       const updatedLogs = await adminService.getActivityLogs();
       setActivityLogs(updatedLogs);
 
+      // Show success message
       setSuccessMessage({
         title: "Psychologist Updated Successfully!",
         message: `${editFormData.name}'s information has been updated.`,
@@ -490,10 +539,17 @@ const AdminPanelNew = () => {
         )
       );
 
+      // Refresh dashboard statistics to reflect the change
+      await loadDashboardData();
+
       setShowOptionsMenu(null);
-      alert(
-        `Psychologist ${newStatus ? "activated" : "deactivated"} successfully!`
-      );
+
+      // Show custom success modal instead of browser alert
+      setDeactivateSuccessData({
+        psychologist: psychologist,
+        action: newStatus ? "activated" : "deactivated",
+      });
+      setShowDeactivateSuccessModal(true);
     } catch (error) {
       console.error("Error updating psychologist:", error);
 
@@ -506,7 +562,11 @@ const AdminPanelNew = () => {
         });
         setShowDeactivateBlockedModal(true);
       } else {
-        alert("❌ Failed to update psychologist status: " + error.message);
+        setErrorModalData({
+          title: "Update Failed",
+          message: "Failed to update psychologist status: " + error.message,
+        });
+        setShowErrorModal(true);
       }
     }
   };
@@ -693,7 +753,7 @@ const AdminPanelNew = () => {
                 psychologist.is_active ? "text-gray-900" : "text-gray-500"
               }`}
             >
-              {psychologist.name}
+              {getFullName(psychologist)}
             </h3>
             <p
               className={`text-sm ${
@@ -754,7 +814,7 @@ const AdminPanelNew = () => {
                   onClick={() => {
                     console.log(
                       "Delete button clicked for:",
-                      psychologist.name
+                      getFullName(psychologist)
                     );
                     setShowOptionsMenu(null);
                     setPsychologistToDelete(psychologist);
@@ -1406,25 +1466,23 @@ const AdminPanelNew = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {psychologists.filter(
-                (psychologist) =>
-                  psychologist.name
-                    .toLowerCase()
-                    .includes(psychologistSearchTerm.toLowerCase()) ||
-                  psychologist.email
-                    .toLowerCase()
-                    .includes(psychologistSearchTerm.toLowerCase())
-              ).length > 0 ? (
+              {psychologists.filter((psychologist) => {
+                const name = getFullName(psychologist).toLowerCase();
+                const term = psychologistSearchTerm.toLowerCase();
+                return (
+                  name.includes(term) ||
+                  (psychologist.email || "").toLowerCase().includes(term)
+                );
+              }).length > 0 ? (
                 psychologists
-                  .filter(
-                    (psychologist) =>
-                      psychologist.name
-                        .toLowerCase()
-                        .includes(psychologistSearchTerm.toLowerCase()) ||
-                      psychologist.email
-                        .toLowerCase()
-                        .includes(psychologistSearchTerm.toLowerCase())
-                  )
+                  .filter((psychologist) => {
+                    const name = getFullName(psychologist).toLowerCase();
+                    const term = psychologistSearchTerm.toLowerCase();
+                    return (
+                      name.includes(term) ||
+                      (psychologist.email || "").toLowerCase().includes(term)
+                    );
+                  })
                   .map((psychologist) => (
                     <PsychologistCard
                       key={psychologist.id}
@@ -1474,6 +1532,8 @@ const AdminPanelNew = () => {
                   <option value="assigned">Assigned Patients</option>
                   <option value="unassigned">Unassigned Patients</option>
                   <option value="name">Sort by Name</option>
+                  <option value="dateAsc">Date Added (Oldest First)</option>
+                  <option value="dateDesc">Date Added (Newest First)</option>
                 </select>
                 <button className="flex items-center px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
                   <Filter className="h-4 w-4 mr-2" />
@@ -1504,6 +1564,26 @@ const AdminPanelNew = () => {
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Assigned Psychologist
+                      </th>
+                      <th 
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                        onClick={() => {
+                          if (patientSortBy === 'dateAsc') {
+                            setPatientSortBy('dateDesc');
+                          } else {
+                            setPatientSortBy('dateAsc');
+                          }
+                        }}
+                      >
+                        <div className="flex items-center space-x-1">
+                          <span>Date Added</span>
+                          {patientSortBy === 'dateAsc' && (
+                            <ChevronDown className="h-4 w-4 rotate-180" />
+                          )}
+                          {patientSortBy === 'dateDesc' && (
+                            <ChevronDown className="h-4 w-4" />
+                          )}
+                        </div>
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Actions
@@ -1548,6 +1628,20 @@ const AdminPanelNew = () => {
                               }`.trim() ||
                               "Unknown";
                             return nameA.localeCompare(nameB);
+                          });
+                          break;
+                        case "dateAsc":
+                          filteredPatients = filteredPatients.sort((a, b) => {
+                            const dateA = new Date(a.created_at || a.date_added || 0);
+                            const dateB = new Date(b.created_at || b.date_added || 0);
+                            return dateA - dateB; // Oldest first
+                          });
+                          break;
+                        case "dateDesc":
+                          filteredPatients = filteredPatients.sort((a, b) => {
+                            const dateA = new Date(a.created_at || a.date_added || 0);
+                            const dateB = new Date(b.created_at || b.date_added || 0);
+                            return dateB - dateA; // Newest first
                           });
                           break;
                         case "all":
@@ -1611,13 +1705,22 @@ const AdminPanelNew = () => {
                                   <div className="flex items-center space-x-2">
                                     <UserCheck className="h-4 w-4 text-green-600" />
                                     <span className="text-green-600 font-medium">
-                                      {getFullName(
-                                        psychologists.find(
-                                          (p) =>
-                                            p.id ===
-                                            patient.assigned_psychologist_id
-                                        )
-                                      ) || "Unknown Psychologist"}
+                                      {loading ? (
+                                        <div className="flex items-center space-x-2">
+                                          <div className="w-4 h-4 border-2 border-green-300 border-t-green-600 rounded-full animate-spin"></div>
+                                          <span className="text-gray-500">
+                                            Loading psychologist...
+                                          </span>
+                                        </div>
+                                      ) : (
+                                        getFullName(
+                                          psychologists.find(
+                                            (p) =>
+                                              p.id ===
+                                              patient.assigned_psychologist_id
+                                          )
+                                        ) || "Unknown Psychologist"
+                                      )}
                                     </span>
                                   </div>
                                 ) : (
@@ -1629,6 +1732,17 @@ const AdminPanelNew = () => {
                                   </div>
                                 )}
                               </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {patient.created_at || patient.date_added
+                                ? new Date(
+                                    patient.created_at || patient.date_added
+                                  ).toLocaleDateString("en-US", {
+                                    year: "numeric",
+                                    month: "short",
+                                    day: "numeric"
+                                  })
+                                : "N/A"}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                               <div className="flex items-center space-x-2">
@@ -1663,7 +1777,7 @@ const AdminPanelNew = () => {
                         // Show no results message when search yields no results
                         return (
                           <tr>
-                            <td colSpan="3" className="px-6 py-12 text-center">
+                            <td colSpan="4" className="px-6 py-12 text-center">
                               <div className="flex flex-col items-center justify-center space-y-4">
                                 <div className="bg-gray-100 p-3 rounded-full">
                                   <svg
@@ -1704,7 +1818,7 @@ const AdminPanelNew = () => {
                         return (
                           <tr>
                             <td
-                              colSpan="3"
+                              colSpan="4"
                               className="px-6 py-8 text-center text-gray-500"
                             >
                               {loading
@@ -2218,6 +2332,40 @@ const AdminPanelNew = () => {
                             </p>
                           </div>
                         </div>
+                        <div className="flex items-start space-x-4 p-4 bg-gray-50 rounded-xl border border-gray-100">
+                          <Calendar className="h-5 w-5 text-emerald-600 mt-0.5 flex-shrink-0" />
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-700">
+                              Birth Date
+                            </p>
+                            <p className="text-gray-900 font-semibold">
+                              {selectedPsychologist.birth_date ? (
+                                <>
+                                  {new Date(
+                                    selectedPsychologist.birth_date
+                                  ).toLocaleDateString("en-US", {
+                                    year: "numeric",
+                                    month: "long",
+                                    day: "numeric",
+                                  })}{" "}
+                                  (
+                                  {Math.floor(
+                                    (Date.now() -
+                                      new Date(
+                                        selectedPsychologist.birth_date
+                                      ).getTime()) /
+                                      (365.25 * 24 * 60 * 60 * 1000)
+                                  )}{" "}
+                                  years old)
+                                </>
+                              ) : (
+                                <span className="text-gray-500 italic">
+                                  Not specified
+                                </span>
+                              )}
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -2385,21 +2533,14 @@ const AdminPanelNew = () => {
 
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-2">
-                  Email Address *
+                  Email Address
                 </label>
-                <input
-                  type="email"
-                  value={editFormData.email}
-                  onChange={(e) =>
-                    setEditFormData({ ...editFormData, email: e.target.value })
-                  }
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-gray-50/50 transition-all duration-200 hover:bg-white"
-                  required
-                />
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-2">
-                  <p className="text-xs text-blue-700 font-medium">
-                    💡 Changing email will require the psychologist to verify
-                    their new email address.
+                <div className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-100 text-gray-600">
+                  {selectedPsychologist?.email}
+                </div>
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mt-2">
+                  <p className="text-xs text-gray-600 font-medium">
+                    � Email addresses cannot be changed for security reasons.
                   </p>
                 </div>
               </div>
@@ -2419,6 +2560,35 @@ const AdminPanelNew = () => {
                   }
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-gray-50/50 transition-all duration-200 hover:bg-white"
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">
+                  Birth Date
+                </label>
+                <div className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-100 text-gray-600">
+                  {selectedPsychologist?.birth_date ? (
+                    <>
+                      {new Date(
+                        selectedPsychologist.birth_date
+                      ).toLocaleDateString()}{" "}
+                      (
+                      {Math.floor(
+                        (Date.now() -
+                          new Date(selectedPsychologist.birth_date).getTime()) /
+                          (365.25 * 24 * 60 * 60 * 1000)
+                      )}{" "}
+                      years old)
+                    </>
+                  ) : (
+                    "Not specified"
+                  )}
+                </div>
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mt-2">
+                  <p className="text-xs text-gray-600 font-medium">
+                    🔒 Birth date cannot be changed through the admin panel.
+                  </p>
+                </div>
               </div>
 
               <div>
@@ -2450,11 +2620,7 @@ const AdminPanelNew = () => {
               </button>
               <button
                 onClick={handleSavePsychologistChanges}
-                disabled={
-                  isUpdatingPsychologist ||
-                  !editFormData.name.trim() ||
-                  !editFormData.email.trim()
-                }
+                disabled={isUpdatingPsychologist || !editFormData.name.trim()}
                 className="px-6 py-3 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-xl hover:from-emerald-700 hover:to-emerald-800 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center transition-all duration-200 font-medium"
               >
                 {isUpdatingPsychologist && (
@@ -2648,92 +2814,129 @@ const AdminPanelNew = () => {
         </div>
       )}
 
-      {/* Activate/Deactivate Confirmation Modal */}
+      {/* Enhanced Activate/Deactivate Confirmation Modal */}
       {showActivateConfirmModal && psychologistToToggle && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 shadow-2xl max-w-md w-full mx-4">
-            <div className="flex items-center justify-center mb-6">
-              <div
-                className={`p-3 rounded-full ${
-                  psychologistToToggle.is_active
-                    ? "bg-orange-100"
-                    : "bg-green-100"
-                }`}
-              >
-                {psychologistToToggle.is_active ? (
-                  <svg
-                    className="h-6 w-6 text-orange-600"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636m12.728 12.728L18.364 5.636M5.636 18.364l12.728-12.728"
-                    />
-                  </svg>
-                ) : (
-                  <svg
-                    className="h-6 w-6 text-green-600"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                )}
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-md"
+            onClick={() => {
+              setShowActivateConfirmModal(false);
+              setPsychologistToToggle(null);
+            }}
+          ></div>
+
+          {/* Modal content */}
+          <div className="relative bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden border border-white/20">
+            <div className="p-6">
+              {/* Icon and title */}
+              <div className="flex items-center mb-6">
+                <div
+                  className={`flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center ${
+                    psychologistToToggle.is_active
+                      ? "bg-orange-100"
+                      : "bg-green-100"
+                  }`}
+                >
+                  {psychologistToToggle.is_active ? (
+                    <UserX className="h-6 w-6 text-orange-600" />
+                  ) : (
+                    <UserCheck className="h-6 w-6 text-green-600" />
+                  )}
+                </div>
+                <div className="ml-4">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    {psychologistToToggle.is_active ? "Deactivate" : "Activate"}{" "}
+                    Psychologist
+                  </h3>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {psychologistToToggle.is_active
+                      ? "Restrict access"
+                      : "Grant access"}
+                  </p>
+                </div>
               </div>
-            </div>
 
-            <div className="text-center mb-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                {psychologistToToggle.is_active ? "Deactivate" : "Activate"}{" "}
-                Psychologist
-              </h3>
-              <p className="text-sm text-gray-600 mb-4">
-                Are you sure you want to{" "}
-                {psychologistToToggle.is_active ? "deactivate" : "activate"}{" "}
-                <strong>{psychologistToToggle.name}</strong>?
-              </p>
-              {psychologistToToggle.is_active && (
-                <p className="text-xs text-orange-600">
-                  ⚠️ This will prevent the psychologist from accessing their
-                  account and seeing patients.
+              {/* Content */}
+              <div className="mb-6">
+                <p className="text-gray-600 mb-4">
+                  Are you sure you want to{" "}
+                  {psychologistToToggle.is_active ? "deactivate" : "activate"}{" "}
+                  <strong className="text-gray-900">
+                    {getFullName(psychologistToToggle)}
+                  </strong>
+                  ?
                 </p>
-              )}
-            </div>
 
-            <div className="flex space-x-3">
-              <button
-                onClick={() => {
-                  setShowActivateConfirmModal(false);
-                  setPsychologistToToggle(null);
-                }}
-                className="flex-1 bg-gray-100 text-gray-900 py-2.5 px-4 rounded-lg hover:bg-gray-200 transition-colors font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  handleDeactivatePsychologist(psychologistToToggle);
-                  setShowActivateConfirmModal(false);
-                  setPsychologistToToggle(null);
-                }}
-                className={`flex-1 py-2.5 px-4 rounded-lg transition-colors font-medium text-white ${
-                  psychologistToToggle.is_active
-                    ? "bg-orange-600 hover:bg-orange-700"
-                    : "bg-green-600 hover:bg-green-700"
-                }`}
-              >
-                {psychologistToToggle.is_active ? "Deactivate" : "Activate"}
-              </button>
+                <div
+                  className={`${
+                    psychologistToToggle.is_active
+                      ? "bg-orange-50 border-orange-200"
+                      : "bg-green-50 border-green-200"
+                  } border rounded-lg p-4`}
+                >
+                  <div className="flex items-start">
+                    {psychologistToToggle.is_active ? (
+                      <AlertTriangle className="w-5 h-5 text-orange-600 mt-0.5 mr-3 flex-shrink-0" />
+                    ) : (
+                      <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 mr-3 flex-shrink-0" />
+                    )}
+                    <div
+                      className={`text-sm ${
+                        psychologistToToggle.is_active
+                          ? "text-orange-800"
+                          : "text-green-800"
+                      }`}
+                    >
+                      <p className="font-medium mb-2">
+                        {psychologistToToggle.is_active
+                          ? "Deactivation Effects:"
+                          : "Activation Effects:"}
+                      </p>
+                      {psychologistToToggle.is_active ? (
+                        <ul className="list-disc list-inside space-y-1 text-orange-700">
+                          <li>Will not be able to access their account</li>
+                          <li>Cannot receive new patient assignments</li>
+                          <li>Existing patients will need reassignment</li>
+                        </ul>
+                      ) : (
+                        <ul className="list-disc list-inside space-y-1 text-green-700">
+                          <li>Will regain access to their account</li>
+                          <li>Can receive new patient assignments</li>
+                          <li>Can resume providing services</li>
+                        </ul>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => {
+                    setShowActivateConfirmModal(false);
+                    setPsychologistToToggle(null);
+                  }}
+                  className="flex-1 bg-gray-100 text-gray-900 py-3 px-4 rounded-lg hover:bg-gray-200 transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-gray-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    handleDeactivatePsychologist(psychologistToToggle);
+                    setShowActivateConfirmModal(false);
+                    setPsychologistToToggle(null);
+                  }}
+                  className={`flex-1 py-3 px-4 rounded-lg text-sm font-medium transition-colors focus:outline-none focus:ring-2 text-white ${
+                    psychologistToToggle.is_active
+                      ? "bg-orange-600 hover:bg-orange-700 focus:ring-orange-500"
+                      : "bg-green-600 hover:bg-green-700 focus:ring-green-500"
+                  }`}
+                >
+                  {psychologistToToggle.is_active ? "Deactivate" : "Activate"}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -3015,13 +3218,22 @@ const AdminPanelNew = () => {
                         </label>
                         <p className="text-emerald-800 text-sm font-bold">
                           {selectedPatient.assigned_psychologist_id ? (
-                            getFullName(
-                              psychologists.find(
-                                (p) =>
-                                  p.id ===
-                                  selectedPatient.assigned_psychologist_id
-                              )
-                            ) || "Unknown Psychologist"
+                            loading ? (
+                              <div className="flex items-center space-x-2">
+                                <div className="w-4 h-4 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin"></div>
+                                <span className="text-gray-500">
+                                  Loading...
+                                </span>
+                              </div>
+                            ) : (
+                              getFullName(
+                                psychologists.find(
+                                  (p) =>
+                                    p.id ===
+                                    selectedPatient.assigned_psychologist_id
+                                )
+                              ) || "Unknown Psychologist"
+                            )
                           ) : (
                             <span className="text-amber-600 font-medium bg-amber-100 px-2 py-1 rounded-lg">
                               Unassigned
@@ -3220,12 +3432,20 @@ const AdminPanelNew = () => {
                     />
                     <div>
                       <p className="text-blue-900 font-bold text-sm">
-                        {getFullName(
-                          psychologists.find(
-                            (p) =>
-                              p.id === patientToAssign.assigned_psychologist_id
-                          )
-                        ) || "Unknown Psychologist"}
+                        {loading ? (
+                          <div className="flex items-center space-x-2">
+                            <div className="w-4 h-4 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin"></div>
+                            <span className="text-gray-500">Loading...</span>
+                          </div>
+                        ) : (
+                          getFullName(
+                            psychologists.find(
+                              (p) =>
+                                p.id ===
+                                patientToAssign.assigned_psychologist_id
+                            )
+                          ) || "Unknown Psychologist"
+                        )}
                       </p>
                       <p className="text-blue-600 text-xs font-medium">
                         Psychologist
@@ -3629,7 +3849,7 @@ const AdminPanelNew = () => {
               <div className="mb-6">
                 <p className="text-gray-600 mb-4">
                   <strong className="text-gray-900">
-                    {deactivateBlockedData.psychologist.name}
+                    {getFullName(deactivateBlockedData.psychologist)}
                   </strong>{" "}
                   cannot be deactivated because they have active patient
                   assignments.
@@ -3679,6 +3899,174 @@ const AdminPanelNew = () => {
                   className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3 px-4 rounded-lg text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 >
                   Go to Patients Tab
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Deactivation Success Modal */}
+      {showDeactivateSuccessModal && deactivateSuccessData.psychologist && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-md"
+            onClick={() => {
+              setShowDeactivateSuccessModal(false);
+              setDeactivateSuccessData({
+                psychologist: null,
+                action: "",
+              });
+            }}
+          ></div>
+
+          {/* Modal content */}
+          <div className="relative bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden border border-white/20">
+            <div className="p-6">
+              {/* Success icon and title */}
+              <div className="flex items-center mb-6">
+                <div className="flex-shrink-0 w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                  <CheckCircle className="h-6 w-6 text-green-600" />
+                </div>
+                <div className="ml-4">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Psychologist{" "}
+                    {deactivateSuccessData.action === "activated"
+                      ? "Activated"
+                      : "Deactivated"}
+                  </h3>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Status updated successfully
+                  </p>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="mb-6">
+                <p className="text-gray-600 mb-4">
+                  <strong className="text-gray-900">
+                    {getFullName(deactivateSuccessData.psychologist)}
+                  </strong>{" "}
+                  has been {deactivateSuccessData.action} successfully.
+                </p>
+
+                <div
+                  className={`${
+                    deactivateSuccessData.action === "activated"
+                      ? "bg-green-50 border-green-200"
+                      : "bg-orange-50 border-orange-200"
+                  } border rounded-lg p-4`}
+                >
+                  <div className="flex items-start">
+                    {deactivateSuccessData.action === "activated" ? (
+                      <UserCheck className="w-5 h-5 text-green-600 mt-0.5 mr-3 flex-shrink-0" />
+                    ) : (
+                      <UserX className="w-5 h-5 text-orange-600 mt-0.5 mr-3 flex-shrink-0" />
+                    )}
+                    <div
+                      className={`text-sm ${
+                        deactivateSuccessData.action === "activated"
+                          ? "text-green-800"
+                          : "text-orange-800"
+                      }`}
+                    >
+                      <p className="font-medium mb-2">Status Updated:</p>
+                      <p className="mb-1">
+                        The psychologist is now{" "}
+                        <strong>
+                          {deactivateSuccessData.action === "activated"
+                            ? "Active"
+                            : "Inactive"}
+                        </strong>
+                        {deactivateSuccessData.action === "activated"
+                          ? " and can receive new patient assignments."
+                          : " and cannot receive new patient assignments."}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action button */}
+              <div className="flex">
+                <button
+                  onClick={() => {
+                    setShowDeactivateSuccessModal(false);
+                    setDeactivateSuccessData({
+                      psychologist: null,
+                      action: "",
+                    });
+                  }}
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3 px-4 rounded-lg text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  OK
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* General Error Modal */}
+      {showErrorModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-md"
+            onClick={() => {
+              setShowErrorModal(false);
+              setErrorModalData({
+                title: "",
+                message: "",
+              });
+            }}
+          ></div>
+
+          {/* Modal content */}
+          <div className="relative bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden border border-white/20">
+            <div className="p-6">
+              {/* Error icon and title */}
+              <div className="flex items-center mb-6">
+                <div className="flex-shrink-0 w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                  <AlertTriangle className="h-6 w-6 text-red-600" />
+                </div>
+                <div className="ml-4">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    {errorModalData.title}
+                  </h3>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Something went wrong
+                  </p>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="mb-6">
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <div className="flex items-start">
+                    <X className="w-5 h-5 text-red-600 mt-0.5 mr-3 flex-shrink-0" />
+                    <div className="text-sm text-red-800">
+                      <p className="font-medium mb-2">Error Details:</p>
+                      <p>{errorModalData.message}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action button */}
+              <div className="flex">
+                <button
+                  onClick={() => {
+                    setShowErrorModal(false);
+                    setErrorModalData({
+                      title: "",
+                      message: "",
+                    });
+                  }}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white py-3 px-4 rounded-lg text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+                >
+                  OK
                 </button>
               </div>
             </div>

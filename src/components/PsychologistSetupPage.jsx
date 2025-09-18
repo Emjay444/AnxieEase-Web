@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { psychologistAuthService } from "../services/psychologistAuthService";
 import { psychologistService } from "../services/psychologistService";
 import { psychologistSetupService } from "../services/psychologistSetupService";
+import { immediatePasswordService } from "../services/immediatePasswordService";
+import { directPasswordService } from "../services/directPasswordService";
 import { supabase } from "../services/supabaseClient";
 import {
   Mail,
@@ -17,6 +19,7 @@ import {
 
 const PsychologistSetupPage = () => {
   const { email, inviteCode } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     email: email || "",
@@ -24,26 +27,152 @@ const PsychologistSetupPage = () => {
     confirmPassword: "",
   });
   const [errors, setErrors] = useState({});
+  const [passwordPreUpdated, setPasswordPreUpdated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [sessionData, setSessionData] = useState(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [source, setSource] = useState("invite");
+  const [flowType, setFlowType] = useState("account_creation");
+
+  // After success, auto-redirect to login (except for verification which already redirects)
+  useEffect(() => {
+    if (showSuccessModal && flowType !== "email_verification") {
+      const t = setTimeout(() => {
+        navigate("/login");
+      }, 2500);
+      return () => clearTimeout(t);
+    }
+  }, [showSuccessModal, flowType, navigate]);
 
   useEffect(() => {
     const initializeSetup = async () => {
       try {
-        // Handle magic link auth callback first
-        const { data: authCallbackData, error: callbackError } =
-          await supabase.auth.getSession();
+        console.log("🔧 Initializing psychologist setup...");
+        console.log("🔗 Current URL:", window.location.href);
+        console.log("🔑 URL Hash:", window.location.hash);
+
+        // Mark that we're in the setup flow so other parts of the app avoid auto-signout checks
+        try {
+          localStorage.setItem("isInPsychologistSetupFlow", "true");
+        } catch (_) {}
+
+        // Handle magic link auth callback first (parse access_token from URL hash)
+        let authCallbackData = null;
+        let callbackError = null;
+
+        if (
+          window.location.hash &&
+          window.location.hash.includes("access_token")
+        ) {
+          console.log("🔐 Processing magic link callback from URL hash...");
+
+          // Parse the hash parameters manually since getSessionFromUrl is deprecated
+          const hashParams = new URLSearchParams(
+            window.location.hash.substring(1)
+          );
+          const accessToken = hashParams.get("access_token");
+          const refreshToken = hashParams.get("refresh_token");
+          const expiresAt = hashParams.get("expires_at");
+
+          if (accessToken && refreshToken) {
+            // Persist tokens for later recovery in case the page reloads before submit
+            try {
+              localStorage.setItem("setupAccessToken", accessToken);
+              localStorage.setItem("setupRefreshToken", refreshToken);
+              if (expiresAt) localStorage.setItem("setupExpiresAt", expiresAt);
+            } catch (_) {}
+
+            // Set the session using the parsed tokens
+            const { data, error } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+            authCallbackData = data;
+            callbackError = error;
+            console.log("🔐 Magic link callback result:", { data, error });
+          } else {
+            console.log(
+              "🔍 Hash present but no tokens found, checking existing session..."
+            );
+            const { data, error } = await supabase.auth.getSession();
+            authCallbackData = data;
+            callbackError = error;
+          }
+
+          // Clean the hash from the URL
+          window.history.replaceState(
+            {},
+            document.title,
+            window.location.pathname + window.location.search
+          );
+        } else {
+          console.log("🔍 No hash detected, checking existing session...");
+          let { data, error } = await supabase.auth.getSession();
+          authCallbackData = data;
+          callbackError = error;
+          console.log("🔍 Existing session result:", { data, error });
+
+          // If no session, try to restore from stored magic-link tokens
+          if (!data?.session) {
+            try {
+              const storedAccess = localStorage.getItem("setupAccessToken");
+              const storedRefresh = localStorage.getItem("setupRefreshToken");
+              if (storedAccess && storedRefresh) {
+                console.log(
+                  "🔄 Restoring session from stored magic-link tokens..."
+                );
+                const restore = await supabase.auth.setSession({
+                  access_token: storedAccess,
+                  refresh_token: storedRefresh,
+                });
+                authCallbackData = restore?.data;
+                callbackError = restore?.error || null;
+                console.log("🔄 Restore result:", restore);
+              }
+            } catch (e) {
+              console.log("Restore failed:", e?.message);
+            }
+          }
+        }
 
         if (callbackError) {
-          console.error("Auth callback error:", callbackError);
+          console.error("❌ Auth callback error:", callbackError);
         }
 
         // Check for URL parameters
         const urlParams = new URLSearchParams(window.location.search);
         const urlEmail = urlParams.get("email");
         const urlPsychId = urlParams.get("psychologist_id");
+        const urlSource = urlParams.get("source");
+        const urlFlow = urlParams.get("flow");
+
+        if (urlSource) setSource(urlSource);
+        if (urlFlow) setFlowType(urlFlow);
+
+        console.log("🔍 Detected flow type:", urlFlow || "account_creation");
+        console.log("🔍 Detected source:", urlSource || "invite");
+
+        // Handle email verification flow - just verify and redirect
+        if (urlFlow === "email_verification") {
+          console.log("📧 Email verification flow detected");
+
+          // If we have a valid session from the magic link, the email is verified
+          if (authCallbackData?.session) {
+            console.log(
+              "✅ Email verified successfully for:",
+              authCallbackData.session.user.email
+            );
+
+            // Show success and redirect
+            setShowSuccessModal(true);
+            setTimeout(() => {
+              navigate("/login");
+            }, 3000);
+            setLoading(false);
+            return;
+          }
+        }
 
         let workingEmail = null;
         let psychologistId = null;
@@ -57,21 +186,68 @@ const PsychologistSetupPage = () => {
 
           console.log("Found active session for:", workingEmail);
 
+          // Debug: Log session details
+          console.log("🔍 DEBUG: Active session details:", {
+            userId: currentSession.user.id,
+            email: currentSession.user.email,
+            hasValidSession: !!currentSession.access_token,
+          });
+
           // Store session data for persistence
           localStorage.setItem("setupEmail", workingEmail);
 
+          // Store the complete session object for later use
+          if (currentSession.access_token && currentSession.refresh_token) {
+            // Store the session data in a way that won't be affected by auth state changes
+            const sessionForSetup = {
+              access_token: currentSession.access_token,
+              refresh_token: currentSession.refresh_token,
+              user: {
+                id: currentSession.user.id,
+                email: currentSession.user.email,
+              },
+              expires_at: currentSession.expires_at,
+            };
+            localStorage.setItem(
+              "psychologistSetupSession",
+              JSON.stringify(sessionForSetup)
+            );
+            console.log("🔒 Stored complete session for setup persistence");
+            // Also keep in state
+            setSessionData(sessionForSetup);
+          }
+
           // Try to update psychologist user_id
           try {
-            await psychologistService.updatePsychologistUserId(
+            console.log(
+              "🔄 Updating psychologist user_id for:",
               workingEmail,
+              "->",
               currentSession.user.id
+            );
+            const updateResult =
+              await psychologistService.updatePsychologistUserId(
+                workingEmail,
+                currentSession.user.id
+              );
+            console.log(
+              "✅ Successfully updated psychologist user_id:",
+              updateResult
             );
           } catch (updateError) {
             console.error(
-              "Failed to update psychologist user_id:",
+              "❌ Failed to update psychologist user_id:",
               updateError
             );
+            // Don't fail the entire flow just because of this - psychologist might still exist
           }
+
+          // Debug: Verify session is still available after setup
+          console.log("🔍 DEBUG: Session after user_id update:", {
+            hasSession: !!currentSession,
+            userId: currentSession?.user?.id,
+            email: currentSession?.user?.email,
+          });
         } else {
           // Fallback to URL params or localStorage
           workingEmail = urlEmail || localStorage.getItem("setupEmail");
@@ -97,20 +273,31 @@ const PsychologistSetupPage = () => {
 
         setLoading(false);
       } catch (error) {
-        console.error("Setup initialization error:", error);
+        console.error("❌ Setup initialization error:", error);
 
         // Try to recover email from localStorage as last resort
         const storedEmail = localStorage.getItem("setupEmail");
         if (storedEmail) {
+          console.log("🔄 Recovering email from localStorage:", storedEmail);
           setFormData((prev) => ({
             ...prev,
             email: storedEmail,
           }));
+
+          // If we have a stored email, don't show the full error - allow them to try setup
+          setLoading(false);
+          return;
         }
 
+        // Only show error if we couldn't recover any email
+        console.error("❌ Could not recover setup session or email");
         setErrors({
           general:
-            "Setup session expired or invalid. Please use the setup link from your email again.",
+            "Setup session could not be verified. This might happen if:\n" +
+            "• The setup link has expired (links expire after 24 hours)\n" +
+            "• You're already logged in as another user\n" +
+            "• The link was already used\n\n" +
+            "Please request a new setup link from your administrator or try opening the link in a private/incognito browser window.",
         });
         setLoading(false);
       }
@@ -166,15 +353,95 @@ const PsychologistSetupPage = () => {
     try {
       setLoading(true);
 
+      // Debug: Check current session state before submit
+      console.log("🔍 DEBUG: Session state at form submit:", {
+        sessionData: !!sessionData,
+        sessionUserId: sessionData?.user?.id,
+        sessionEmail: sessionData?.user?.email,
+      });
+
+      // Also check what supabase says about current session
+      const { data: currentCheck } = await supabase.auth.getSession();
+      console.log("🔍 DEBUG: Current supabase session at submit:", {
+        hasSession: !!currentCheck?.session,
+        userId: currentCheck?.session?.user?.id,
+        email: currentCheck?.session?.user?.email,
+      });
+
+      // If AuthContext signed out the user but we have stored tokens, don't restore here
+      // Instead, pass the session data directly to the service
+      if (!currentCheck?.session && sessionData?.access_token) {
+        console.log(
+          "🔄 Session not active, will pass stored session to service..."
+        );
+      }
+
+      // Try direct API approach first (bypasses session issues)
+      if (
+        (sessionData?.access_token &&
+          sessionData?.refresh_token &&
+          sessionData?.user?.id) ||
+        (localStorage.getItem("setupAccessToken") &&
+          localStorage.getItem("setupRefreshToken"))
+      ) {
+        console.log("🔄 Attempting direct API setup completion...");
+        try {
+          const access =
+            sessionData?.access_token ||
+            localStorage.getItem("setupAccessToken");
+          const refresh =
+            sessionData?.refresh_token ||
+            localStorage.getItem("setupRefreshToken");
+          const userId =
+            sessionData?.user?.id || currentCheck?.session?.user?.id;
+          await directPasswordService.completeSetupDirectly(
+            formData.email,
+            formData.password,
+            access,
+            refresh,
+            userId
+          );
+
+          console.log("✅ Setup completed successfully via direct API");
+
+          // Clear setup data from localStorage
+          await psychologistSetupService.cleanupSetupSession();
+
+          // Clear password update flags
+          immediatePasswordService.clearPasswordUpdatedFlag();
+
+          // Success! Show success modal
+          setShowSuccessModal(true);
+          return; // Exit early on success
+        } catch (directError) {
+          console.error("❌ Direct API setup failed:", directError);
+          // Fall back to regular service
+        }
+      }
+
+      // Fallback: Use the regular setup service
+      console.log("🔄 Falling back to regular setup service...");
+
+      // Check if password was already updated, if so, skip password update in service
+      if (passwordPreUpdated) {
+        console.log(
+          "✅ Password was already updated, proceeding with account activation only"
+        );
+      }
+
       // Use the dedicated setup service to complete setup
       await psychologistSetupService.completeSetup(
         formData.email,
-        formData.password,
-        sessionData
+        passwordPreUpdated ? null : formData.password, // Pass null if already updated
+        sessionData,
+        flowType
       );
 
       // Clear setup data from localStorage
       await psychologistSetupService.cleanupSetupSession();
+
+      // Clear password update flags
+      immediatePasswordService.clearPasswordUpdatedFlag();
 
       // Success! Show success modal
       setShowSuccessModal(true);
@@ -187,11 +454,39 @@ const PsychologistSetupPage = () => {
       });
     } finally {
       setLoading(false);
+      // Clear the setup flow flag once we're done interacting
+      try {
+        localStorage.removeItem("isInPsychologistSetupFlow");
+      } catch (_) {}
     }
   };
 
   const togglePasswordVisibility = () => {
     setShowPassword(!showPassword);
+  };
+
+  // Handle password input and update immediately if we have a session
+  const handlePasswordChange = async (e) => {
+    const newPassword = e.target.value;
+    setFormData((prev) => ({ ...prev, password: newPassword }));
+
+    // If password is at least 6 characters and we have session data, update immediately
+    if (newPassword.length >= 6 && sessionData && !passwordPreUpdated) {
+      try {
+        console.log("🔄 Attempting immediate password update...");
+        await immediatePasswordService.updatePasswordImmediately(
+          newPassword,
+          formData.email
+        );
+        setPasswordPreUpdated(true);
+        console.log("✅ Password updated immediately during typing");
+      } catch (error) {
+        console.warn(
+          "⚠️ Immediate password update failed, will try again on submit:",
+          error.message
+        );
+      }
+    }
   };
 
   if (loading) {
@@ -226,7 +521,11 @@ const PsychologistSetupPage = () => {
             Anxie<span className="text-emerald-300">Ease</span>
           </h1>
           <p className="mt-1 text-emerald-100/90 drop-shadow-sm">
-            Complete your psychologist account setup
+            {flowType === "password_reset"
+              ? "Set a new password to secure your account"
+              : flowType === "account_creation"
+              ? "Complete your psychologist account setup"
+              : "Set up your account"}
           </p>
         </div>
 
@@ -238,7 +537,9 @@ const PsychologistSetupPage = () => {
               <Mail className="w-5 h-5 text-emerald-600" />
               <div>
                 <p className="text-sm font-medium text-emerald-700">
-                  Setting up account for:
+                  {flowType === "password_reset"
+                    ? "Resetting password for:"
+                    : "Setting up account for:"}
                 </p>
                 <p className="text-sm text-emerald-600 font-semibold">
                   {formData.email}
@@ -246,7 +547,9 @@ const PsychologistSetupPage = () => {
               </div>
             </div>
             <p className="text-xs text-emerald-600 mt-2">
-              This email was invited by an administrator
+              {flowType === "password_reset"
+                ? "This secure link lets you set a new password."
+                : "This email was invited by an administrator"}
             </p>
           </div>
 
@@ -297,7 +600,10 @@ const PsychologistSetupPage = () => {
                   id="password"
                   name="password"
                   value={formData.password}
-                  onChange={handleInputChange}
+                  onChange={(e) => {
+                    handleInputChange(e);
+                    handlePasswordChange(e);
+                  }}
                   className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition duration-200"
                   placeholder="Enter your password"
                 />
@@ -399,10 +705,14 @@ const PsychologistSetupPage = () => {
                   <CheckCircle className="h-8 w-8 text-emerald-600" />
                 </div>
                 <h3 className="text-2xl font-bold text-gray-900 mb-2">
-                  🎉 Setup Complete!
+                  {flowType === "email_verification"
+                    ? "📧 Email Verified!"
+                    : "🎉 Setup Complete!"}
                 </h3>
                 <p className="text-gray-600">
-                  Your psychologist account has been successfully set up.
+                  {flowType === "email_verification"
+                    ? "Your new email address has been successfully verified."
+                    : "Your psychologist account has been successfully set up."}
                 </p>
               </div>
 
@@ -412,13 +722,31 @@ const PsychologistSetupPage = () => {
                   <div className="flex items-start">
                     <CheckCircle className="w-5 h-5 text-emerald-600 mt-0.5 mr-3 flex-shrink-0" />
                     <div className="text-sm text-emerald-800">
-                      <p className="font-medium mb-2">What's Next:</p>
+                      <p className="font-medium mb-2">
+                        {flowType === "email_verification"
+                          ? "Email Change Complete:"
+                          : "What's Next:"}
+                      </p>
                       <ul className="space-y-1">
-                        <li>✅ Your account is now active</li>
-                        <li>✅ You can log in with your email and password</li>
-                        <li>
-                          ✅ Start managing your patients and appointments
-                        </li>
+                        {flowType === "email_verification" ? (
+                          <>
+                            <li>✅ Your email address has been updated</li>
+                            <li>
+                              ✅ You can continue using your account normally
+                            </li>
+                            <li>✅ Use your new email for future logins</li>
+                          </>
+                        ) : (
+                          <>
+                            <li>✅ Your account is now active</li>
+                            <li>
+                              ✅ You can log in with your email and password
+                            </li>
+                            <li>
+                              ✅ Start managing your patients and appointments
+                            </li>
+                          </>
+                        )}
                       </ul>
                     </div>
                   </div>

@@ -1,4 +1,5 @@
 import { supabase } from "./supabaseClient";
+import { getFullName } from "../utils/helpers";
 
 // Mock data for development
 const mockActivityLogs = [
@@ -114,6 +115,72 @@ const mockUsers = [
 ];
 
 export const adminService = {
+  // Fix admin user role metadata
+  async fixAdminRole(email = null) {
+    try {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError) throw userError;
+      if (!user) throw new Error("No user logged in");
+
+      // If email is provided, verify it matches current user
+      if (email && user.email !== email) {
+        throw new Error(
+          "Email mismatch - please log in with the admin account"
+        );
+      }
+
+      console.log("Current user metadata:", user.user_metadata);
+
+      // Update user metadata to include admin role
+      const { data, error } = await supabase.auth.updateUser({
+        data: {
+          role: "admin",
+          ...user.user_metadata, // preserve other metadata
+        },
+      });
+
+      if (error) throw error;
+
+      console.log("Admin role updated successfully");
+      return { success: true, message: "Admin role updated successfully" };
+    } catch (error) {
+      console.error("Error fixing admin role:", error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Check current user role and metadata
+  async debugUserRole() {
+    try {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError) throw userError;
+      if (!user) throw new Error("No user logged in");
+
+      console.log("=== USER ROLE DEBUG ===");
+      console.log("User email:", user.email);
+      console.log("User ID:", user.id);
+      console.log("User metadata:", user.user_metadata);
+      console.log("Role in metadata:", user.user_metadata?.role);
+
+      return {
+        email: user.email,
+        id: user.id,
+        metadata: user.user_metadata,
+        role: user.user_metadata?.role,
+      };
+    } catch (error) {
+      console.error("Error debugging user role:", error);
+      return { error: error.message };
+    }
+  },
   // Helper function to replace UUIDs with names in activity details
   async replaceIdsWithNames(details) {
     if (!details || typeof details !== "string") return details;
@@ -474,7 +541,7 @@ export const adminService = {
       const { data, error } = await supabase.from("user_profiles").select(
         `
           *,
-          psychologists:assigned_psychologist_id(name)
+          psychologists:assigned_psychologist_id(first_name,middle_name,last_name)
         `
       );
 
@@ -547,7 +614,9 @@ export const adminService = {
           hour12: true,
         }),
         assigned_psychologist_id: patient.assigned_psychologist_id || null,
-        assigned_psychologist_name: patient.psychologists?.name || null,
+        assigned_psychologist_name: patient.psychologists
+          ? getFullName(patient.psychologists)
+          : null,
         is_active: patient.is_email_verified,
       }));
     } catch (error) {
@@ -576,7 +645,7 @@ export const adminService = {
         // Try to get psychologist name from psychologists table first
         const { data: psychData, error: psychError } = await supabase
           .from("psychologists")
-          .select("name")
+          .select("first_name, middle_name, last_name")
           .eq("id", psychologistId)
           .single();
 
@@ -601,7 +670,7 @@ export const adminService = {
             psychologistName = "Unknown Psychologist";
           }
         } else {
-          psychologistName = psychData.name || "Unknown Psychologist";
+          psychologistName = getFullName(psychData) || "Unknown Psychologist";
         }
       }
 

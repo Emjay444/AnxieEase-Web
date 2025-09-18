@@ -1,5 +1,6 @@
 import { supabase } from "./supabaseClient";
 import { adminService } from "./adminService";
+import { getFullName, getFullNameParts } from "../utils/helpers";
 
 // In-memory storage for development - will be removed once database works
 const mockStorage = {
@@ -149,6 +150,17 @@ export const psychologistService = {
       // Generate a UUID for the psychologist
       const psychologistId = crypto.randomUUID();
 
+      // Parse name inputs; supports either `name` or split fields
+      const parsed = getFullNameParts({
+        first_name: psychologistData.first_name,
+        middle_name: psychologistData.middle_name,
+        last_name: psychologistData.last_name,
+      });
+      const fullNameForLogs = getFullName({
+        ...parsed,
+        email: psychologistData.email,
+      });
+
       // Create the psychologist record and send email in parallel for better performance
       const [psychResult, emailResult] = await Promise.allSettled([
         // Create the psychologist record
@@ -157,9 +169,13 @@ export const psychologistService = {
           .insert([
             {
               id: psychologistId,
-              name: psychologistData.name,
+              // Prefer split fields; transition trigger keeps legacy `name` in sync
+              first_name: parsed.first_name || null,
+              middle_name: parsed.middle_name || null,
+              last_name: parsed.last_name || null,
               email: psychologistData.email,
               contact: psychologistData.contact,
+              birth_date: psychologistData.birthdate || null,
               license_number: psychologistData.licenseNumber,
               sex: psychologistData.sex,
               is_active:
@@ -181,14 +197,15 @@ export const psychologistService = {
               psychologistData.email
             )}&psychologist_id=${encodeURIComponent(
               psychologistId
-            )}&source=admin_invite`,
-            // Magic link expires in 1 hour (3600 seconds) - Supabase default
-            // You can customize this by adding: shouldCreateUser: false, expiry: 7200 (for 2 hours)
+            )}&source=admin_invite&setup=true&flow=account_creation`,
+            // Extend magic link expiration to 24 hours (86400 seconds) for better user experience
+            shouldCreateUser: true, // Create a new auth user for the magic link to work
             data: {
               role: "psychologist",
               psychologistId: psychologistId,
-              name: psychologistData.name,
+              name: fullNameForLogs,
               email: psychologistData.email,
+              setupMode: true, // Flag to indicate this is a setup session
             },
           },
         }),
@@ -211,8 +228,8 @@ export const psychologistService = {
           emailResult.status === "rejected"
             ? emailResult.reason
             : emailResult.value.error;
-        console.warn(
-          "Magic link email failed, but psychologist created:",
+        console.error(
+          "❌ Magic link email failed, but psychologist created:",
           error.message
         );
 
@@ -224,6 +241,12 @@ export const psychologistService = {
         };
       }
 
+      // Log successful email sending
+      console.log(
+        "✅ Magic link email sent successfully to:",
+        psychologistData.email
+      );
+
       // Log the activity for admin tracking
       try {
         const { data: currentUser } = await supabase.auth.getUser();
@@ -233,7 +256,7 @@ export const psychologistService = {
           await adminService.logActivity(
             currentUserId,
             "Create Psychologist Account",
-            `Created psychologist account for ${psychologistData.name} (${
+            `Created psychologist account for ${fullNameForLogs} (${
               psychologistData.email
             }). Status: ${
               psychologistData.is_active ? "Active" : "Pending Setup"
@@ -262,42 +285,40 @@ export const psychologistService = {
   // Update psychologist information
   async updatePsychologist(id, updates) {
     try {
-      // First update the psychologists table
-      const { data: psychData, error: psychError } = await supabase
+      // Prepare updates for psychologists table with correct column names
+      const psychologistUpdates = {
+        contact: updates.contact,
+        specialization: updates.specialization,
+        // Parse name into components if provided
+        ...(updates.name && {
+          first_name: updates.name.split(" ")[0] || "",
+          last_name: updates.name.split(" ").slice(1).join(" ") || "",
+        }),
+      };
+
+      // First update the psychologists table with timeout
+      const updatePromise = supabase
         .from("psychologists")
-        .update(updates)
+        .update(psychologistUpdates)
         .eq("id", id)
         .select();
+
+      // Add 10 second timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Update operation timed out")), 10000)
+      );
+
+      const { data: psychData, error: psychError } = await Promise.race([
+        updatePromise,
+        timeoutPromise,
+      ]);
 
       if (psychError) {
         console.log("Psychologists table error:", psychError.message);
       }
 
-      // Also try to update user_profiles table if it exists
-      try {
-        const { error: userProfileError } = await supabase
-          .from("user_profiles")
-          .update({
-            email: updates.email,
-            contact_number: updates.contact,
-            specialization: updates.specialization,
-            // Parse name into components if provided
-            ...(updates.name && {
-              first_name: updates.name.split(" ")[0] || "",
-              last_name: updates.name.split(" ").slice(1).join(" ") || "",
-            }),
-          })
-          .eq("id", id);
-
-        if (userProfileError) {
-          console.log("User profiles update info:", userProfileError.message);
-        }
-      } catch (userError) {
-        console.log(
-          "User profiles table might not exist or user not found:",
-          userError.message
-        );
-      }
+      // Also try to update user_profiles table if it exists (non-blocking)
+      this.updateUserProfilesAsync(id, updates);
 
       // Return the psychologists table data
       if (psychData && psychData.length > 0) {
@@ -367,7 +388,7 @@ export const psychologistService = {
       // Get the psychologist details first for the activity log
       const { data: psychologist, error: fetchError } = await supabase
         .from("psychologists")
-        .select("name, email")
+        .select("first_name, middle_name, last_name, email")
         .eq("id", id)
         .single();
 
@@ -397,7 +418,9 @@ export const psychologistService = {
         await adminService.logActivity(
           "00000000-0000-0000-0000-000000000000", // Admin user ID placeholder
           "Psychologist Deactivated",
-          `Deactivated psychologist ${psychologist.name} (${psychologist.email})`
+          `Deactivated psychologist ${getFullName(psychologist)} (${
+            psychologist.email
+          })`
         );
       } catch (logError) {
         console.error(
@@ -491,12 +514,12 @@ export const psychologistService = {
         // Try to get psychologist name from the psychologists table
         const { data: psychData, error: psychError } = await supabase
           .from("psychologists")
-          .select("name")
+          .select("first_name, middle_name, last_name")
           .eq("id", psychologistId)
           .single();
 
         if (!psychError && psychData) {
-          psychName = psychData.name || psychologistId;
+          psychName = getFullName(psychData) || psychologistId;
         }
       } catch (nameError) {
         console.log("Error getting names for activity log:", nameError);
@@ -562,12 +585,12 @@ export const psychologistService = {
           if (psychologistId) {
             const { data: psychData, error: psychError } = await supabase
               .from("psychologists")
-              .select("name")
+              .select("first_name, middle_name, last_name")
               .eq("id", psychologistId)
               .single();
 
             if (!psychError && psychData) {
-              psychName = psychData.name || psychologistId;
+              psychName = getFullName(psychData) || psychologistId;
             }
           }
         }
@@ -638,13 +661,13 @@ export const psychologistService = {
     }
   },
 
-  // Send password reset email to psychologist
+  // Send password reset magic link to psychologist (redirects to setup UI)
   async sendResetEmail(psychologistId) {
     try {
       // Get psychologist details
       const { data: psychologist, error: fetchError } = await supabase
         .from("psychologists")
-        .select("name, email")
+        .select("first_name, middle_name, last_name, email")
         .eq("id", psychologistId)
         .single();
 
@@ -657,15 +680,36 @@ export const psychologistService = {
         throw new Error("Psychologist not found");
       }
 
-      // Send password reset email using Supabase Auth
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(
-        psychologist.email,
-        {
-          redirectTo: `${
-            import.meta.env.VITE_APP_URL || window.location.origin
-          }/reset-password`,
-        }
-      );
+      // Send magic link for password reset
+      const appUrl = import.meta.env.VITE_APP_URL || window.location.origin;
+
+      // First try with shouldCreateUser: false (for existing auth users)
+      let { error: resetError } = await supabase.auth.signInWithOtp({
+        email: psychologist.email,
+        options: {
+          emailRedirectTo: `${appUrl}/psychologist-setup?email=${encodeURIComponent(
+            psychologist.email
+          )}&source=reset_password&flow=password_reset`,
+          shouldCreateUser: false, // Don't create new users initially
+        },
+      });
+
+      // If that fails (user doesn't exist in auth), try creating the user
+      if (resetError && resetError.message.includes("User not found")) {
+        console.log(
+          "🔄 Auth user not found, creating user for password reset..."
+        );
+        const { error: createError } = await supabase.auth.signInWithOtp({
+          email: psychologist.email,
+          options: {
+            emailRedirectTo: `${appUrl}/psychologist-setup?email=${encodeURIComponent(
+              psychologist.email
+            )}&source=reset_password&flow=password_reset`,
+            shouldCreateUser: true, // Create user for password reset
+          },
+        });
+        resetError = createError;
+      }
 
       if (resetError) {
         console.error("Reset email error:", resetError.message);
@@ -678,7 +722,9 @@ export const psychologistService = {
         await adminService.logActivity(
           null, // No specific user ID for admin actions
           "Password Reset Email Sent",
-          `Reset password email sent to psychologist ${psychologist.name} (${psychologist.email})`
+          `Reset password email sent to psychologist ${getFullName(
+            psychologist
+          )} (${psychologist.email})`
         );
       } catch (logError) {
         console.error("Error logging reset email activity:", logError.message);
@@ -693,6 +739,32 @@ export const psychologistService = {
     } catch (error) {
       console.error("Send reset email error:", error.message);
       throw error;
+    }
+  },
+
+  // Async method to update user profiles without blocking the UI
+  async updateUserProfilesAsync(id, updates) {
+    try {
+      const { error: userProfileError } = await supabase
+        .from("user_profiles")
+        .update({
+          contact_number: updates.contact,
+          // Parse name into components if provided
+          ...(updates.name && {
+            first_name: updates.name.split(" ")[0] || "",
+            last_name: updates.name.split(" ").slice(1).join(" ") || "",
+          }),
+        })
+        .eq("id", id);
+
+      if (userProfileError) {
+        console.log("User profiles update info:", userProfileError.message);
+      }
+    } catch (userError) {
+      console.log(
+        "User profiles table might not exist or user not found:",
+        userError.message
+      );
     }
   },
 };

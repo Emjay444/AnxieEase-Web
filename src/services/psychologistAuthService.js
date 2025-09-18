@@ -1,4 +1,5 @@
 import { supabase } from "./supabaseClient";
+import { getFullName } from "../utils/helpers";
 
 export const psychologistAuthService = {
   // This function would be called when a psychologist completes their account setup
@@ -28,7 +29,7 @@ export const psychologistAuthService = {
           password,
           options: {
             data: {
-              full_name: psychologist.name,
+              full_name: getFullName(psychologist),
               role: "psychologist",
             },
           },
