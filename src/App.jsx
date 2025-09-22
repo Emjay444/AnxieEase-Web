@@ -10,6 +10,7 @@ import LoginPageNew from "./components/LoginPageNew";
 import Dashboard from "./components/Dashboard";
 import PatientProfile from "./components/PatientProfile";
 import AdminPanelNew from "./components/AdminPanelNew";
+import AdminDashboard from "./components/AdminDashboard";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ForgotPasswordPage from "./components/ForgotPasswordPage";
 import NewPasswordPage from "./components/NewPasswordPage";
@@ -80,6 +81,10 @@ const router = createBrowserRouter(
         {
           path: "/admin",
           element: <AdminPanelNew />,
+        },
+        {
+          path: "/admin-iot",
+          element: <AdminDashboard />,
         },
       ],
     },

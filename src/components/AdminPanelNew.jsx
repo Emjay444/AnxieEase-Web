@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { adminService } from "../services/adminService";
 import { psychologistService } from "../services/psychologistService";
+import deviceService from "../services/deviceService";
 import AddDoctorModal from "./AddDoctorModal";
 import ProfilePicture from "./ProfilePicture";
 import { getFullName } from "../utils/helpers";
@@ -30,6 +31,10 @@ import {
   User,
   X,
   AlertTriangle,
+  Smartphone,
+  Battery,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
 import LogoutButton from "./LogoutButton";
 // Charts
@@ -136,6 +141,25 @@ const AdminPanelNew = () => {
   const [psychologistSearchTerm, setPsychologistSearchTerm] = useState("");
   const [patientSearchTerm, setPatientSearchTerm] = useState("");
   const [patientSortBy, setPatientSortBy] = useState("all"); // all, assigned, unassigned, name
+
+  // Device Management state
+  const [deviceStatus, setDeviceStatus] = useState({
+    device_id: 'AnxieEase001',
+    device_name: 'AnxieEase Sensor #001',
+    status: 'available',
+    assigned_user: null
+  });
+  const [availableUsers, setAvailableUsers] = useState([]);
+  const [deviceStats, setDeviceStats] = useState({
+    total_devices: 1,
+    device_status: 'available',
+    assigned_user: null,
+    total_users: 0,
+    available_users: 0
+  });
+  const [loadingDevices, setLoadingDevices] = useState(false);
+  const [deviceError, setDeviceError] = useState(null);
+  const [showAssignModal, setShowAssignModal] = useState(false);
 
   // Pagination state for activity logs
   const [currentPage, setCurrentPage] = useState(1);
@@ -322,9 +346,66 @@ const AdminPanelNew = () => {
     }
   };
 
+  // Load devices data
+  const loadDevicesData = async () => {
+    try {
+      setLoadingDevices(true);
+      setDeviceError(null);
+      const [deviceStatusData, usersData, statsData] = await Promise.all([
+        deviceService.getDeviceStatus(),
+        deviceService.getAvailableUsers(),
+        deviceService.getDeviceStats()
+      ]);
+      setDeviceStatus(deviceStatusData);
+      setAvailableUsers(usersData);
+      setDeviceStats(statsData);
+    } catch (error) {
+      console.error("Error loading devices:", error);
+      setDeviceError(error.message || "Failed to load device data");
+    } finally {
+      setLoadingDevices(false);
+    }
+  };
+
+  // Handle device assignment
+  const handleAssignDevice = async (userId) => {
+    try {
+      setLoadingDevices(true);
+      await deviceService.assignDeviceToUser(userId);
+      setShowAssignModal(false);
+      await loadDevicesData(); // Refresh data
+    } catch (error) {
+      console.error("Error assigning device:", error);
+      setDeviceError(error.message || "Failed to assign device");
+    } finally {
+      setLoadingDevices(false);
+    }
+  };
+
+  // Handle device access removal
+  const handleRemoveAccess = async () => {
+    try {
+      setLoadingDevices(true);
+      await deviceService.removeDeviceAccess();
+      await loadDevicesData(); // Refresh data
+    } catch (error) {
+      console.error("Error removing access:", error);
+      setDeviceError(error.message || "Failed to remove device access");
+    } finally {
+      setLoadingDevices(false);
+    }
+  };
+
   useEffect(() => {
     loadDashboardData();
   }, []);
+
+  // Load devices when switching to devices tab
+  useEffect(() => {
+    if (activeTab === "devices") {
+      loadDevicesData();
+    }
+  }, [activeTab]);
 
   // Reset pagination when switching to activity tab
   useEffect(() => {
@@ -954,6 +1035,13 @@ const AdminPanelNew = () => {
             icon={UserPlus}
             isActive={activeTab === "patients"}
             onClick={() => setActiveTab("patients")}
+          />
+          <TabButton
+            tab="devices"
+            label="Device Management"
+            icon={Smartphone}
+            isActive={activeTab === "devices"}
+            onClick={() => setActiveTab("devices")}
           />
           <TabButton
             tab="activity"
@@ -1841,6 +1929,169 @@ const AdminPanelNew = () => {
                 </table>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Device Management Tab */}
+        {activeTab === "devices" && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Device Management</h2>
+                <p className="text-gray-600">Manage device assignments and user access</p>
+              </div>
+            </div>
+
+            {/* Device Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-white p-4 rounded-lg border border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Total Devices</p>
+                    <p className="text-2xl font-bold text-gray-900">1</p>
+                  </div>
+                  <Smartphone className="w-8 h-8 text-gray-400" />
+                </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-lg border border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Total Users</p>
+                    <p className="text-2xl font-bold text-gray-900">{deviceStats.total_users}</p>
+                  </div>
+                  <Users className="w-8 h-8 text-gray-400" />
+                </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-lg border border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Available Users</p>
+                    <p className="text-2xl font-bold text-emerald-600">{deviceStats.available_users}</p>
+                  </div>
+                  <UserCheck className="w-8 h-8 text-emerald-400" />
+                </div>
+              </div>
+            </div>
+
+            {/* Device Card */}
+            <div className="bg-white rounded-lg border border-gray-200">
+              {loadingDevices ? (
+                <div className="p-8 text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600 mx-auto"></div>
+                  <p className="mt-2 text-gray-600">Loading device...</p>
+                </div>
+              ) : deviceError ? (
+                <div className="p-8 text-center">
+                  <AlertTriangle className="w-12 h-12 text-red-400 mx-auto mb-4" />
+                  <p className="text-red-600 font-medium mb-2">Error loading device</p>
+                  <p className="text-gray-600 text-sm mb-4">{deviceError}</p>
+                  <button 
+                    onClick={loadDevicesData}
+                    className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition-colors"
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : (
+                <div className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4">
+                      <div className="w-16 h-16 bg-emerald-100 rounded-xl flex items-center justify-center">
+                        <Smartphone className="w-8 h-8 text-emerald-600" />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-semibold text-gray-900">{deviceStatus.device_name}</h3>
+                        <p className="text-gray-600">Device ID: {deviceStatus.device_id}</p>
+                        <div className="flex items-center space-x-2 mt-2">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            deviceStatus.status === 'available' 
+                              ? 'bg-emerald-100 text-emerald-800' 
+                              : 'bg-blue-100 text-blue-800'
+                          }`}>
+                            {deviceStatus.status === 'available' && <CheckCircle className="w-3 h-3 mr-1" />}
+                            {deviceStatus.status === 'assigned' && <User className="w-3 h-3 mr-1" />}
+                            {deviceStatus.status === 'available' ? 'Available' : 'Assigned'}
+                          </span>
+                          {deviceStatus.status === 'assigned' && (
+                            <span className="text-sm text-gray-600">
+                              → {deviceStatus.assigned_user?.first_name} {deviceStatus.assigned_user?.last_name}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-3">
+                      {deviceStatus.status === 'assigned' ? (
+                        <button
+                          onClick={handleRemoveAccess}
+                          disabled={loadingDevices}
+                          className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center space-x-2"
+                        >
+                          <UserX className="w-4 h-4" />
+                          <span>Remove Access</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setShowAssignModal(true)}
+                          disabled={loadingDevices || availableUsers.length === 0}
+                          className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center space-x-2"
+                        >
+                          <UserPlus className="w-4 h-4" />
+                          <span>Assign Device</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {deviceStatus.linked_at && (
+                    <div className="mt-4 pt-4 border-t border-gray-200">
+                      <p className="text-sm text-gray-600">
+                        Assigned on: {new Date(deviceStatus.linked_at).toLocaleString()}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Assignment Modal */}
+            {showAssignModal && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center">
+                <div className="absolute inset-0 bg-black bg-opacity-50" onClick={() => setShowAssignModal(false)}></div>
+                <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+                  <div className="p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Assign Device to User</h3>
+                    
+                    <div className="space-y-3 max-h-60 overflow-y-auto">
+                      {availableUsers.map((user) => (
+                        <button
+                          key={user.id}
+                          onClick={() => handleAssignDevice(user.id)}
+                          className="w-full text-left p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                        >
+                          <p className="font-medium text-gray-900">
+                            {user.first_name} {user.last_name}
+                          </p>
+                          <p className="text-sm text-gray-600">{user.email}</p>
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="mt-6 flex justify-end space-x-3">
+                      <button
+                        onClick={() => setShowAssignModal(false)}
+                        className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
