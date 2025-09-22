@@ -14,8 +14,134 @@ const LoginPage = () => {
   const [rememberMe, setRememberMe] = useState(false);
   const [lockoutInfo, setLockoutInfo] = useState(null);
   const [countdown, setCountdown] = useState(0);
+  
+  // Field-specific validation errors
+  const [fieldErrors, setFieldErrors] = useState({
+    email: "",
+    password: ""
+  });
+
   const navigate = useNavigate();
   const { signIn, user, userRole, loading } = useAuth();
+
+  // Enhanced email validation
+  const validateEmail = (email) => {
+    const errors = [];
+    
+    if (!email.trim()) {
+      errors.push("Email address is required");
+      return errors;
+    }
+    
+    // More comprehensive email regex
+    const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+    
+    if (!emailRegex.test(email.trim())) {
+      errors.push("Please enter a valid email address");
+    }
+    
+    // Check for common typos
+    const commonDomains = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com'];
+    const domain = email.split('@')[1];
+    if (domain) {
+      const suspiciousDomains = ['gmial.com', 'yahooo.com', 'hotmial.com', 'outlok.com'];
+      if (suspiciousDomains.includes(domain.toLowerCase())) {
+        const suggestion = commonDomains.find(d => d.includes(domain.substring(0, 3)));
+        if (suggestion) {
+          errors.push(`Did you mean ${email.split('@')[0]}@${suggestion}?`);
+        }
+      }
+    }
+    
+    // Length validation
+    if (email.length > 320) { // RFC 5321 limit
+      errors.push("Email address is too long (maximum 320 characters)");
+    }
+    
+    return errors;
+  };
+
+  // Enhanced password validation
+  const validatePassword = (password) => {
+    const errors = [];
+    
+    if (!password) {
+      errors.push("Password is required");
+      return errors;
+    }
+    
+    if (password.length < 8) {
+      errors.push("Password must be at least 8 characters long");
+    }
+    
+    if (password.length > 128) {
+      errors.push("Password is too long (maximum 128 characters)");
+    }
+    
+    // Check for at least one letter and one number (common requirement)
+    const hasLetter = /[a-zA-Z]/.test(password);
+    const hasNumber = /\d/.test(password);
+    
+    if (!hasLetter) {
+      errors.push("Password must contain at least one letter");
+    }
+    
+    if (!hasNumber) {
+      errors.push("Password must contain at least one number");
+    }
+    
+    // Check for common weak passwords
+    const commonPasswords = [
+      'password', '123456', '123456789', 'qwerty', 'abc123', 
+      'password123', '111111', '123123', 'admin', 'login'
+    ];
+    
+    if (commonPasswords.includes(password.toLowerCase())) {
+      errors.push("This password is too common. Please choose a stronger password");
+    }
+    
+    // Check for whitespace at beginning or end
+    if (password !== password.trim()) {
+      errors.push("Password cannot start or end with spaces");
+    }
+    
+    return errors;
+  };
+
+  // Real-time validation on field change
+  const handleEmailChange = (value) => {
+    setEmail(value);
+    
+    // Clear general errors when user types
+    if (error) setError("");
+    if (success) setSuccess("");
+    
+    // Validate email in real-time (with debounce for better UX)
+    setTimeout(() => {
+      const emailErrors = validateEmail(value);
+      setFieldErrors(prev => ({
+        ...prev,
+        email: emailErrors.length > 0 ? emailErrors[0] : ""
+      }));
+    }, 500);
+  };
+
+  const handlePasswordChange = (value) => {
+    setPassword(value);
+    
+    // Clear general errors when user types
+    if (error) setError("");
+    if (success) setSuccess("");
+    
+    // Validate password in real-time
+    setTimeout(() => {
+      const passwordErrors = validatePassword(value);
+      setFieldErrors(prev => ({
+        ...prev,
+        password: passwordErrors.length > 0 ? passwordErrors[0] : ""
+      }));
+    }, 500);
+  };
 
   // Load saved credentials on mount
   useEffect(() => {
@@ -53,7 +179,7 @@ const LoginPage = () => {
           setError("");
           clearInterval(timer);
         } else {
-          setCountdown(Math.ceil(remaining / 1000)); // Convert to seconds
+          setCountdown(Math.ceil(remaining / 1000));
         }
       }, 1000);
 
@@ -66,7 +192,7 @@ const LoginPage = () => {
     if (!loading && user) {
       const cached = localStorage.getItem("userRole");
       const role = userRole || cached;
-      if (!role) return; // wait for a known role
+      if (!role) return;
       const dest = role === "admin" ? "/admin" : "/dashboard";
       console.log("Authenticated, navigating to:", dest, "role:", role);
       navigate(dest, { replace: true });
@@ -79,52 +205,48 @@ const LoginPage = () => {
     setSuccess("");
     setIsLoading(true);
 
-    // Input validation
-    if (!email.trim()) {
-      setError("Email address is required");
+    // Comprehensive validation before submission
+    const emailErrors = validateEmail(email);
+    const passwordErrors = validatePassword(password);
+
+    // Update field errors
+    setFieldErrors({
+      email: emailErrors.length > 0 ? emailErrors[0] : "",
+      password: passwordErrors.length > 0 ? passwordErrors[0] : ""
+    });
+
+    // If there are validation errors, don't proceed
+    if (emailErrors.length > 0 || passwordErrors.length > 0) {
+      setError("Please fix the validation errors below");
       setIsLoading(false);
       return;
     }
 
-    if (!email.includes("@") || !email.includes(".")) {
-      setError("Please enter a valid email address");
-      setIsLoading(false);
-      return;
-    }
-
-    if (!password.trim()) {
-      setError("Password is required");
-      setIsLoading(false);
-      return;
-    }
-
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters long");
-      setIsLoading(false);
-      return;
-    }
+    // Additional security checks
+    const trimmedEmail = email.trim().toLowerCase();
+    const trimmedPassword = password.trim();
 
     try {
       console.log("Attempting to sign in...");
-      const { role } = await signIn(email, password);
+      const { role } = await signIn(trimmedEmail, trimmedPassword);
       console.log("Sign in successful, role:", role);
 
       // Handle remember me functionality
       if (rememberMe) {
-        localStorage.setItem("rememberedEmail", email);
+        localStorage.setItem("rememberedEmail", trimmedEmail);
         localStorage.setItem("rememberMe", "true");
       } else {
         localStorage.removeItem("rememberedEmail");
         localStorage.removeItem("rememberMe");
       }
 
-      // Show success message briefly before redirect
+      // Clear any field errors on success
+      setFieldErrors({ email: "", password: "" });
       setError("");
       setSuccess("Sign in successful! Redirecting...");
 
       // Small delay to show success state
       setTimeout(() => {
-        // Redirect based on role
         if (role === "admin") {
           navigate("/admin");
         } else if (role === "psychologist") {
@@ -136,28 +258,22 @@ const LoginPage = () => {
     } catch (err) {
       console.error("Sign in error:", err);
 
-      // Handle different types of errors with specific messages
       let errorMessage = "Failed to sign in";
 
       if (err.message.includes("Invalid login credentials")) {
-        errorMessage =
-          "Invalid email or password. Please check your credentials and try again.";
+        errorMessage = "Invalid email or password. Please check your credentials and try again.";
       } else if (err.message.includes("Email not confirmed")) {
-        errorMessage =
-          "Please check your email and confirm your account before signing in.";
+        errorMessage = "Please check your email and confirm your account before signing in.";
       } else if (err.message.includes("Too many requests")) {
-        errorMessage =
-          "Too many login attempts. Please wait a moment before trying again.";
+        errorMessage = "Too many login attempts. Please wait a moment before trying again.";
       } else if (err.message.includes("Network")) {
-        errorMessage =
-          "Network error. Please check your internet connection and try again.";
+        errorMessage = "Network error. Please check your internet connection and try again.";
       } else if (err.message.includes("Account locked")) {
-        errorMessage = err.message; // Keep lockout messages as they are
+        errorMessage = err.message;
       } else if (err.message) {
         errorMessage = err.message;
       }
 
-      // Handle lockout information
       if (err.lockoutInfo) {
         setLockoutInfo(err.lockoutInfo);
         setCountdown(Math.ceil(err.lockoutInfo.remainingMs / 1000));
@@ -242,15 +358,13 @@ const LoginPage = () => {
                   type="email"
                   id="email"
                   value={email}
-                  onChange={(e) => {
-                    setEmail(e.target.value);
-                    // Clear error when user starts typing
-                    if (error) setError("");
-                    if (success) setSuccess("");
-                  }}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors peer"
+                  onChange={(e) => handleEmailChange(e.target.value)}
+                  className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors peer ${
+                    fieldErrors.email ? 'border-red-300 focus:ring-red-500 focus:border-red-500' : 'border-gray-300'
+                  }`}
                   required
                   aria-label="Email address"
+                  aria-describedby={fieldErrors.email ? "email-error" : undefined}
                 />
                 <label
                   htmlFor="email"
@@ -259,6 +373,12 @@ const LoginPage = () => {
                   Email
                 </label>
               </div>
+              {fieldErrors.email && (
+                <p id="email-error" className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                  <AlertCircle className="w-4 h-4" />
+                  {fieldErrors.email}
+                </p>
+              )}
             </div>
 
             {/* Password Field */}
@@ -269,15 +389,13 @@ const LoginPage = () => {
                   type={showPassword ? "text" : "password"}
                   id="password"
                   value={password}
-                  onChange={(e) => {
-                    setPassword(e.target.value);
-                    // Clear error when user starts typing
-                    if (error) setError("");
-                    if (success) setSuccess("");
-                  }}
-                  className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors peer"
+                  onChange={(e) => handlePasswordChange(e.target.value)}
+                  className={`w-full pl-10 pr-12 py-3 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors peer ${
+                    fieldErrors.password ? 'border-red-300 focus:ring-red-500 focus:border-red-500' : 'border-gray-300'
+                  }`}
                   required
                   aria-label="Password"
+                  aria-describedby={fieldErrors.password ? "password-error" : undefined}
                 />
                 <label
                   htmlFor="password"
@@ -289,6 +407,7 @@ const LoginPage = () => {
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? (
                     <EyeOff className="w-5 h-5" />
@@ -297,6 +416,12 @@ const LoginPage = () => {
                   )}
                 </button>
               </div>
+              {fieldErrors.password && (
+                <p id="password-error" className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                  <AlertCircle className="w-4 h-4" />
+                  {fieldErrors.password}
+                </p>
+              )}
             </div>
 
             {/* Remember Me and Forgot Password */}
@@ -309,7 +434,6 @@ const LoginPage = () => {
                     const checked = e.target.checked;
                     setRememberMe(checked);
 
-                    // If unchecking, clear saved credentials immediately
                     if (!checked) {
                       localStorage.removeItem("rememberedEmail");
                       localStorage.removeItem("rememberMe");
@@ -330,7 +454,14 @@ const LoginPage = () => {
             {/* Submit Button */}
             <button
               type="submit"
-              disabled={isLoading || (lockoutInfo && lockoutInfo.isLocked)}
+              disabled={
+                isLoading || 
+                (lockoutInfo && lockoutInfo.isLocked) || 
+                fieldErrors.email || 
+                fieldErrors.password ||
+                !email.trim() ||
+                !password.trim()
+              }
               className="w-full btn-gradient text-white py-3 px-4 rounded-lg font-medium hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"
             >
               {isLoading ? (
