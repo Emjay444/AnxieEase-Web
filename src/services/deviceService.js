@@ -7,10 +7,23 @@ class DeviceService {
   // Get the single device with current user assignment
   async getDeviceStatus() {
     try {
-      // Get device assignment from wearable_devices table
+      // Look for the base device (AnxieEase001)
       const { data: device, error: deviceError } = await supabase
         .from('wearable_devices')
-        .select('*')
+        .select(`
+          device_id,
+          device_name,
+          user_id,
+          linked_at,
+          status,
+          battery_level,
+          last_seen_at,
+          user_profiles (
+            id,
+            first_name,
+            last_name
+          )
+        `)
         .eq('device_id', DEVICE_ID)
         .single();
 
@@ -19,29 +32,50 @@ class DeviceService {
         return this.getMockDeviceStatus();
       }
 
-      // If device has a user assigned, get user details
-      let assignedUser = null;
-      if (device?.user_id) {
-        const { data: user, error: userError } = await supabase
-          .from('user_profiles')
-          .select('id, first_name, last_name, email')
-          .eq('id', device.user_id)
-          .single();
-
-        if (!userError) {
-          assignedUser = user;
-        }
+      if (!device) {
+        // No device found, return available status
+        return {
+          device_id: DEVICE_ID,
+          device_name: 'AnxieEase Sensor #001',
+          status: 'available',
+          assigned_user: null,
+          linked_at: null,
+          battery_level: 100,
+          last_seen_at: null
+        };
       }
 
+      // Sanitize legacy names like "AnxieEase Sensor #001 (User: abcdefg)"
+      const cleanName = (device.device_name || '').replace(/\s*\(User:\s*[^)]+\)\s*$/i, '').trim() || 'AnxieEase Sensor #001';
+
+      // Use joined profile only if it has actual name fields
+      let assignedProfile = (device.user_profiles && (device.user_profiles.first_name || device.user_profiles.last_name))
+        ? device.user_profiles
+        : null;
+      // Fallback: if user_id exists but join returned empty/missing names, fetch profile directly
+      if (!assignedProfile && device.user_id) {
+        const { data: profile } = await supabase
+          .from('user_profiles')
+          .select('id, first_name, last_name')
+          .eq('id', device.user_id)
+          .single();
+        assignedProfile = profile || null;
+      }
+
+      // Build a safe full name string if we have a profile
+      const assignedUserName = assignedProfile
+        ? `${assignedProfile.first_name ?? ''} ${assignedProfile.last_name ?? ''}`.trim() || null
+        : null;
+
       return {
-        device_id: DEVICE_ID,
-        device_name: 'AnxieEase Sensor #001',
-        status: device?.user_id ? 'assigned' : 'available',
-        assigned_user: assignedUser,
-        linked_at: device?.linked_at,
-        last_seen_at: device?.last_seen_at,
-        battery_level: device?.battery_level || null,
-        is_active: device?.is_active ?? true
+        device_id: device.device_id,
+        device_name: cleanName,
+        status: device.user_id ? 'assigned' : 'available',
+        assigned_user: assignedProfile,
+        assigned_user_name: assignedUserName,
+        linked_at: device.linked_at,
+        battery_level: device.battery_level || 100,
+        last_seen_at: device.last_seen_at
       };
 
     } catch (error) {
@@ -55,7 +89,7 @@ class DeviceService {
     try {
       const { data: users, error } = await supabase
         .from('user_profiles')
-        .select('id, first_name, last_name, email, role')
+        .select('id, first_name, last_name, role')
         .eq('role', 'patient')
         .order('first_name');
 
@@ -75,46 +109,46 @@ class DeviceService {
   // Assign device to a user
   async assignDeviceToUser(userId) {
     try {
-      // First, ensure device exists in wearable_devices table
+      // First, check if AnxieEase001 base device exists (from physical device setup)
       const { data: existingDevice } = await supabase
         .from('wearable_devices')
-        .select('device_id')
+        .select('device_id, device_name')
         .eq('device_id', DEVICE_ID)
         .single();
 
-      if (!existingDevice) {
-        // Create device record if it doesn't exist
-        await supabase
+      if (existingDevice) {
+        // Update the existing device record (from physical setup)
+        const { error: updateError } = await supabase
+          .from('wearable_devices')
+          .update({
+            device_name: 'AnxieEase Sensor #001', // Keep clean device name
+            user_id: userId,
+            linked_at: new Date().toISOString(),
+            status: 'assigned'
+          })
+          .eq('device_id', DEVICE_ID);
+
+        if (updateError) {
+          console.error('Error updating existing device:', updateError);
+          throw updateError;
+        }
+      } else {
+        // If no base device exists, create one
+        const { error: insertError } = await supabase
           .from('wearable_devices')
           .insert({
             device_id: DEVICE_ID,
-            device_name: 'AnxieEase Sensor #001',
+            device_name: 'AnxieEase Sensor #001', // Keep clean device name
             user_id: userId,
             linked_at: new Date().toISOString(),
-            is_active: true,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
+            status: 'assigned'
           });
-      } else {
-        // Update existing device
-        await supabase
-          .from('wearable_devices')
-          .update({
-            user_id: userId,
-            linked_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          })
-          .eq('device_id', DEVICE_ID);
-      }
 
-      // Update user profile to link device
-      await supabase
-        .from('user_profiles')
-        .update({
-          device_id: DEVICE_ID,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', userId);
+        if (insertError) {
+          console.error('Error creating device record:', insertError);
+          throw insertError;
+        }
+      }
 
       return { success: true };
 
@@ -127,32 +161,20 @@ class DeviceService {
   // Remove device access from current user
   async removeDeviceAccess() {
     try {
-      // Get current user to update their profile
-      const { data: device } = await supabase
-        .from('wearable_devices')
-        .select('user_id')
-        .eq('device_id', DEVICE_ID)
-        .single();
-
-      // Clear device assignment
-      await supabase
+      // Update the device to remove user assignment but keep the device record
+      const { error: updateError } = await supabase
         .from('wearable_devices')
         .update({
+          device_name: 'AnxieEase Sensor #001', // Reset to clean name
           user_id: null,
           linked_at: null,
-          updated_at: new Date().toISOString()
+          status: 'available'
         })
         .eq('device_id', DEVICE_ID);
 
-      // Clear device from user profile if user exists
-      if (device?.user_id) {
-        await supabase
-          .from('user_profiles')
-          .update({
-            device_id: null,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', device.user_id);
+      if (updateError) {
+        console.error('Error removing device assignment:', updateError);
+        throw updateError;
       }
 
       return { success: true };
@@ -172,9 +194,11 @@ class DeviceService {
       return {
         total_devices: 1,
         device_status: deviceStatus.status,
-        assigned_user: deviceStatus.assigned_user?.first_name + ' ' + deviceStatus.assigned_user?.last_name || null,
+        assigned_user: deviceStatus.assigned_user
+          ? `${deviceStatus.assigned_user.first_name ?? ''} ${deviceStatus.assigned_user.last_name ?? ''}`.trim() || null
+          : null,
         total_users: allUsers.length,
-        available_users: allUsers.filter(user => user.id !== deviceStatus.assigned_user?.id).length
+        available_users: deviceStatus.status === 'assigned' ? 1 : 0 // Show 1 if device is assigned, 0 if available
       };
 
     } catch (error) {

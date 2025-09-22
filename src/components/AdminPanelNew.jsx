@@ -374,6 +374,19 @@ const AdminPanelNew = () => {
       await deviceService.assignDeviceToUser(userId);
       setShowAssignModal(false);
       await loadDevicesData(); // Refresh data
+      
+      // Find the assigned user for success message
+      const assignedUser = availableUsers.find(user => user.id === userId);
+      setSuccessMessage({
+        title: "Device Assigned Successfully",
+        message: `AnxieEase device has been successfully assigned to ${assignedUser?.first_name} ${assignedUser?.last_name}`,
+        details: [
+          `Device ID: AnxieEase001`,
+          `Patient: ${assignedUser?.first_name} ${assignedUser?.last_name}`,
+          `Assignment Date: ${new Date().toLocaleString()}`
+        ],
+      });
+      setShowSuccessModal(true);
     } catch (error) {
       console.error("Error assigning device:", error);
       setDeviceError(error.message || "Failed to assign device");
@@ -386,8 +399,20 @@ const AdminPanelNew = () => {
   const handleRemoveAccess = async () => {
     try {
       setLoadingDevices(true);
+      const previousUser = deviceStatus.assigned_user;
       await deviceService.removeDeviceAccess();
       await loadDevicesData(); // Refresh data
+      
+      setSuccessMessage({
+        title: "Device Access Removed",
+        message: `AnxieEase device access has been successfully removed from ${previousUser?.first_name} ${previousUser?.last_name}`,
+        details: [
+          `Device ID: AnxieEase001`,
+          `Previous Patient: ${previousUser?.first_name} ${previousUser?.last_name}`,
+          `Removal Date: ${new Date().toLocaleString()}`
+        ],
+      });
+      setShowSuccessModal(true);
     } catch (error) {
       console.error("Error removing access:", error);
       setDeviceError(error.message || "Failed to remove device access");
@@ -1056,7 +1081,7 @@ const AdminPanelNew = () => {
         {activeTab === "overview" && (
           <div className="space-y-6">
             {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {/* Enhanced Psychologists Card with Breakdown */}
               <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
                 <div className="flex items-center">
@@ -1100,6 +1125,12 @@ const AdminPanelNew = () => {
                 value={stats.activeAssignments}
                 icon={UserCheck}
                 color="purple"
+              />
+              <StatCard
+                title="Total Devices"
+                value={1}
+                icon={Smartphone}
+                color="blue"
               />
             </div>
 
@@ -1942,82 +1973,97 @@ const AdminPanelNew = () => {
               </div>
             </div>
 
-            {/* Device Stats */}
+            {/* Enhanced Device Stats */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-white p-4 rounded-lg border border-gray-200">
+              <div className="bg-gradient-to-br from-white to-blue-50 p-4 rounded-lg border border-blue-200 shadow-sm hover:shadow-md transition-all duration-200">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-600">Total Devices</p>
-                    <p className="text-2xl font-bold text-gray-900">1</p>
+                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Total Devices</p>
+                    <p className="text-2xl font-bold text-blue-900 mt-1">1</p>
                   </div>
-                  <Smartphone className="w-8 h-8 text-gray-400" />
+                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <Smartphone className="w-5 h-5 text-blue-600" />
+                  </div>
                 </div>
               </div>
 
-              <div className="bg-white p-4 rounded-lg border border-gray-200">
+              <div className="bg-gradient-to-br from-white to-gray-50 p-4 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-600">Total Users</p>
-                    <p className="text-2xl font-bold text-gray-900">{deviceStats.total_users}</p>
+                    <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Total Patients</p>
+                    <p className="text-2xl font-bold text-gray-900 mt-1">{deviceStats.total_users}</p>
                   </div>
-                  <Users className="w-8 h-8 text-gray-400" />
+                  <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                    <Users className="w-5 h-5 text-gray-600" />
+                  </div>
                 </div>
               </div>
 
-              <div className="bg-white p-4 rounded-lg border border-gray-200">
+              <div className="bg-gradient-to-br from-white to-emerald-50 p-4 rounded-lg border border-emerald-200 shadow-sm hover:shadow-md transition-all duration-200">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-600">Available Users</p>
-                    <p className="text-2xl font-bold text-emerald-600">{deviceStats.available_users}</p>
+                    <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">Assigned Patients</p>
+                    <p className="text-2xl font-bold text-emerald-900 mt-1">{deviceStats.available_users}</p>
                   </div>
-                  <UserCheck className="w-8 h-8 text-emerald-400" />
+                  <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
+                    <UserCheck className="w-5 h-5 text-emerald-600" />
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Device Card */}
-            <div className="bg-white rounded-lg border border-gray-200">
+            {/* Enhanced Device Card */}
+            <div className="bg-gradient-to-br from-white to-gray-50 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200">
               {loadingDevices ? (
-                <div className="p-8 text-center">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600 mx-auto"></div>
+                <div className="p-6 text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-2 border-emerald-600 border-t-transparent mx-auto"></div>
                   <p className="mt-2 text-gray-600">Loading device...</p>
                 </div>
               ) : deviceError ? (
-                <div className="p-8 text-center">
-                  <AlertTriangle className="w-12 h-12 text-red-400 mx-auto mb-4" />
-                  <p className="text-red-600 font-medium mb-2">Error loading device</p>
+                <div className="p-6 text-center">
+                  <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <AlertTriangle className="w-6 h-6 text-red-500" />
+                  </div>
+                  <p className="text-red-600 font-semibold mb-1">Error loading device</p>
                   <p className="text-gray-600 text-sm mb-4">{deviceError}</p>
                   <button 
                     onClick={loadDevicesData}
-                    className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition-colors"
+                    className="bg-emerald-600 text-white px-4 py-2 rounded-md hover:bg-emerald-700 transition-colors font-medium shadow-sm"
                   >
-                    Retry
+                    Retry Loading
                   </button>
                 </div>
               ) : (
-                <div className="p-6">
+                <div className="p-5">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-4">
-                      <div className="w-16 h-16 bg-emerald-100 rounded-xl flex items-center justify-center">
-                        <Smartphone className="w-8 h-8 text-emerald-600" />
+                      <div className="w-14 h-14 bg-gradient-to-br from-emerald-100 to-emerald-200 rounded-xl flex items-center justify-center shadow-inner">
+                        <Smartphone className="w-7 h-7 text-emerald-600" />
                       </div>
                       <div>
-                        <h3 className="text-xl font-semibold text-gray-900">{deviceStatus.device_name}</h3>
-                        <p className="text-gray-600">Device ID: {deviceStatus.device_id}</p>
-                        <div className="flex items-center space-x-2 mt-2">
+                        <h3 className="text-xl font-bold text-gray-900 mb-0.5">{deviceStatus.device_name}</h3>
+                        <p className="text-gray-500 text-xs font-medium mb-2">Device ID: {deviceStatus.device_id}</p>
+                        <div className="flex items-center space-x-2">
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                             deviceStatus.status === 'available' 
-                              ? 'bg-emerald-100 text-emerald-800' 
-                              : 'bg-blue-100 text-blue-800'
+                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' 
+                              : 'bg-blue-100 text-blue-800 border border-blue-200'
                           }`}>
                             {deviceStatus.status === 'available' && <CheckCircle className="w-3 h-3 mr-1" />}
                             {deviceStatus.status === 'assigned' && <User className="w-3 h-3 mr-1" />}
                             {deviceStatus.status === 'available' ? 'Available' : 'Assigned'}
                           </span>
                           {deviceStatus.status === 'assigned' && (
-                            <span className="text-sm text-gray-600">
-                              → {deviceStatus.assigned_user?.first_name} {deviceStatus.assigned_user?.last_name}
-                            </span>
+                            <div className="flex items-center bg-gray-100 px-2.5 py-0.5 rounded-full">
+                              <span className="text-xs font-medium text-gray-700">
+                                Assigned to: {
+                                  deviceStatus.assigned_user_name ||
+                                  [deviceStatus.assigned_user?.first_name, deviceStatus.assigned_user?.last_name]
+                                    .filter(Boolean)
+                                    .join(' ') || 'Unknown patient'
+                                }
+                              </span>
+                            </div>
                           )}
                         </div>
                       </div>
@@ -2028,7 +2074,7 @@ const AdminPanelNew = () => {
                         <button
                           onClick={handleRemoveAccess}
                           disabled={loadingDevices}
-                          className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center space-x-2"
+                          className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 font-medium shadow-sm hover:shadow"
                         >
                           <UserX className="w-4 h-4" />
                           <span>Remove Access</span>
@@ -2037,7 +2083,7 @@ const AdminPanelNew = () => {
                         <button
                           onClick={() => setShowAssignModal(true)}
                           disabled={loadingDevices || availableUsers.length === 0}
-                          className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center space-x-2"
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-md transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 font-medium shadow-sm hover:shadow"
                         >
                           <UserPlus className="w-4 h-4" />
                           <span>Assign Device</span>
@@ -2047,35 +2093,53 @@ const AdminPanelNew = () => {
                   </div>
 
                   {deviceStatus.linked_at && (
-                    <div className="mt-4 pt-4 border-t border-gray-200">
-                      <p className="text-sm text-gray-600">
-                        Assigned on: {new Date(deviceStatus.linked_at).toLocaleString()}
-                      </p>
+                    <div className="mt-4 pt-3 border-t border-gray-200">
+                      <div className="flex items-center space-x-2 text-xs text-gray-600">
+                        <span className="font-medium">Assignment Date:</span>
+                        <span>{new Date(deviceStatus.linked_at).toLocaleString()}</span>
+                      </div>
                     </div>
                   )}
                 </div>
               )}
             </div>
 
-            {/* Assignment Modal */}
+            {/* Enhanced Assignment Modal */}
             {showAssignModal && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center">
-                <div className="absolute inset-0 bg-black bg-opacity-50" onClick={() => setShowAssignModal(false)}></div>
-                <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                <div className="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm" onClick={() => setShowAssignModal(false)}></div>
+                <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full">
                   <div className="p-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Assign Device to User</h3>
+                    <div className="flex items-center justify-between mb-6">
+                      <h3 className="text-xl font-bold text-gray-900">Assign Device to Patient</h3>
+                      <button
+                        onClick={() => setShowAssignModal(false)}
+                        className="text-gray-400 hover:text-gray-600 transition-colors"
+                      >
+                        <X className="w-6 h-6" />
+                      </button>
+                    </div>
                     
-                    <div className="space-y-3 max-h-60 overflow-y-auto">
+                    <p className="text-gray-600 mb-6">Select a patient to assign the AnxieEase device to:</p>
+                    
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
                       {availableUsers.map((user) => (
                         <button
                           key={user.id}
                           onClick={() => handleAssignDevice(user.id)}
-                          className="w-full text-left p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                          className="w-full text-left p-4 border border-gray-200 rounded-xl hover:bg-emerald-50 hover:border-emerald-300 transition-all duration-200 group"
                         >
-                          <p className="font-medium text-gray-900">
-                            {user.first_name} {user.last_name}
-                          </p>
-                          <p className="text-sm text-gray-600">{user.email}</p>
+                          <div className="flex items-center space-x-3">
+                            <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center group-hover:bg-emerald-200 transition-colors">
+                              <User className="w-5 h-5 text-emerald-600" />
+                            </div>
+                            <div>
+                              <p className="font-semibold text-gray-900">
+                                {user.first_name} {user.last_name}
+                              </p>
+                              <p className="text-sm text-gray-500">Patient ID: {user.id}</p>
+                            </div>
+                          </div>
                         </button>
                       ))}
                     </div>
@@ -2083,7 +2147,7 @@ const AdminPanelNew = () => {
                     <div className="mt-6 flex justify-end space-x-3">
                       <button
                         onClick={() => setShowAssignModal(false)}
-                        className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                        className="px-6 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium"
                       >
                         Cancel
                       </button>
