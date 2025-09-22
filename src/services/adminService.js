@@ -1,5 +1,4 @@
 import { supabase } from "./supabaseClient";
-import { getFullName } from "../utils/helpers";
 
 // Mock data for development
 const mockActivityLogs = [
@@ -115,72 +114,6 @@ const mockUsers = [
 ];
 
 export const adminService = {
-  // Fix admin user role metadata
-  async fixAdminRole(email = null) {
-    try {
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-
-      if (userError) throw userError;
-      if (!user) throw new Error("No user logged in");
-
-      // If email is provided, verify it matches current user
-      if (email && user.email !== email) {
-        throw new Error(
-          "Email mismatch - please log in with the admin account"
-        );
-      }
-
-      console.log("Current user metadata:", user.user_metadata);
-
-      // Update user metadata to include admin role
-      const { data, error } = await supabase.auth.updateUser({
-        data: {
-          role: "admin",
-          ...user.user_metadata, // preserve other metadata
-        },
-      });
-
-      if (error) throw error;
-
-      console.log("Admin role updated successfully");
-      return { success: true, message: "Admin role updated successfully" };
-    } catch (error) {
-      console.error("Error fixing admin role:", error);
-      return { success: false, error: error.message };
-    }
-  },
-
-  // Check current user role and metadata
-  async debugUserRole() {
-    try {
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-
-      if (userError) throw userError;
-      if (!user) throw new Error("No user logged in");
-
-      console.log("=== USER ROLE DEBUG ===");
-      console.log("User email:", user.email);
-      console.log("User ID:", user.id);
-      console.log("User metadata:", user.user_metadata);
-      console.log("Role in metadata:", user.user_metadata?.role);
-
-      return {
-        email: user.email,
-        id: user.id,
-        metadata: user.user_metadata,
-        role: user.user_metadata?.role,
-      };
-    } catch (error) {
-      console.error("Error debugging user role:", error);
-      return { error: error.message };
-    }
-  },
   // Helper function to replace UUIDs with names in activity details
   async replaceIdsWithNames(details) {
     if (!details || typeof details !== "string") return details;
@@ -327,12 +260,6 @@ export const adminService = {
             details: await this.replaceIdsWithNames(log.details),
           }))
         );
-
-        // Sort by timestamp descending (newest first) by default
-        processedLogs.sort(
-          (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
-        );
-
         return processedLogs;
       }
 
@@ -408,27 +335,20 @@ export const adminService = {
   // Get dashboard statistics
   async getDashboardStats() {
     try {
-      // Get count of ALL psychologists (active + inactive)
-      const { data: allPsychologists, error: allPsychError } = await supabase
-        .from("psychologists")
-        .select("id", { count: "exact" });
-
-      // Get count of ACTIVE psychologists only
-      const { data: activePsychologists, error: activePsychError } =
+      // Get count of active psychologists
+      const { data: psychologistsCount, error: psychologistsError } =
         await supabase
           .from("psychologists")
           .select("id", { count: "exact" })
           .eq("is_active", true);
 
-      if (allPsychError || activePsychError) {
+      if (psychologistsError) {
         console.error(
           "Error fetching psychologists count:",
-          allPsychError?.message || activePsychError?.message
+          psychologistsError.message
         );
         return {
           psychologistsCount: 0,
-          activePsychologistsCount: 0,
-          inactivePsychologistsCount: 0,
           patientsCount: 0,
           unassignedPatientsCount: 0,
         };
@@ -443,10 +363,7 @@ export const adminService = {
       if (patientsError) {
         console.error("Error fetching patients count:", patientsError.message);
         return {
-          psychologistsCount: allPsychologists.length,
-          activePsychologistsCount: activePsychologists.length,
-          inactivePsychologistsCount:
-            allPsychologists.length - activePsychologists.length,
+          psychologistsCount: psychologistsCount.length,
           patientsCount: 0,
           unassignedPatientsCount: 0,
         };
@@ -465,20 +382,14 @@ export const adminService = {
           unassignedError.message
         );
         return {
-          psychologistsCount: allPsychologists.length,
-          activePsychologistsCount: activePsychologists.length,
-          inactivePsychologistsCount:
-            allPsychologists.length - activePsychologists.length,
+          psychologistsCount: psychologistsCount.length,
           patientsCount: patientsCount.length,
           unassignedPatientsCount: 0,
         };
       }
 
       return {
-        psychologistsCount: allPsychologists.length,
-        activePsychologistsCount: activePsychologists.length,
-        inactivePsychologistsCount:
-          allPsychologists.length - activePsychologists.length,
+        psychologistsCount: psychologistsCount.length,
         patientsCount: patientsCount.length,
         unassignedPatientsCount: unassignedCount.length,
       };
@@ -486,8 +397,6 @@ export const adminService = {
       console.error("Get dashboard stats error:", error.message);
       return {
         psychologistsCount: 0,
-        activePsychologistsCount: 0,
-        inactivePsychologistsCount: 0,
         patientsCount: 0,
         unassignedPatientsCount: 0,
       };
@@ -513,7 +422,8 @@ export const adminService = {
       return data.map((patient) => ({
         id: patient.id,
         email:
-          patient.email || `user-${patient.id.substring(0, 8)}@anxieease.com`,
+          patient.email ||
+          `user-${patient.id.substring(0, 8)}@anxieease.com`,
         name:
           `${patient.first_name || ""} ${patient.last_name || ""}`.trim() ||
           "Unknown",
@@ -538,12 +448,14 @@ export const adminService = {
   async getAllUsers() {
     try {
       // Fetch from user_profiles without strict role filter
-      const { data, error } = await supabase.from("user_profiles").select(
-        `
+      const { data, error } = await supabase
+        .from("user_profiles")
+        .select(
+          `
           *,
-          psychologists:assigned_psychologist_id(first_name,middle_name,last_name)
+          psychologists:assigned_psychologist_id(name)
         `
-      );
+        );
 
       if (error) {
         console.error("Get patients error:", error.message);
@@ -561,10 +473,7 @@ export const adminService = {
         .select("id,email");
 
       if (psychErr) {
-        console.log(
-          "getAllUsers: psychologists lookup failed:",
-          psychErr.message
-        );
+        console.log("getAllUsers: psychologists lookup failed:", psychErr.message);
       }
 
       const psychIdSet = new Set((psychRows || []).map((p) => p.id));
@@ -582,13 +491,11 @@ export const adminService = {
         const isPsychById = psychIdSet.has(u.id);
         const isPsychByEmail = email && psychEmailSet.has(email);
         const classifyAsPatient = role === "patient" || role === "";
-
+        
         return !isPsychById && !isPsychByEmail && classifyAsPatient;
       });
 
-      console.log(
-        `getAllUsers: Found ${patients.length} patients from ${data.length} user_profiles`
-      );
+      console.log(`getAllUsers: Found ${patients.length} patients from ${data.length} user_profiles`);
 
       return patients.map((patient) => ({
         id: patient.id,
@@ -614,9 +521,7 @@ export const adminService = {
           hour12: true,
         }),
         assigned_psychologist_id: patient.assigned_psychologist_id || null,
-        assigned_psychologist_name: patient.psychologists
-          ? getFullName(patient.psychologists)
-          : null,
+        assigned_psychologist_name: patient.psychologists?.name || null,
         is_active: patient.is_email_verified,
       }));
     } catch (error) {
@@ -645,7 +550,7 @@ export const adminService = {
         // Try to get psychologist name from psychologists table first
         const { data: psychData, error: psychError } = await supabase
           .from("psychologists")
-          .select("first_name, middle_name, last_name")
+          .select("name")
           .eq("id", psychologistId)
           .single();
 
@@ -670,7 +575,7 @@ export const adminService = {
             psychologistName = "Unknown Psychologist";
           }
         } else {
-          psychologistName = getFullName(psychData) || "Unknown Psychologist";
+          psychologistName = psychData.name || "Unknown Psychologist";
         }
       }
 

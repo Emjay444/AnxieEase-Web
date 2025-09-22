@@ -7,14 +7,14 @@ import {
 import { AuthProvider } from "./contexts/AuthContext";
 import { PatientProvider } from "./contexts/PatientContext";
 import LoginPageNew from "./components/LoginPageNew";
-import Dashboard from "./components/Dashboard";
+import DashboardNew from "./components/DashboardNew";
 import PatientProfile from "./components/PatientProfile";
 import AdminPanelNew from "./components/AdminPanelNew";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ForgotPasswordPage from "./components/ForgotPasswordPage";
+import ResetPasswordPage from "./components/ResetPasswordPage";
 import NewPasswordPage from "./components/NewPasswordPage";
 import PsychologistSetupPage from "./components/PsychologistSetupPage";
-import SessionTimeoutWrapper from "./components/SessionTimeoutWrapper";
 
 // Define the route structure using the data router format
 const router = createBrowserRouter(
@@ -30,7 +30,7 @@ const router = createBrowserRouter(
     },
     {
       path: "/reset-password",
-      element: <NewPasswordPage />,
+      element: <ResetPasswordPage />,
     },
     {
       path: "/new-password",
@@ -62,7 +62,7 @@ const router = createBrowserRouter(
           children: [
             {
               path: "/dashboard",
-              element: <Dashboard />,
+              element: <DashboardNew />,
             },
             {
               path: "/patient/:patientId",
@@ -102,9 +102,7 @@ const router = createBrowserRouter(
 function App() {
   return (
     <AuthProvider>
-      <SessionTimeoutWrapper>
-        <RouterProvider router={router} />
-      </SessionTimeoutWrapper>
+      <RouterProvider router={router} />
     </AuthProvider>
   );
 }
