@@ -378,15 +378,12 @@ const ProfileOverview = React.memo(
             {/* User Info */}
             <div className="space-y-3">
               <h4 className="text-xl font-semibold text-gray-900">
-                Dr.{" "}
-                {profileForm.last_name
-                  ? `${profileForm.last_name}, ${profileForm.first_name}${
-                      profileForm.middle_name
-                        ? " " + profileForm.middle_name.charAt(0) + "."
-                        : ""
-                    }`
-                  : user?.name || "Psychologist"}
-              </h4>
+  {profileForm.first_name && profileForm.last_name
+    ? `Dr. ${profileForm.first_name} ${
+        profileForm.middle_name ? profileForm.middle_name.charAt(0) + ". " : ""
+      }${profileForm.last_name}`
+    : `Dr. ${user?.email?.split('@')[0] || "Psychologist"}`}
+</h4>
               <p className="text-gray-600">
                 {profileForm.email || user?.email}
               </p>
@@ -1021,29 +1018,20 @@ const DashboardNew = () => {
         setCalendarReloadKey((prev) => prev + 1);
 
         // Update profile form with psychologist data
-        console.log("📋 Updating profile form with psychologist data:");
-        console.log("  - First Name:", psychologist.first_name);
-        console.log("  - Middle Name:", psychologist.middle_name);
-        console.log("  - Last Name:", psychologist.last_name);
-        console.log("  - Email:", psychologist.email);
-        console.log("  - Avatar URL:", psychologist.avatar_url);
-        console.log("  - Sex:", psychologist.sex);
-
         const updatedProfileForm = {
-          first_name: psychologist.first_name || "",
-          middle_name: psychologist.middle_name || "",
-          last_name: psychologist.last_name || "",
-          email: psychologist.email || "",
-          phone: psychologist.contact || "",
-          license_number: psychologist.license_number || "",
-          bio: psychologist.bio || "",
-          sex: psychologist.sex || "",
-          avatar_url: psychologist.avatar_url || "",
-          profilePicture: null,
-        };
+  first_name: psychologist.first_name || "",
+  middle_name: psychologist.middle_name || "",
+  last_name: psychologist.last_name || "",
+  email: psychologist.email || "",
+  phone: psychologist.contact || "",
+  license_number: psychologist.license_number || "",
+  bio: psychologist.bio || "",
+  sex: psychologist.sex || "",
+  avatar_url: psychologist.avatar_url || "",
+  profilePicture: null,
+};
+setProfileForm(updatedProfileForm);
 
-        console.log("📋 Setting profileForm to:", updatedProfileForm);
-        setProfileForm(updatedProfileForm);
 
         // Load real appointment requests for this psychologist
         const pending =
@@ -1095,182 +1083,176 @@ const DashboardNew = () => {
   };
 
   const handleProfileUpdate = async () => {
-    // Validation: Check for required fields
-    const requiredFields = [
-      { field: "first_name", label: "First Name" },
-      { field: "last_name", label: "Last Name" },
-      { field: "phone", label: "Phone Number" },
-      { field: "license_number", label: "License Number" },
-    ];
+  // Validation: Check for required fields
+  const requiredFields = [
+    { field: "first_name", label: "First Name" },
+    { field: "last_name", label: "Last Name" },
+    { field: "phone", label: "Phone Number" },
+    { field: "license_number", label: "License Number" },
+  ];
 
-    const emptyFields = requiredFields.filter(
-      ({ field }) => !profileForm[field]?.trim()
+  const emptyFields = requiredFields.filter(
+    ({ field }) => !profileForm[field]?.trim()
+  );
+
+  if (emptyFields.length > 0) {
+    const fieldNames = emptyFields.map(({ label }) => label).join(", ");
+    showNotification(
+      "warning",
+      "Required Fields Missing",
+      `Please fill in the following required fields: ${fieldNames}`
+    );
+    return;
+  }
+
+  // Name validation (no numbers, minimum 2 letters)
+  const nameFields = [
+    { field: "first_name", label: "First Name" },
+    { field: "last_name", label: "Last Name" },
+    { field: "middle_name", label: "Middle Name" },
+  ];
+
+  for (const { field, label } of nameFields) {
+    const value = profileForm[field]?.trim();
+
+    // Skip validation for middle name if it's empty (optional field)
+    if (field === "middle_name" && !value) continue;
+
+    if (value) {
+      // Check for numbers in name
+      if (/\d/.test(value)) {
+        showNotification(
+          "warning",
+          "Invalid Name Format",
+          `${label} cannot contain numbers. Please use only letters.`
+        );
+        return;
+      }
+
+      // Check minimum length (2 letters)
+      if (value.length < 2) {
+        showNotification(
+          "warning",
+          "Name Too Short",
+          `${label} must be at least 2 characters long.`
+        );
+        return;
+      }
+    }
+  }
+
+  // Phone validation (should be 11 digits)
+  if (profileForm.phone.length !== 11) {
+    showNotification(
+      "warning",
+      "Invalid Phone Number",
+      "Phone number must be exactly 11 digits."
+    );
+    return;
+  }
+
+  if (!profileForm.phone.startsWith("09")) {
+    showNotification(
+      "warning",
+      "Invalid Phone Number",
+      "Phone number must start with 09."
+    );
+    return;
+  }
+
+  setProfileUpdateLoading(true);
+  try {
+    console.log("Updating profile:", profileForm);
+    console.log("Psychologist ID:", psychologistId);
+
+    if (!psychologistId) {
+      throw new Error("Psychologist ID not found");
+    }
+
+    // Handle profile picture upload
+    let uploadedAvatarUrl = profileForm.avatar_url || null;
+    if (profileForm.profilePicture) {
+      const file = profileForm.profilePicture;
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${psychologistId}/${Date.now()}.${fileExt}`;
+      
+      console.log("Uploading avatar:", fileName);
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(fileName, file, { upsert: true, contentType: file.type });
+        
+      if (uploadError) {
+        console.error("Avatar upload error:", uploadError);
+        throw new Error(`Failed to upload avatar: ${uploadError.message}`);
+      }
+      
+      const { data: publicUrlData } = supabase.storage
+        .from("avatars")
+        .getPublicUrl(uploadData.path);
+      uploadedAvatarUrl = publicUrlData.publicUrl;
+      console.log("Avatar uploaded successfully:", uploadedAvatarUrl);
+    }
+
+    // Prepare the update data
+    const updateData = {
+      first_name: profileForm.first_name.trim(),
+      middle_name: profileForm.middle_name?.trim() || null,
+      last_name: profileForm.last_name.trim(),
+      contact: profileForm.phone.trim(),
+      license_number: profileForm.license_number.trim(),
+      bio: profileForm.bio?.trim() || null,
+      avatar_url: uploadedAvatarUrl,
+      updated_at: new Date().toISOString(),
+    };
+
+    console.log("Update data being sent:", updateData);
+
+    // Update directly with Supabase instead of using the service
+    const { data: updatedData, error: updateError } = await supabase
+      .from("psychologists")
+      .update(updateData)
+      .eq("id", psychologistId)
+      .select()
+      .single();
+
+    if (updateError) {
+      console.error("Database update error:", updateError);
+      throw new Error(`Database update failed: ${updateError.message}`);
+    }
+
+    console.log("Profile updated successfully:", updatedData);
+
+    // Update the local profile form with the returned data
+    setProfileForm(prev => ({
+      ...prev,
+      first_name: updatedData.first_name || "",
+      middle_name: updatedData.middle_name || "",
+      last_name: updatedData.last_name || "",
+      phone: updatedData.contact || "",
+      license_number: updatedData.license_number || "",
+      bio: updatedData.bio || "",
+      avatar_url: updatedData.avatar_url || prev.avatar_url || "",
+      profilePicture: null, // Clear the temporary file
+    }));
+
+    setProfileUpdateLoading(false);
+    setShowProfileModal(false);
+    showNotification(
+      "success",
+      "Profile Updated",
+      "Your profile has been updated successfully!"
     );
 
-    if (emptyFields.length > 0) {
-      const fieldNames = emptyFields.map(({ label }) => label).join(", ");
-      showNotification(
-        "warning",
-        "Required Fields Missing",
-        `Please fill in the following required fields: ${fieldNames}`
-      );
-      return;
-    }
-
-    // Name validation (no numbers, minimum 2 letters)
-    const nameFields = [
-      { field: "first_name", label: "First Name" },
-      { field: "last_name", label: "Last Name" },
-      { field: "middle_name", label: "Middle Name" },
-    ];
-
-    for (const { field, label } of nameFields) {
-      const value = profileForm[field]?.trim();
-
-      // Skip validation for middle name if it's empty (optional field)
-      if (field === "middle_name" && !value) continue;
-
-      if (value) {
-        // Check for numbers in name
-        if (/\d/.test(value)) {
-          showNotification(
-            "warning",
-            "Invalid Name Format",
-            `${label} cannot contain numbers. Please use only letters.`
-          );
-          return;
-        }
-
-        // Check minimum length (2 letters)
-        if (value.length < 2) {
-          showNotification(
-            "warning",
-            "Name Too Short",
-            `${label} must be at least 2 characters long.`
-          );
-          return;
-        }
-      }
-    }
-
-    // Phone validation (should be 11 digits)
-    if (profileForm.phone.length !== 11) {
-      showNotification(
-        "warning",
-        "Invalid Phone Number",
-        "Phone number must be exactly 11 digits."
-      );
-      return;
-    }
-
-    setProfileUpdateLoading(true);
-    try {
-      console.log("Updating profile:", profileForm);
-
-      if (!psychologistId) {
-        throw new Error("Psychologist ID not found");
-      }
-
-      // If a new profile picture is selected, upload to Supabase Storage
-      let uploadedAvatarUrl = profileForm.avatar_url || null;
-      if (profileForm.profilePicture) {
-        const file = profileForm.profilePicture;
-        const fileExt = file.name.split(".").pop();
-        const fileName = `${psychologistId}/${Date.now()}.${fileExt}`;
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from("avatars")
-          .upload(fileName, file, { upsert: true, contentType: file.type });
-        if (uploadError) {
-          console.error("Avatar upload error:", uploadError);
-          throw uploadError;
-        }
-        const { data: publicUrlData } = supabase.storage
-          .from("avatars")
-          .getPublicUrl(uploadData.path);
-        uploadedAvatarUrl = publicUrlData.publicUrl;
-      }
-
-      // Prepare the update data - map form fields to database columns
-      const updateData = {
-        first_name: profileForm.first_name,
-        middle_name: profileForm.middle_name,
-        last_name: profileForm.last_name,
-        // Generate full name for backwards compatibility
-        name: `${profileForm.last_name}, ${profileForm.first_name}${
-          profileForm.middle_name
-            ? " " + profileForm.middle_name.charAt(0) + "."
-            : ""
-        }`,
-        contact: profileForm.phone,
-        license_number: profileForm.license_number,
-        bio: profileForm.bio,
-        avatar_url: uploadedAvatarUrl,
-        updated_at: new Date().toISOString(),
-      };
-
-      // Update psychologist profile in database
-      const updatedPsychologist = await psychologistService.updatePsychologist(
-        psychologistId,
-        updateData
-      );
-
-      if (!updatedPsychologist) {
-        throw new Error("Failed to update profile");
-      }
-
-      console.log("Profile updated successfully:", updatedPsychologist);
-
-      setProfileUpdateLoading(false);
-      setShowProfileModal(false);
-      showNotification(
-        "success",
-        "Profile Updated",
-        "Your profile has been updated successfully!"
-      );
-
-      // Reload dashboard data to reflect changes
-      const loadDashboardData = async () => {
-        // Re-run the data loading logic
-        if (user?.id) {
-          const { data: psychologist } = await supabase
-            .from("psychologists")
-            .select(
-              "id, first_name, middle_name, last_name, email, contact, license_number, sex, avatar_url, bio"
-            )
-            .eq("user_id", user.id)
-            .single();
-
-          if (psychologist) {
-            setProfileForm((prev) => ({
-              ...prev,
-              first_name: psychologist.first_name || "",
-              middle_name: psychologist.middle_name || "",
-              last_name: psychologist.last_name || "",
-              email: psychologist.email || "",
-              phone: psychologist.contact || "",
-              license_number: psychologist.license_number || "",
-              bio: psychologist.bio || "",
-              sex: psychologist.sex || "",
-              avatar_url: psychologist.avatar_url || prev.avatar_url || "",
-            }));
-          }
-        }
-      };
-
-      await loadDashboardData();
-      // Clear transient file to avoid re-uploads
-      setProfileForm((prev) => ({ ...prev, profilePicture: null }));
-    } catch (error) {
-      console.error("Error updating profile:", error);
-      setProfileUpdateLoading(false);
-      showNotification(
-        "error",
-        "Update Failed",
-        `Error updating profile: ${error.message}`
-      );
-    }
-  };
-
+  } catch (error) {
+    console.error("Error updating profile:", error);
+    setProfileUpdateLoading(false);
+    showNotification(
+      "error",
+      "Update Failed",
+      `Error updating profile: ${error.message}`
+    );
+  }
+};
   // Handle Password Change
   const handlePasswordChange = async () => {
     setPasswordUpdateLoading(true);
