@@ -117,14 +117,52 @@ class DeviceService {
         .single();
 
       if (existingDevice) {
-        // Update the existing device record (from physical setup)
+        // First, let's see what baselines exist and debug the UUID matching
+        const { data: allBaselines } = await supabase
+          .from('baseline_heart_rates')
+          .select('user_id, baseline_hr')
+          .order('recording_end_time', { ascending: false });
+        
+        console.log('All baselines in system:', allBaselines);
+        console.log('Looking for user ID:', userId);
+        console.log('User ID type:', typeof userId);
+        
+        // Try to find a matching baseline with more flexible matching
+        const matchingBaseline = allBaselines?.find(b => 
+          b.user_id === userId || 
+          b.user_id?.toString() === userId?.toString() ||
+          b.user_id?.startsWith(userId?.substring(0, 20)) ||
+          userId?.startsWith(b.user_id?.substring(0, 20))
+        );
+        
+        console.log('Matching baseline found:', matchingBaseline);
+
+        // Get user's baseline before updating device
+        const { data: userBaseline, error: baselineError } = await supabase
+          .from('baseline_heart_rates')
+          .select('baseline_hr')
+          .eq('user_id', userId)
+          .order('recording_end_time', { ascending: false })
+          .limit(1)
+          .single();
+
+        console.log('Baseline lookup for user:', userId);
+        console.log('Found baseline:', userBaseline);
+        console.log('Baseline error:', baselineError);
+
+        // Use the flexible match if the exact match failed
+        const finalBaseline = userBaseline?.baseline_hr || matchingBaseline?.baseline_hr || null;
+        console.log('Final baseline to use:', finalBaseline);
+
+        // Update the existing device record (from physical setup) with baseline sync
         const { error: updateError } = await supabase
           .from('wearable_devices')
           .update({
             device_name: 'AnxieEase Sensor #001', // Keep clean device name
             user_id: userId,
             linked_at: new Date().toISOString(),
-            status: 'assigned'
+            status: 'assigned',
+            baseline_hr: finalBaseline // Use the flexible baseline
           })
           .eq('device_id', DEVICE_ID);
 
@@ -133,7 +171,20 @@ class DeviceService {
           throw updateError;
         }
       } else {
-        // If no base device exists, create one
+        // Get user's baseline before creating device record
+        const { data: userBaseline, error: baselineError } = await supabase
+          .from('baseline_heart_rates')
+          .select('baseline_hr')
+          .eq('user_id', userId)
+          .order('recording_end_time', { ascending: false })
+          .limit(1)
+          .single();
+
+        console.log('Baseline lookup for new device - user:', userId);
+        console.log('Found baseline:', userBaseline);
+        console.log('Baseline error:', baselineError);
+
+        // If no base device exists, create one with baseline sync
         const { error: insertError } = await supabase
           .from('wearable_devices')
           .insert({
@@ -141,7 +192,8 @@ class DeviceService {
             device_name: 'AnxieEase Sensor #001', // Keep clean device name
             user_id: userId,
             linked_at: new Date().toISOString(),
-            status: 'assigned'
+            status: 'assigned',
+            baseline_hr: userBaseline?.baseline_hr || null // Sync baseline immediately
           });
 
         if (insertError) {
@@ -168,7 +220,8 @@ class DeviceService {
           device_name: 'AnxieEase Sensor #001', // Reset to clean name
           user_id: null,
           linked_at: null,
-          status: 'available'
+          status: 'available',
+          baseline_hr: null // Clear baseline when removing user
         })
         .eq('device_id', DEVICE_ID);
 
