@@ -92,36 +92,7 @@ const SuccessModal = ({ isOpen, onClose, title, message, details = [] }) => {
           {/* Message */}
           <p className="text-gray-600 mb-4">{message}</p>
 
-          {/* Details list */}
-          {details.length > 0 && (
-            <div className="space-y-3 mb-6">
-              {details.map((detail, index) => (
-                <div key={index} className="flex items-start space-x-2">
-                  <div
-                    className={`w-1.5 h-1.5 rounded-full mt-2 flex-shrink-0 ${
-                      detail.type === "info"
-                        ? "bg-blue-500"
-                        : detail.type === "warning"
-                        ? "bg-yellow-500"
-                        : "bg-gray-400"
-                    }`}
-                  ></div>
-                  <p
-                    className={`text-sm ${
-                      detail.type === "info"
-                        ? "text-blue-700"
-                        : detail.type === "warning"
-                        ? "text-yellow-700"
-                        : "text-gray-600"
-                    }`}
-                  >
-                    {detail.text}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-
+   
           {/* OK button */}
           <button
             onClick={onClose}
@@ -2107,7 +2078,7 @@ const AdminPanelNew = () => {
             {/* Enhanced Assignment Modal */}
             {showAssignModal && (
               <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                <div className="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm" onClick={() => setShowAssignModal(false)}></div>
+               <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowAssignModal(false)}></div>
                 <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full">
                   <div className="p-6">
                     <div className="flex items-center justify-between mb-6">
