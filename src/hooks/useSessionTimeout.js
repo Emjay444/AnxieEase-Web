@@ -1,8 +1,11 @@
 import { useEffect, useCallback, useRef, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 
-const SESSION_TIMEOUT = 15 * 60 * 1000; // 15 minutes in milliseconds
-const WARNING_TIME = 2 * 60 * 1000; // Show warning 2 minutes before timeout
+const SESSION_TIMEOUT = 15 * 60 * 1000; // 15 minutes in milliseconds (back to original)
+const WARNING_TIME = 2 * 60 * 1000; // Show warning 2 minutes before timeout (back to original)
+
+// Check if we're in development mode
+const isDevelopment = process.env.NODE_ENV === "development";
 
 export const useSessionTimeout = () => {
   const { user, signOut } = useAuth();
@@ -12,8 +15,8 @@ export const useSessionTimeout = () => {
   const [showWarning, setShowWarning] = useState(false);
   const [warningTimeRemaining, setWarningTimeRemaining] = useState(0);
 
-  // Reset the timer
-  const resetTimer = useCallback(() => {
+  // Activity handler (safe version that doesn't trigger auth changes)
+  const handleActivity = useCallback(() => {
     if (!user) return;
 
     lastActivityRef.current = Date.now();
@@ -29,23 +32,22 @@ export const useSessionTimeout = () => {
 
     // Set warning timer (13 minutes)
     warningTimeoutRef.current = setTimeout(() => {
-      console.log("Session will expire in 2 minutes due to inactivity");
+      if (isDevelopment) {
+        console.log("Session will expire in 2 minutes due to inactivity");
+      }
       setShowWarning(true);
       setWarningTimeRemaining(WARNING_TIME);
     }, SESSION_TIMEOUT - WARNING_TIME);
 
     // Set logout timer (15 minutes)
     timeoutRef.current = setTimeout(() => {
-      console.log("Session expired due to inactivity");
+      if (isDevelopment) {
+        console.log("Session expired due to inactivity");
+      }
       setShowWarning(false);
       signOut();
     }, SESSION_TIMEOUT);
-  }, [user, signOut]);
-
-  // Activity handler
-  const handleActivity = useCallback(() => {
-    resetTimer();
-  }, [resetTimer]);
+  }, [user, signOut, isDevelopment]);
 
   useEffect(() => {
     if (user) {
@@ -75,8 +77,8 @@ export const useSessionTimeout = () => {
         document.addEventListener(event, throttledActivityHandler, true);
       });
 
-      // Initialize timer
-      resetTimer();
+      // Initialize timer (safe version)
+      handleActivity();
 
       // Cleanup
       return () => {
@@ -95,33 +97,22 @@ export const useSessionTimeout = () => {
         }
       };
     }
-  }, [user, handleActivity, resetTimer]);
+  }, [user, handleActivity]);
 
-  // Check for activity when window regains focus
+  // Disable focus/visibility handlers to prevent tab switching issues
+  // Session timeout will only reset on actual user activity (mouse/keyboard)
   useEffect(() => {
-    const handleFocus = () => {
-      if (user) {
-        const now = Date.now();
-        const timeSinceLastActivity = now - lastActivityRef.current;
-
-        // If more than 15 minutes have passed, sign out
-        if (timeSinceLastActivity > SESSION_TIMEOUT) {
-          console.log("Session expired while window was not focused");
-          signOut();
-        } else {
-          // Reset timer if still within timeout period
-          resetTimer();
-        }
-      }
-    };
-
-    window.addEventListener("focus", handleFocus);
-    return () => window.removeEventListener("focus", handleFocus);
-  }, [user, signOut, resetTimer]);
+    if (isDevelopment) {
+      console.log(
+        "🔒 [DEV] Focus/visibility handlers disabled to prevent tab reload issues"
+      );
+    }
+    // No focus/visibility event listeners - only mouse/keyboard activity resets timer
+  }, [user, isDevelopment]);
 
   const handleExtendSession = useCallback(() => {
-    resetTimer();
-  }, [resetTimer]);
+    handleActivity();
+  }, [handleActivity]);
 
   const handleLogout = useCallback(() => {
     setShowWarning(false);
@@ -129,7 +120,6 @@ export const useSessionTimeout = () => {
   }, [signOut]);
 
   return {
-    resetTimer,
     showWarning,
     warningTimeRemaining,
     handleExtendSession,
