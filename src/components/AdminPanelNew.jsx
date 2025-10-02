@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext";
+import { supabase } from "../services/supabaseClient";
+import { authService } from "../services/authService";
 import { adminService } from "../services/adminService";
 import { psychologistService } from "../services/psychologistService";
 import deviceService from "../services/deviceService";
 import AddDoctorModal from "./AddDoctorModal";
 import ProfilePicture from "./ProfilePicture";
+import ChangePasswordOTPModal from "./ChangePasswordOTPModal";
 import { getFullName } from "../utils/helpers";
 import {
   Users,
@@ -19,6 +22,7 @@ import {
   Edit3,
   Trash2,
   Eye,
+  EyeOff,
   Mail,
   Phone,
   Calendar,
@@ -35,6 +39,9 @@ import {
   Battery,
   Wifi,
   WifiOff,
+  Lock,
+  ArrowLeft,
+  Loader2,
 } from "lucide-react";
 import LogoutButton from "./LogoutButton";
 // Charts
@@ -70,9 +77,10 @@ const SuccessModal = ({ isOpen, onClose, title, message, details = [] }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Blurred backdrop instead of black */}
+      {/* Blurred backdrop with slight dark tint */}
       <div
-        className="absolute inset-0 bg-white/20 backdrop-blur-md"
+        className="absolute inset-0 bg-transparent backdrop-blur-md"
+        style={{ backgroundColor: "rgba(0, 0, 0, 0.2)" }}
         onClick={onClose}
       ></div>
 
@@ -91,36 +99,6 @@ const SuccessModal = ({ isOpen, onClose, title, message, details = [] }) => {
 
           {/* Message */}
           <p className="text-gray-600 mb-4">{message}</p>
-
-          {/* Details list */}
-          {details.length > 0 && (
-            <div className="space-y-3 mb-6">
-              {details.map((detail, index) => (
-                <div key={index} className="flex items-start space-x-2">
-                  <div
-                    className={`w-1.5 h-1.5 rounded-full mt-2 flex-shrink-0 ${
-                      detail.type === "info"
-                        ? "bg-blue-500"
-                        : detail.type === "warning"
-                        ? "bg-yellow-500"
-                        : "bg-gray-400"
-                    }`}
-                  ></div>
-                  <p
-                    className={`text-sm ${
-                      detail.type === "info"
-                        ? "text-blue-700"
-                        : detail.type === "warning"
-                        ? "text-yellow-700"
-                        : "text-gray-600"
-                    }`}
-                  >
-                    {detail.text}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
 
           {/* OK button */}
           <button
@@ -144,18 +122,18 @@ const AdminPanelNew = () => {
 
   // Device Management state
   const [deviceStatus, setDeviceStatus] = useState({
-    device_id: 'AnxieEase001',
-    device_name: 'AnxieEase Sensor #001',
-    status: 'available',
-    assigned_user: null
+    device_id: "AnxieEase001",
+    device_name: "AnxieEase Sensor #001",
+    status: "available",
+    assigned_user: null,
   });
   const [availableUsers, setAvailableUsers] = useState([]);
   const [deviceStats, setDeviceStats] = useState({
     total_devices: 1,
-    device_status: 'available',
+    device_status: "available",
     assigned_user: null,
     total_users: 0,
-    available_users: 0
+    available_users: 0,
   });
   const [loadingDevices, setLoadingDevices] = useState(false);
   const [deviceError, setDeviceError] = useState(null);
@@ -177,6 +155,29 @@ const AdminPanelNew = () => {
     message: "",
     details: [],
   });
+
+  // Password change states (OTP-based only)
+  const [showChangePasswordOTPModal, setShowChangePasswordOTPModal] =
+    useState(false);
+
+  // Admin management states
+  const [adminsList, setAdminsList] = useState([]);
+  const [showAddAdminModal, setShowAddAdminModal] = useState(false);
+  const [addAdminForm, setAddAdminForm] = useState({
+    email: "",
+    fullName: "",
+  });
+  const [addAdminFormErrors, setAddAdminFormErrors] = useState({
+    email: "",
+    fullName: "",
+  });
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [adminToDelete, setAdminToDelete] = useState(null);
+  const [deletingAdmin, setDeletingAdmin] = useState(false);
+  const [showDeleteOwnAccountModal, setShowDeleteOwnAccountModal] =
+    useState(false);
+  const [deletingOwnAccount, setDeletingOwnAccount] = useState(false);
+  const [addingAdmin, setAddingAdmin] = useState(false);
 
   // Real data states - connected to Supabase
   const [stats, setStats] = useState({
@@ -354,7 +355,7 @@ const AdminPanelNew = () => {
       const [deviceStatusData, usersData, statsData] = await Promise.all([
         deviceService.getDeviceStatus(),
         deviceService.getAvailableUsers(),
-        deviceService.getDeviceStats()
+        deviceService.getDeviceStats(),
       ]);
       setDeviceStatus(deviceStatusData);
       setAvailableUsers(usersData);
@@ -374,16 +375,16 @@ const AdminPanelNew = () => {
       await deviceService.assignDeviceToUser(userId);
       setShowAssignModal(false);
       await loadDevicesData(); // Refresh data
-      
+
       // Find the assigned user for success message
-      const assignedUser = availableUsers.find(user => user.id === userId);
+      const assignedUser = availableUsers.find((user) => user.id === userId);
       setSuccessMessage({
         title: "Device Assigned Successfully",
         message: `AnxieEase device has been successfully assigned to ${assignedUser?.first_name} ${assignedUser?.last_name}`,
         details: [
           `Device ID: AnxieEase001`,
           `Patient: ${assignedUser?.first_name} ${assignedUser?.last_name}`,
-          `Assignment Date: ${new Date().toLocaleString()}`
+          `Assignment Date: ${new Date().toLocaleString()}`,
         ],
       });
       setShowSuccessModal(true);
@@ -402,14 +403,14 @@ const AdminPanelNew = () => {
       const previousUser = deviceStatus.assigned_user;
       await deviceService.removeDeviceAccess();
       await loadDevicesData(); // Refresh data
-      
+
       setSuccessMessage({
         title: "Device Access Removed",
         message: `AnxieEase device access has been successfully removed from ${previousUser?.first_name} ${previousUser?.last_name}`,
         details: [
           `Device ID: AnxieEase001`,
           `Previous Patient: ${previousUser?.first_name} ${previousUser?.last_name}`,
-          `Removal Date: ${new Date().toLocaleString()}`
+          `Removal Date: ${new Date().toLocaleString()}`,
         ],
       });
       setShowSuccessModal(true);
@@ -439,6 +440,13 @@ const AdminPanelNew = () => {
     }
   }, [activeTab]);
 
+  // Load admins list when switching to settings tab
+  useEffect(() => {
+    if (activeTab === "settings") {
+      loadAdminsList();
+    }
+  }, [activeTab]);
+
   // Load analytics data when year changes
   const loadAnalyticsData = async (year) => {
     try {
@@ -453,6 +461,296 @@ const AdminPanelNew = () => {
   useEffect(() => {
     loadAnalyticsData(selectedYear);
   }, [selectedYear]);
+
+  // OTP-based password change handlers
+  const handleOTPPasswordChangeSuccess = (message) => {
+    setSuccessMessage({
+      title: "Password Updated Successfully",
+      message: message,
+      details: [
+        "Your password has been updated with OTP verification",
+        "The new password is now active for your account",
+        "Please use your new password for future logins",
+      ],
+    });
+    setShowSuccessModal(true);
+  };
+
+  const handleOTPPasswordChangeError = (message) => {
+    setErrorModalData({
+      title: "OTP Password Update Failed",
+      message: message,
+    });
+    setShowErrorModal(true);
+  };
+
+  // Admin management functions
+  const loadAdminsList = async () => {
+    try {
+      const result = await adminService.getAllAdmins();
+      if (result.success) {
+        console.log("📋 All admins from database:", result.admins);
+        console.log("📋 Current user email:", user?.email);
+        console.log("📋 Current user ID:", user?.id);
+        console.log(
+          "📋 Admin IDs and emails:",
+          result.admins.map((admin) => `${admin.id}: "${admin.email}"`)
+        );
+        console.log("📋 Filtering out current user from admin list...");
+        const filteredAdmins = result.admins.filter((admin) => {
+          const shouldKeep = admin.id !== user?.id;
+          console.log(
+            `📋 Admin "${admin.email}" (ID: ${admin.id}) - Keep: ${shouldKeep}`
+          );
+          return shouldKeep;
+        });
+        console.log("📋 Filtered admins:", filteredAdmins);
+        setAdminsList(filteredAdmins);
+      } else {
+        console.error("Error loading admins:", result.error);
+        setAdminsList([]);
+      }
+    } catch (error) {
+      console.error("Error loading admins:", error);
+      setAdminsList([]);
+    }
+  };
+
+  const handleAddAdminFormChange = (field, value) => {
+    setAddAdminForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+
+    // Clear field-specific errors when user starts typing
+    if (addAdminFormErrors[field]) {
+      setAddAdminFormErrors((prev) => ({
+        ...prev,
+        [field]: "",
+      }));
+    }
+  };
+
+  const handleAddAdmin = async () => {
+    setAddingAdmin(true);
+    setAddAdminFormErrors({ email: "", fullName: "" });
+
+    try {
+      // Validate form
+      const errors = {};
+
+      // Email validation
+      if (!addAdminForm.email.trim()) {
+        errors.email = "Email address is required";
+      } else {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(addAdminForm.email.trim())) {
+          errors.email = "Please enter a valid email address";
+        }
+      }
+
+      // Full name validation
+      if (!addAdminForm.fullName.trim()) {
+        errors.fullName = "Full name is required";
+      }
+
+      // If there are validation errors, show them and stop
+      if (Object.keys(errors).length > 0) {
+        setAddAdminFormErrors(errors);
+        setAddingAdmin(false);
+        return;
+      }
+
+      // Create admin invitation using the same method as psychologist creation
+      const newAdmin = await authService.createAdmin(
+        addAdminForm.email,
+        addAdminForm.fullName
+      );
+
+      // Clear form and close modal
+      setAddAdminForm({
+        email: "",
+        fullName: "",
+      });
+      setAddAdminFormErrors({
+        email: "",
+        fullName: "",
+      });
+      setShowAddAdminModal(false);
+
+      // Reload admins list
+      await loadAdminsList();
+
+      // Log the activity
+      try {
+        await adminService.logActivity(
+          user?.id,
+          "Admin Account Invited",
+          `Sent admin invitation to ${addAdminForm.email} (${addAdminForm.fullName})`
+        );
+      } catch (logError) {
+        console.warn("Failed to log admin invitation activity:", logError);
+      }
+
+      // Show success message
+      setSuccessMessage({
+        title: "Admin Invitation Sent",
+        message: `Invitation sent to ${
+          addAdminForm.fullName || addAdminForm.email
+        }.`,
+        details: [
+          `Email: ${addAdminForm.email}`,
+          `Full Name: ${addAdminForm.fullName || "Not specified"}`,
+          "📧 A magic link has been sent to their email address",
+          "🔐 They will set their own password during setup",
+          "✅ Once setup is complete, they will have full admin access",
+        ],
+      });
+      setShowSuccessModal(true);
+    } catch (error) {
+      console.error("Error adding admin:", error);
+      setErrorModalData({
+        title: "Failed to Add Admin",
+        message: error.message,
+      });
+      setShowErrorModal(true);
+    } finally {
+      setAddingAdmin(false);
+    }
+  };
+
+  const handleRemoveAdmin = (admin) => {
+    // Safeguard: prevent deletion of current user (should not happen due to filtering)
+    if (admin.id === user?.id) {
+      setErrorModalData({
+        title: "Cannot Remove Self",
+        message: "You cannot remove your own admin account from this list.",
+      });
+      setShowErrorModal(true);
+      return;
+    }
+
+    setAdminToDelete(admin);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDeleteAdmin = async () => {
+    if (!adminToDelete) return;
+
+    setDeletingAdmin(true);
+    try {
+      console.log("🗑️ Removing admin:", adminToDelete.email);
+
+      // Remove from admin_profiles table
+      const removeResult = await adminService.removeUserFromAdminsTable(
+        adminToDelete.id
+      );
+
+      if (!removeResult.success) {
+        throw new Error(removeResult.error);
+      }
+
+      // Close delete modal
+      setShowDeleteModal(false);
+      setAdminToDelete(null);
+
+      // Reload admins list
+      await loadAdminsList();
+
+      // Log the activity
+      try {
+        await adminService.logActivity(
+          user?.id,
+          "Admin Account Deleted",
+          `Permanently removed admin account: ${adminToDelete.email} (${
+            adminToDelete.full_name || "No name"
+          })`
+        );
+      } catch (logError) {
+        console.warn("Failed to log admin deletion activity:", logError);
+      }
+
+      // Show success message
+      setSuccessMessage({
+        title: "Admin Removed",
+        message: `${
+          adminToDelete.full_name || adminToDelete.email
+        } has been permanently removed from the admin system.`,
+        details: [
+          "The admin account has been completely deleted from the system",
+          "They can no longer access the admin dashboard",
+        ],
+      });
+      setShowSuccessModal(true);
+
+      console.log("✅ Admin removed successfully");
+    } catch (error) {
+      console.error("❌ Error removing admin:", error);
+      setErrorModalData({
+        title: "Failed to Remove Admin",
+        message: error.message || "An unexpected error occurred.",
+      });
+      setShowErrorModal(true);
+    } finally {
+      setDeletingAdmin(false);
+    }
+  };
+
+  const cancelDeleteAdmin = () => {
+    setShowDeleteModal(false);
+    setAdminToDelete(null);
+  };
+
+  const handleDeleteOwnAccount = async () => {
+    setDeletingOwnAccount(true);
+    try {
+      console.log("🗑️ Deleting own admin account:", user?.email);
+
+      // Remove from admin_profiles table
+      const removeResult = await adminService.removeUserFromAdminsTable(
+        user?.id
+      );
+
+      if (!removeResult.success) {
+        throw new Error(removeResult.error);
+      }
+
+      console.log("✅ Own admin account deleted successfully");
+
+      // Log the activity before signing out
+      try {
+        await adminService.logActivity(
+          user?.id,
+          "Admin Self-Deletion",
+          `Admin account self-deleted: ${user?.email}`
+        );
+      } catch (logError) {
+        console.warn("Failed to log self-deletion activity:", logError);
+      }
+
+      // Close modal
+      setShowDeleteOwnAccountModal(false);
+
+      // Sign out the user since their admin account is deleted
+      await authService.signOut();
+
+      // Redirect to login
+      navigate("/login");
+    } catch (error) {
+      console.error("❌ Error deleting own account:", error);
+      setErrorModalData({
+        title: "Failed to Delete Account",
+        message: error.message || "An unexpected error occurred.",
+      });
+      setShowErrorModal(true);
+    } finally {
+      setDeletingOwnAccount(false);
+    }
+  };
+
+  const cancelDeleteOwnAccount = () => {
+    setShowDeleteOwnAccountModal(false);
+  };
 
   // Handle adding new psychologist
   const handleAddPsychologist = async (psychologistData) => {
@@ -1074,6 +1372,13 @@ const AdminPanelNew = () => {
             icon={Activity}
             isActive={activeTab === "activity"}
             onClick={() => setActiveTab("activity")}
+          />
+          <TabButton
+            tab="settings"
+            label="Settings"
+            icon={Settings}
+            isActive={activeTab === "settings"}
+            onClick={() => setActiveTab("settings")}
           />
         </div>
 
@@ -1968,8 +2273,12 @@ const AdminPanelNew = () => {
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-semibold text-gray-900">Device Management</h2>
-                <p className="text-gray-600">Manage device assignments and user access</p>
+                <h2 className="text-xl font-semibold text-gray-900">
+                  Device Management
+                </h2>
+                <p className="text-gray-600">
+                  Manage device assignments and user access
+                </p>
               </div>
             </div>
 
@@ -1978,7 +2287,9 @@ const AdminPanelNew = () => {
               <div className="bg-gradient-to-br from-white to-blue-50 p-4 rounded-lg border border-blue-200 shadow-sm hover:shadow-md transition-all duration-200">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Total Devices</p>
+                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">
+                      Total Devices
+                    </p>
                     <p className="text-2xl font-bold text-blue-900 mt-1">1</p>
                   </div>
                   <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -1990,8 +2301,12 @@ const AdminPanelNew = () => {
               <div className="bg-gradient-to-br from-white to-gray-50 p-4 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Total Patients</p>
-                    <p className="text-2xl font-bold text-gray-900 mt-1">{deviceStats.total_users}</p>
+                    <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">
+                      Total Patients
+                    </p>
+                    <p className="text-2xl font-bold text-gray-900 mt-1">
+                      {deviceStats.total_users}
+                    </p>
                   </div>
                   <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
                     <Users className="w-5 h-5 text-gray-600" />
@@ -2002,8 +2317,12 @@ const AdminPanelNew = () => {
               <div className="bg-gradient-to-br from-white to-emerald-50 p-4 rounded-lg border border-emerald-200 shadow-sm hover:shadow-md transition-all duration-200">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">Assigned Patients</p>
-                    <p className="text-2xl font-bold text-emerald-900 mt-1">{deviceStats.available_users}</p>
+                    <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">
+                      Assigned Patients
+                    </p>
+                    <p className="text-2xl font-bold text-emerald-900 mt-1">
+                      {deviceStats.available_users}
+                    </p>
                   </div>
                   <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
                     <UserCheck className="w-5 h-5 text-emerald-600" />
@@ -2024,9 +2343,11 @@ const AdminPanelNew = () => {
                   <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
                     <AlertTriangle className="w-6 h-6 text-red-500" />
                   </div>
-                  <p className="text-red-600 font-semibold mb-1">Error loading device</p>
+                  <p className="text-red-600 font-semibold mb-1">
+                    Error loading device
+                  </p>
                   <p className="text-gray-600 text-sm mb-4">{deviceError}</p>
-                  <button 
+                  <button
                     onClick={loadDevicesData}
                     className="bg-emerald-600 text-white px-4 py-2 rounded-md hover:bg-emerald-700 transition-colors font-medium shadow-sm"
                   >
@@ -2041,27 +2362,42 @@ const AdminPanelNew = () => {
                         <Smartphone className="w-7 h-7 text-emerald-600" />
                       </div>
                       <div>
-                        <h3 className="text-xl font-bold text-gray-900 mb-0.5">{deviceStatus.device_name}</h3>
-                        <p className="text-gray-500 text-xs font-medium mb-2">Device ID: {deviceStatus.device_id}</p>
+                        <h3 className="text-xl font-bold text-gray-900 mb-0.5">
+                          {deviceStatus.device_name}
+                        </h3>
+                        <p className="text-gray-500 text-xs font-medium mb-2">
+                          Device ID: {deviceStatus.device_id}
+                        </p>
                         <div className="flex items-center space-x-2">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            deviceStatus.status === 'available' 
-                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' 
-                              : 'bg-blue-100 text-blue-800 border border-blue-200'
-                          }`}>
-                            {deviceStatus.status === 'available' && <CheckCircle className="w-3 h-3 mr-1" />}
-                            {deviceStatus.status === 'assigned' && <User className="w-3 h-3 mr-1" />}
-                            {deviceStatus.status === 'available' ? 'Available' : 'Assigned'}
+                          <span
+                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              deviceStatus.status === "available"
+                                ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                                : "bg-blue-100 text-blue-800 border border-blue-200"
+                            }`}
+                          >
+                            {deviceStatus.status === "available" && (
+                              <CheckCircle className="w-3 h-3 mr-1" />
+                            )}
+                            {deviceStatus.status === "assigned" && (
+                              <User className="w-3 h-3 mr-1" />
+                            )}
+                            {deviceStatus.status === "available"
+                              ? "Available"
+                              : "Assigned"}
                           </span>
-                          {deviceStatus.status === 'assigned' && (
+                          {deviceStatus.status === "assigned" && (
                             <div className="flex items-center bg-gray-100 px-2.5 py-0.5 rounded-full">
                               <span className="text-xs font-medium text-gray-700">
-                                Assigned to: {
-                                  deviceStatus.assigned_user_name ||
-                                  [deviceStatus.assigned_user?.first_name, deviceStatus.assigned_user?.last_name]
+                                Assigned to:{" "}
+                                {deviceStatus.assigned_user_name ||
+                                  [
+                                    deviceStatus.assigned_user?.first_name,
+                                    deviceStatus.assigned_user?.last_name,
+                                  ]
                                     .filter(Boolean)
-                                    .join(' ') || 'Unknown patient'
-                                }
+                                    .join(" ") ||
+                                  "Unknown patient"}
                               </span>
                             </div>
                           )}
@@ -2070,7 +2406,7 @@ const AdminPanelNew = () => {
                     </div>
 
                     <div className="flex items-center space-x-3">
-                      {deviceStatus.status === 'assigned' ? (
+                      {deviceStatus.status === "assigned" ? (
                         <button
                           onClick={handleRemoveAccess}
                           disabled={loadingDevices}
@@ -2082,7 +2418,9 @@ const AdminPanelNew = () => {
                       ) : (
                         <button
                           onClick={() => setShowAssignModal(true)}
-                          disabled={loadingDevices || availableUsers.length === 0}
+                          disabled={
+                            loadingDevices || availableUsers.length === 0
+                          }
                           className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-md transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 font-medium shadow-sm hover:shadow"
                         >
                           <UserPlus className="w-4 h-4" />
@@ -2096,7 +2434,9 @@ const AdminPanelNew = () => {
                     <div className="mt-4 pt-3 border-t border-gray-200">
                       <div className="flex items-center space-x-2 text-xs text-gray-600">
                         <span className="font-medium">Assignment Date:</span>
-                        <span>{new Date(deviceStatus.linked_at).toLocaleString()}</span>
+                        <span>
+                          {new Date(deviceStatus.linked_at).toLocaleString()}
+                        </span>
                       </div>
                     </div>
                   )}
@@ -2107,11 +2447,16 @@ const AdminPanelNew = () => {
             {/* Enhanced Assignment Modal */}
             {showAssignModal && (
               <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                <div className="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm" onClick={() => setShowAssignModal(false)}></div>
+                <div
+                  className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+                  onClick={() => setShowAssignModal(false)}
+                ></div>
                 <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full">
                   <div className="p-6">
                     <div className="flex items-center justify-between mb-6">
-                      <h3 className="text-xl font-bold text-gray-900">Assign Device to Patient</h3>
+                      <h3 className="text-xl font-bold text-gray-900">
+                        Assign Device to Patient
+                      </h3>
                       <button
                         onClick={() => setShowAssignModal(false)}
                         className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -2119,9 +2464,11 @@ const AdminPanelNew = () => {
                         <X className="w-6 h-6" />
                       </button>
                     </div>
-                    
-                    <p className="text-gray-600 mb-6">Select a patient to assign the AnxieEase device to:</p>
-                    
+
+                    <p className="text-gray-600 mb-6">
+                      Select a patient to assign the AnxieEase device to:
+                    </p>
+
                     <div className="space-y-2 max-h-60 overflow-y-auto">
                       {availableUsers.map((user) => (
                         <button
@@ -2137,7 +2484,9 @@ const AdminPanelNew = () => {
                               <p className="font-semibold text-gray-900">
                                 {user.first_name} {user.last_name}
                               </p>
-                              <p className="text-sm text-gray-500">Patient ID: {user.id}</p>
+                              <p className="text-sm text-gray-500">
+                                Patient ID: {user.id}
+                              </p>
                             </div>
                           </div>
                         </button>
@@ -2443,6 +2792,157 @@ const AdminPanelNew = () => {
             </div>
           </div>
         )}
+
+        {/* Settings Tab */}
+        {activeTab === "settings" && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900">
+                    Admin Settings
+                  </h2>
+                  <p className="text-gray-600 mt-1">
+                    Manage your admin account settings
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                {/* Account Information */}
+                <div className="border-b border-gray-200 pb-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-medium text-gray-900">
+                      Account Information
+                    </h3>
+                    <button
+                      onClick={() => setShowDeleteOwnAccountModal(true)}
+                      className="flex items-center space-x-2 px-3 py-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors text-sm border border-red-200 hover:border-red-300"
+                      title="Delete My Account"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      <span>Delete Account</span>
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Email Address
+                      </label>
+                      <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600">
+                        {user?.email}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Email cannot be changed for security reasons
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Role
+                      </label>
+                      <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600">
+                        Administrator
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Password Management */}
+                <div className="border-b border-gray-200 pb-6">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">
+                    Password Management
+                  </h3>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-medium text-gray-900">
+                          Change Password
+                        </h4>
+                        <p className="text-sm text-gray-600 mt-1">
+                          Secure password change with OTP verification via email
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setShowChangePasswordOTPModal(true)}
+                        className="flex items-center space-x-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+                      >
+                        <Mail className="h-4 w-4" />
+                        <span>Change Password</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Admin Management */}
+                <div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">
+                    Admin Management
+                  </h3>
+
+                  {/* Current Admins List */}
+                  <div className="bg-white border border-gray-200 rounded-lg">
+                    <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-medium text-gray-900">
+                          Current Administrators
+                        </h4>
+                        <button
+                          onClick={() => setShowAddAdminModal(true)}
+                          className="flex items-center space-x-2 px-3 py-1.5 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors text-sm"
+                        >
+                          <UserPlus className="h-4 w-4" />
+                          <span>Add Admin</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="divide-y divide-gray-200">
+                      {adminsList.length > 0 ? (
+                        adminsList.map((admin, index) => (
+                          <div key={admin.id} className="px-4 py-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-3">
+                                <div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center">
+                                  <User className="h-4 w-4 text-emerald-600" />
+                                </div>
+                                <div>
+                                  <p className="font-medium text-gray-900">
+                                    {admin.full_name || "Admin User"}
+                                  </p>
+                                  <p className="text-sm text-gray-600">
+                                    {admin.email}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+                                  Administrator
+                                </span>
+                                <button
+                                  onClick={() => handleRemoveAdmin(admin)}
+                                  className="flex items-center space-x-1 px-2 py-1 text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors text-sm"
+                                  title="Delete Admin Account"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                  <span>Delete</span>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="px-4 py-8 text-center text-gray-500">
+                          <User className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                          <p>No administrators found</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Add Psychologist Modal */}
@@ -2452,6 +2952,118 @@ const AdminPanelNew = () => {
         onSave={handleAddPsychologist}
         isLoading={isCreatingPsychologist}
       />
+
+      {/* Add Admin Modal */}
+      {showAddAdminModal && (
+        <div className="fixed inset-0 bg-transparent backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl p-8 max-w-md w-full shadow-2xl">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-semibold text-gray-900">
+                Add New Administrator
+              </h3>
+              <button
+                onClick={() => {
+                  setShowAddAdminModal(false);
+                  setAddAdminForm({ email: "", fullName: "" });
+                  setAddAdminFormErrors({ email: "", fullName: "" });
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Email */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Email Address *
+                </label>
+                <input
+                  type="email"
+                  value={addAdminForm.email}
+                  onChange={(e) =>
+                    handleAddAdminFormChange("email", e.target.value)
+                  }
+                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent ${
+                    addAdminFormErrors.email
+                      ? "border-red-300"
+                      : "border-gray-300"
+                  }`}
+                  placeholder="admin@example.com"
+                  required
+                />
+                {addAdminFormErrors.email && (
+                  <p className="mt-1 text-sm text-red-600">
+                    {addAdminFormErrors.email}
+                  </p>
+                )}
+              </div>
+
+              {/* Full Name */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Full Name *
+                </label>
+                <input
+                  type="text"
+                  value={addAdminForm.fullName}
+                  onChange={(e) =>
+                    handleAddAdminFormChange("fullName", e.target.value)
+                  }
+                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent ${
+                    addAdminFormErrors.fullName
+                      ? "border-red-300"
+                      : "border-gray-300"
+                  }`}
+                  placeholder="John Doe"
+                  required
+                />
+                {addAdminFormErrors.fullName && (
+                  <p className="mt-1 text-sm text-red-600">
+                    {addAdminFormErrors.fullName}
+                  </p>
+                )}
+              </div>
+
+              {/* Info Message */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-sm text-blue-800">
+                  📧 <strong>Invitation Process:</strong> A magic link will be
+                  sent to this email address. The recipient will set their own
+                  password during account setup.
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex space-x-3 pt-4">
+                <button
+                  onClick={() => {
+                    setShowAddAdminModal(false);
+                    setAddAdminForm({ email: "", fullName: "" });
+                    setAddAdminFormErrors({ email: "", fullName: "" });
+                  }}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  disabled={addingAdmin}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddAdmin}
+                  disabled={
+                    addingAdmin ||
+                    !addAdminForm.email.trim() ||
+                    !addAdminForm.fullName.trim()
+                  }
+                  className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {addingAdmin ? "Sending Invitation..." : "Send Invitation"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Success Modal */}
       <SuccessModal
@@ -4396,6 +5008,198 @@ const AdminPanelNew = () => {
           </div>
         </div>
       )}
+
+      {/* Delete Admin Confirmation Modal */}
+      {showDeleteModal && adminToDelete && (
+        <div
+          className="fixed inset-0 bg-transparent backdrop-blur-md flex items-center justify-center p-4 z-50"
+          style={{ backgroundColor: "rgba(0, 0, 0, 0.2)" }}
+        >
+          <div className="bg-white rounded-xl p-8 max-w-md w-full shadow-2xl">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-semibold text-gray-900">
+                Confirm Admin Removal
+              </h3>
+              <button
+                onClick={cancelDeleteAdmin}
+                className="text-gray-400 hover:text-gray-600"
+                disabled={deletingAdmin}
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center space-x-3 p-4 bg-red-50 rounded-lg border border-red-200">
+                <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                  <Trash2 className="h-5 w-5 text-red-600" />
+                </div>
+                <div>
+                  <p className="font-medium text-red-900">
+                    Remove Administrator
+                  </p>
+                  <p className="text-sm text-red-700">
+                    This action cannot be undone
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-gray-50 rounded-lg p-4">
+                <p className="text-sm text-gray-700 mb-2">
+                  You are about to remove:
+                </p>
+                <div className="flex items-center space-x-3">
+                  <div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center">
+                    <User className="h-4 w-4 text-emerald-600" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900">
+                      {adminToDelete.full_name || "Admin User"}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      {adminToDelete.email}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                <p className="text-sm text-red-800">
+                  <strong>Warning:</strong> This will permanently remove the
+                  admin account from the system. This action cannot be undone.
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex space-x-3 pt-4">
+                <button
+                  onClick={cancelDeleteAdmin}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  disabled={deletingAdmin}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDeleteAdmin}
+                  disabled={deletingAdmin}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                >
+                  {deletingAdmin ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Removing...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Remove Admin
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Own Account Confirmation Modal */}
+      {showDeleteOwnAccountModal && (
+        <div
+          className="fixed inset-0 bg-transparent backdrop-blur-md flex items-center justify-center p-4 z-50"
+          style={{ backgroundColor: "rgba(0, 0, 0, 0.2)" }}
+        >
+          <div className="bg-white rounded-xl p-8 max-w-md w-full shadow-2xl">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-semibold text-gray-900">
+                Delete My Account
+              </h3>
+              <button
+                onClick={cancelDeleteOwnAccount}
+                className="text-gray-400 hover:text-gray-600"
+                disabled={deletingOwnAccount}
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center space-x-3 p-4 bg-red-50 rounded-lg border border-red-200">
+                <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                  <Trash2 className="h-5 w-5 text-red-600" />
+                </div>
+                <div>
+                  <p className="font-medium text-red-900">
+                    Delete Your Account
+                  </p>
+                  <p className="text-sm text-red-700">
+                    This action cannot be undone
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-gray-50 rounded-lg p-4">
+                <p className="text-sm text-gray-700 mb-2">
+                  You are about to delete your own account:
+                </p>
+                <div className="flex items-center space-x-3">
+                  <div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center">
+                    <User className="h-4 w-4 text-emerald-600" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900">Your Account</p>
+                    <p className="text-sm text-gray-600">{user?.email}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                <p className="text-sm text-red-800">
+                  <strong>Warning:</strong> This will permanently remove your
+                  admin account from the system and log you out immediately.
+                  This action cannot be undone.
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex space-x-3 pt-4">
+                <button
+                  onClick={cancelDeleteOwnAccount}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  disabled={deletingOwnAccount}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteOwnAccount}
+                  disabled={deletingOwnAccount}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                >
+                  {deletingOwnAccount ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete My Account
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* OTP-Based Password Change Modal */}
+      <ChangePasswordOTPModal
+        isOpen={showChangePasswordOTPModal}
+        onClose={() => setShowChangePasswordOTPModal(false)}
+        userEmail={user?.email}
+        onSuccess={handleOTPPasswordChangeSuccess}
+        onError={handleOTPPasswordChangeError}
+      />
     </div>
   );
 };

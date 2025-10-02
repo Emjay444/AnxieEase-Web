@@ -267,38 +267,12 @@ export const authService = {
 
       console.log("User metadata role:", metaRole);
 
-      // Prefer explicit role from metadata for admin only, but verify against admins table.
+      // Prefer explicit role from metadata for admin only.
       // Do NOT trust 'psychologist' in metadata because invite/magic-link
       // may attach it before setup completion. We'll verify via DB below.
-      if (metaRole === "admin") {
-        // Verify user exists in admin_profiles table
-        console.log(
-          "Verifying admin status against admin_profiles table for user:",
-          userId
-        );
-        const { data: adminProfile, error: adminError } = await supabase
-          .from("admin_profiles")
-          .select("id")
-          .eq("id", userId)
-          .single();
-
-        if (adminError) {
-          console.log("Admin lookup error:", adminError.message);
-          // If user has admin metadata but not in admin_profiles table, they're not a valid admin
-          if (adminError.code === "PGRST116") {
-            // Row not found
-            console.log(
-              "User has admin metadata but not found in admin_profiles table - access denied"
-            );
-            return null;
-          }
-          // For other errors, fall through to psychologist check
-        } else if (adminProfile) {
-          console.log("User verified as admin in admin_profiles table");
-          return "admin";
-        }
-      }
-      // ignore other metadata roles here; fall through to DB check
+      if (metaRole === "admin") return "admin";
+      // ignore psychologist metadata here; fall through to DB check
+      if (metaRole && metaRole !== "psychologist") return metaRole;
 
       // If no metadata role, check if user exists in psychologists table
       console.log("Checking psychologists table for user:", userId);
@@ -384,56 +358,6 @@ export const authService = {
       return authData.user;
     } catch (error) {
       console.error("Create psychologist error:", error.message);
-      throw error;
-    }
-  },
-
-  // Create new admin invitation (admin only) - same pattern as psychologist creation
-  async createAdmin(email, fullName) {
-    try {
-      // Check if email already exists in admin_profiles
-      const { data: existingAdmins } = await supabase
-        .from("admin_profiles")
-        .select("email")
-        .eq("email", email);
-
-      if (existingAdmins && existingAdmins.length > 0) {
-        throw new Error("Email already exists in admin profiles");
-      }
-
-      // Don't create the admin_profiles record yet - just send the invitation
-      // The record will be created during setup when we have the real auth user ID
-      const emailResult = await supabase.auth.signInWithOtp({
-        email,
-        options: {
-          emailRedirectTo: `${
-            import.meta.env.VITE_APP_URL || window.location.origin
-          }/admin-setup?email=${encodeURIComponent(email)}`,
-          data: {
-            role: "admin",
-            full_name: fullName,
-            invitation_pending: true,
-          },
-        },
-      });
-
-      // Check if email sending was successful
-      if (emailResult.error) {
-        console.warn("Failed to send setup email:", emailResult.error);
-        throw new Error(
-          "Failed to send invitation email: " + emailResult.error.message
-        );
-      }
-
-      console.log("✅ Admin invitation sent successfully");
-
-      return {
-        email,
-        full_name: fullName,
-        message: "Admin invitation sent successfully",
-      };
-    } catch (error) {
-      console.error("Create admin error:", error.message);
       throw error;
     }
   },

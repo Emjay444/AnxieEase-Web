@@ -15,6 +15,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import ForgotPasswordPage from "./components/ForgotPasswordPage";
 import NewPasswordPage from "./components/NewPasswordPage";
 import PsychologistSetupPage from "./components/PsychologistSetupPage";
+import AdminSetupPage from "./components/AdminSetupPage";
 import SessionTimeoutWrapper from "./components/SessionTimeoutWrapper";
 
 // Define the route structure using the data router format
@@ -44,6 +45,10 @@ const router = createBrowserRouter(
     {
       path: "/psychologist-setup",
       element: <PsychologistSetupPage />,
+    },
+    {
+      path: "/admin-setup",
+      element: <AdminSetupPage />,
     },
     {
       path: "/",
