@@ -7,6 +7,7 @@ import { psychologistService } from "../services/psychologistService";
 import deviceService from "../services/deviceService";
 import AddDoctorModal from "./AddDoctorModal";
 import ProfilePicture from "./ProfilePicture";
+import ChangePasswordOTPModal from "./ChangePasswordOTPModal";
 import { getFullName } from "../utils/helpers";
 import {
   Users,
@@ -155,17 +156,8 @@ const AdminPanelNew = () => {
     details: [],
   });
 
-  // Password change states
-  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
-  const [passwordForm, setPasswordForm] = useState({
-    currentPassword: "",
-    newPassword: "",
-    confirmPassword: "",
-  });
-  const [passwordUpdateLoading, setPasswordUpdateLoading] = useState(false);
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  // Password change states (OTP-based only)
+  const [showChangePasswordOTPModal, setShowChangePasswordOTPModal] = useState(false);
 
   // Admin management states
   const [adminsList, setAdminsList] = useState([]);
@@ -469,104 +461,26 @@ const AdminPanelNew = () => {
     loadAnalyticsData(selectedYear);
   }, [selectedYear]);
 
-  // Password change functions
-  const handlePasswordFormChange = (field, value) => {
-    setPasswordForm((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+  // OTP-based password change handlers
+  const handleOTPPasswordChangeSuccess = (message) => {
+    setSuccessMessage({
+      title: "Password Updated Successfully",
+      message: message,
+      details: [
+        "Your password has been updated with OTP verification",
+        "The new password is now active for your account",
+        "Please use your new password for future logins",
+      ],
+    });
+    setShowSuccessModal(true);
   };
 
-  const handlePasswordChange = async () => {
-    setPasswordUpdateLoading(true);
-    try {
-      // Validate required fields
-      if (!passwordForm.currentPassword) {
-        throw new Error("Please enter your current password");
-      }
-      if (!passwordForm.newPassword) {
-        throw new Error("Please enter a new password");
-      }
-      if (!passwordForm.confirmPassword) {
-        throw new Error("Please confirm your new password");
-      }
-
-      // Check if passwords match
-      if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-        throw new Error("New passwords do not match");
-      }
-
-      // Enhanced password validation
-      if (passwordForm.newPassword.length < 8) {
-        throw new Error("Password must be at least 8 characters long");
-      }
-      if (!/[A-Z]/.test(passwordForm.newPassword)) {
-        throw new Error(
-          "Password must contain at least one uppercase letter (A-Z)"
-        );
-      }
-      if (!/[a-z]/.test(passwordForm.newPassword)) {
-        throw new Error(
-          "Password must contain at least one lowercase letter (a-z)"
-        );
-      }
-      if (!/[0-9]/.test(passwordForm.newPassword)) {
-        throw new Error("Password must contain at least one number (0-9)");
-      }
-      if (!/[!@#$%^&*(),.?":{}|<>]/.test(passwordForm.newPassword)) {
-        throw new Error(
-          "Password must contain at least one special character (!@#$%^&*)"
-        );
-      }
-
-      // Verify current password by attempting to sign in
-      try {
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email: user?.email,
-          password: passwordForm.currentPassword,
-        });
-        if (signInError) {
-          throw new Error("Current password is incorrect");
-        }
-      } catch (error) {
-        throw new Error("Current password is incorrect");
-      }
-
-      // Update the password
-      const { error: passwordError } = await supabase.auth.updateUser({
-        password: passwordForm.newPassword,
-      });
-      if (passwordError) {
-        throw new Error(`Failed to update password: ${passwordError.message}`);
-      }
-
-      // Clear password form
-      setPasswordForm({
-        currentPassword: "",
-        newPassword: "",
-        confirmPassword: "",
-      });
-
-      setShowChangePasswordModal(false);
-      setSuccessMessage({
-        title: "Password Updated Successfully",
-        message: "Your admin password has been updated successfully!",
-        details: [
-          "Your password has been changed and is now active",
-          "Please use your new password for future logins",
-        ],
-      });
-      setShowSuccessModal(true);
-    } catch (error) {
-      console.error("Error updating password:", error);
-      setErrorModalData({
-        title: "Password Update Failed",
-        message: error.message,
-      });
-      setShowErrorModal(true);
-    } finally {
-      setPasswordUpdateLoading(false);
-    }
+  const handleOTPPasswordChangeError = (message) => {
+    setErrorModalData({
+      title: "OTP Password Update Failed",
+      message: message,
+    });
+    setShowErrorModal(true);
   };
 
   // Admin management functions
@@ -2944,14 +2858,14 @@ const AdminPanelNew = () => {
                           Change Password
                         </h4>
                         <p className="text-sm text-gray-600 mt-1">
-                          Update your password to keep your account secure
+                          Secure password change with OTP verification via email
                         </p>
                       </div>
                       <button
-                        onClick={() => setShowChangePasswordModal(true)}
+                        onClick={() => setShowChangePasswordOTPModal(true)}
                         className="flex items-center space-x-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
                       >
-                        <Lock className="h-4 w-4" />
+                        <Mail className="h-4 w-4" />
                         <span>Change Password</span>
                       </button>
                     </div>
@@ -3037,252 +2951,6 @@ const AdminPanelNew = () => {
         onSave={handleAddPsychologist}
         isLoading={isCreatingPsychologist}
       />
-
-      {/* Change Password Modal */}
-      {showChangePasswordModal && (
-        <div className="fixed inset-0 bg-transparent backdrop-blur-md flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl p-8 md:p-10 max-w-lg w-full shadow-2xl">
-            <div className="flex items-center justify-between mb-8">
-              <div className="flex items-center space-x-3">
-                <button
-                  onClick={() => setShowChangePasswordModal(false)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <ArrowLeft className="h-5 w-5" />
-                </button>
-                <h3 className="text-xl font-semibold text-gray-900">
-                  Change Admin Password
-                </h3>
-              </div>
-            </div>
-
-            <div className="space-y-6">
-              {/* Current Password */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Current Password
-                </label>
-                <div className="relative">
-                  <input
-                    type={showCurrentPassword ? "text" : "password"}
-                    value={passwordForm.currentPassword}
-                    onChange={(e) =>
-                      handlePasswordFormChange(
-                        "currentPassword",
-                        e.target.value
-                      )
-                    }
-                    className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                    placeholder="Enter current password"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  >
-                    {showCurrentPassword ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {/* New Password */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  New Password
-                </label>
-                <div className="relative">
-                  <input
-                    type={showNewPassword ? "text" : "password"}
-                    value={passwordForm.newPassword}
-                    onChange={(e) =>
-                      handlePasswordFormChange("newPassword", e.target.value)
-                    }
-                    className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                    placeholder="Enter new password"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowNewPassword(!showNewPassword)}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  >
-                    {showNewPassword ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                  </button>
-                </div>
-
-                {/* Password Requirements */}
-                {passwordForm.newPassword && (
-                  <div className="mt-3 p-3 bg-gray-50 rounded-lg">
-                    <p className="text-xs font-medium text-gray-700 mb-2">
-                      Password Requirements:
-                    </p>
-                    <div className="space-y-1">
-                      <div
-                        className={`flex items-center text-xs ${
-                          passwordForm.newPassword.length >= 8
-                            ? "text-green-600"
-                            : "text-gray-500"
-                        }`}
-                      >
-                        <div
-                          className={`w-1.5 h-1.5 rounded-full mr-2 ${
-                            passwordForm.newPassword.length >= 8
-                              ? "bg-green-500"
-                              : "bg-gray-300"
-                          }`}
-                        ></div>
-                        At least 8 characters
-                      </div>
-                      <div
-                        className={`flex items-center text-xs ${
-                          /[A-Z]/.test(passwordForm.newPassword)
-                            ? "text-green-600"
-                            : "text-gray-500"
-                        }`}
-                      >
-                        <div
-                          className={`w-1.5 h-1.5 rounded-full mr-2 ${
-                            /[A-Z]/.test(passwordForm.newPassword)
-                              ? "bg-green-500"
-                              : "bg-gray-300"
-                          }`}
-                        ></div>
-                        One uppercase letter
-                      </div>
-                      <div
-                        className={`flex items-center text-xs ${
-                          /[a-z]/.test(passwordForm.newPassword)
-                            ? "text-green-600"
-                            : "text-gray-500"
-                        }`}
-                      >
-                        <div
-                          className={`w-1.5 h-1.5 rounded-full mr-2 ${
-                            /[a-z]/.test(passwordForm.newPassword)
-                              ? "bg-green-500"
-                              : "bg-gray-300"
-                          }`}
-                        ></div>
-                        One lowercase letter
-                      </div>
-                      <div
-                        className={`flex items-center text-xs ${
-                          /[0-9]/.test(passwordForm.newPassword)
-                            ? "text-green-600"
-                            : "text-gray-500"
-                        }`}
-                      >
-                        <div
-                          className={`w-1.5 h-1.5 rounded-full mr-2 ${
-                            /[0-9]/.test(passwordForm.newPassword)
-                              ? "bg-green-500"
-                              : "bg-gray-300"
-                          }`}
-                        ></div>
-                        One number
-                      </div>
-                      <div
-                        className={`flex items-center text-xs ${
-                          /[!@#$%^&*(),.?":{}|<>]/.test(
-                            passwordForm.newPassword
-                          )
-                            ? "text-green-600"
-                            : "text-gray-500"
-                        }`}
-                      >
-                        <div
-                          className={`w-1.5 h-1.5 rounded-full mr-2 ${
-                            /[!@#$%^&*(),.?":{}|<>]/.test(
-                              passwordForm.newPassword
-                            )
-                              ? "bg-green-500"
-                              : "bg-gray-300"
-                          }`}
-                        ></div>
-                        One special character
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Confirm Password */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Confirm New Password
-                </label>
-                <div className="relative">
-                  <input
-                    type={showConfirmPassword ? "text" : "password"}
-                    value={passwordForm.confirmPassword}
-                    onChange={(e) =>
-                      handlePasswordFormChange(
-                        "confirmPassword",
-                        e.target.value
-                      )
-                    }
-                    className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                    placeholder="Confirm new password"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  >
-                    {showConfirmPassword ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                  </button>
-                </div>
-                {passwordForm.confirmPassword &&
-                  passwordForm.newPassword !== passwordForm.confirmPassword && (
-                    <p className="text-red-500 text-sm mt-1">
-                      Passwords do not match
-                    </p>
-                  )}
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex space-x-3 pt-4">
-                <button
-                  onClick={() => setShowChangePasswordModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                  disabled={passwordUpdateLoading}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handlePasswordChange}
-                  disabled={
-                    passwordUpdateLoading ||
-                    !passwordForm.currentPassword ||
-                    !passwordForm.newPassword ||
-                    !passwordForm.confirmPassword ||
-                    passwordForm.newPassword !== passwordForm.confirmPassword ||
-                    passwordForm.newPassword.length < 8 ||
-                    !/[A-Z]/.test(passwordForm.newPassword) ||
-                    !/[a-z]/.test(passwordForm.newPassword) ||
-                    !/[0-9]/.test(passwordForm.newPassword) ||
-                    !/[!@#$%^&*(),.?":{}|<>]/.test(passwordForm.newPassword)
-                  }
-                  className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {passwordUpdateLoading ? "Updating..." : "Update Password"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Add Admin Modal */}
       {showAddAdminModal && (
@@ -5522,6 +5190,15 @@ const AdminPanelNew = () => {
           </div>
         </div>
       )}
+
+      {/* OTP-Based Password Change Modal */}
+      <ChangePasswordOTPModal
+        isOpen={showChangePasswordOTPModal}
+        onClose={() => setShowChangePasswordOTPModal(false)}
+        userEmail={user?.email}
+        onSuccess={handleOTPPasswordChangeSuccess}
+        onError={handleOTPPasswordChangeError}
+      />
     </div>
   );
 };
