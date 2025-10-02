@@ -12,9 +12,12 @@ export const immediatePasswordService = {
 
       // Send OTP using Supabase's password reset functionality
       // This will send an OTP to the user's email
-      const { data, error } = await supabase.auth.resetPasswordForEmail(userEmail, {
-        redirectTo: `${window.location.origin}/admin/change-password-otp`,
-      });
+      const { data, error } = await supabase.auth.resetPasswordForEmail(
+        userEmail,
+        {
+          redirectTo: `${window.location.origin}/admin/change-password-otp`,
+        }
+      );
 
       if (error) {
         console.error("❌ Failed to send OTP:", error);
@@ -22,11 +25,11 @@ export const immediatePasswordService = {
       }
 
       console.log("✅ Password change OTP sent successfully");
-      
+
       // Store temporary flag for OTP flow
       localStorage.setItem("otpPasswordChangeInitiated", "true");
       localStorage.setItem("otpPasswordChangeEmail", userEmail);
-      
+
       return { success: true, message: "OTP sent to your email address" };
     } catch (error) {
       console.error("❌ Password change OTP error:", error);
@@ -47,7 +50,7 @@ export const immediatePasswordService = {
         email: email,
         password: currentPassword,
       });
-      
+
       if (signInError) {
         throw new Error("Current password is incorrect");
       }
@@ -80,7 +83,7 @@ export const immediatePasswordService = {
 
       // Clear OTP flow flags
       this.clearOTPPasswordChangeFlags();
-      
+
       // Store success flag
       localStorage.setItem("passwordUpdated", "true");
       localStorage.setItem("passwordUpdatedFor", email);

@@ -157,7 +157,8 @@ const AdminPanelNew = () => {
   });
 
   // Password change states (OTP-based only)
-  const [showChangePasswordOTPModal, setShowChangePasswordOTPModal] = useState(false);
+  const [showChangePasswordOTPModal, setShowChangePasswordOTPModal] =
+    useState(false);
 
   // Admin management states
   const [adminsList, setAdminsList] = useState([]);
