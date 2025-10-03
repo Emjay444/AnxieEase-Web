@@ -309,30 +309,6 @@ export const appointmentService = {
       console.error("getPendingRequestsByPsychologist error:", err.message);
       return [];
     }
-  }, // Set/Update appointment date-time (and optionally status)
-  async setAppointmentSchedule(appointmentId, datetimeISO, status = null) {
-    try {
-      const payload = {
-        appointment_date: datetimeISO,
-        updated_at: new Date().toISOString(),
-      };
-      if (status) payload.status = status;
-
-      const { data, error } = await supabase
-        .from("appointments")
-        .update(payload)
-        .eq("id", appointmentId)
-        .select();
-
-      if (error) {
-        console.error("Error updating appointment schedule:", error.message);
-        return false;
-      }
-      return data?.[0] || true;
-    } catch (err) {
-      console.error("setAppointmentSchedule error:", err.message);
-      return false;
-    }
   },
 
   // Update appointment status

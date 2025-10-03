@@ -81,11 +81,6 @@ const PatientProfileView = ({ patient, onBack, psychologistId }) => {
   const [noteDeleteConfirmOpen, setNoteDeleteConfirmOpen] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
-  // Scheduling state
-  const [pendingScheduleRequest, setPendingScheduleRequest] = useState(null);
-  const [scheduledDate, setScheduledDate] = useState("");
-  const [scheduledTime, setScheduledTime] = useState("");
-
   // Helpers: normalize severity (supports severity_level) and colors
   const normalizeSeverity = (r) => {
     let rawVal =
@@ -341,41 +336,6 @@ const PatientProfileView = ({ patient, onBack, psychologistId }) => {
       loadPatientData(); // Refresh
     } catch (error) {
       console.error("Error updating request:", error);
-    }
-  };
-
-  const handleOpenSchedule = (request) => {
-    setPendingScheduleRequest(request);
-    // Set default date to today and time to 9 AM
-    const today = new Date();
-    setScheduledDate(today.toISOString().split("T")[0]);
-    setScheduledTime("09:00");
-  };
-
-  const handleConfirmSchedule = async () => {
-    if (!pendingScheduleRequest || !scheduledDate || !scheduledTime) return;
-
-    try {
-      // Combine date and time into ISO string
-      const datetime = new Date(`${scheduledDate}T${scheduledTime}:00`);
-      const iso = datetime.toISOString();
-
-      // Update appointment in DB: set appointment_date and mark scheduled
-      const success = await appointmentService.setAppointmentSchedule(
-        pendingScheduleRequest.id,
-        iso,
-        "scheduled"
-      );
-
-      if (success) {
-        // Close modal and refresh data
-        setPendingScheduleRequest(null);
-        setScheduledDate("");
-        setScheduledTime("");
-        loadPatientData(); // Refresh the patient data
-      }
-    } catch (error) {
-      console.error("Error scheduling appointment:", error);
     }
   };
 
@@ -1429,13 +1389,6 @@ const PatientProfileView = ({ patient, onBack, psychologistId }) => {
                               <XCircle className="h-4 w-4 mr-1" />
                               Decline
                             </button>
-                            <button
-                              onClick={() => handleOpenSchedule(request)}
-                              className="flex items-center px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 transition-colors text-sm"
-                            >
-                              <CalendarDays className="h-4 w-4 mr-1" />
-                              Schedule
-                            </button>
                           </div>
                         </div>
                       </div>
@@ -1453,101 +1406,6 @@ const PatientProfileView = ({ patient, onBack, psychologistId }) => {
         </div>
       </div>
 
-      {/* Schedule Appointment Modal */}
-      {pendingScheduleRequest && (
-        <div className="fixed inset-0 bg-transparent backdrop-blur-md flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl p-6 max-w-md w-full shadow-2xl">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Schedule Appointment
-              </h3>
-              <button
-                onClick={() => {
-                  setPendingScheduleRequest(null);
-                  setScheduledDate("");
-                  setScheduledTime("");
-                }}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div className="p-3 rounded-lg bg-gray-50 text-sm text-gray-700">
-                <div className="font-medium">Patient Request</div>
-                <div className="font-semibold">{patient.name}</div>
-                <div className="text-gray-500">
-                  {pendingScheduleRequest.reason}
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <label className="block text-sm font-medium text-gray-700">
-                  Select Date:
-                </label>
-                <input
-                  type="date"
-                  value={scheduledDate}
-                  onChange={(e) => setScheduledDate(e.target.value)}
-                  min={new Date().toISOString().split("T")[0]}
-                  className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                />
-              </div>
-
-              <div className="space-y-3">
-                <label className="block text-sm font-medium text-gray-700">
-                  Select Time:
-                </label>
-                <input
-                  type="time"
-                  value={scheduledTime}
-                  onChange={(e) => setScheduledTime(e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                />
-              </div>
-
-              {scheduledDate && scheduledTime && (
-                <div className="p-3 rounded-lg bg-emerald-50 text-sm text-emerald-800">
-                  <div className="font-medium">Scheduled For:</div>
-                  <div>
-                    {new Date(
-                      `${scheduledDate}T${scheduledTime}`
-                    ).toLocaleString("en-US", {
-                      timeZone: "Asia/Manila",
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={() => {
-                  setPendingScheduleRequest(null);
-                  setScheduledDate("");
-                  setScheduledTime("");
-                }}
-                className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirmSchedule}
-                disabled={!scheduledDate || !scheduledTime}
-                className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Confirm
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

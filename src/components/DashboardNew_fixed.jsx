@@ -46,15 +46,11 @@ const DashboardNew = () => {
   const [showPatientProfile, setShowPatientProfile] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   const [calendarReloadKey, setCalendarReloadKey] = useState(0);
-  const [pendingScheduleRequest, setPendingScheduleRequest] = useState(null);
-  const [selectedSlot, setSelectedSlot] = useState(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [psychologistId, setPsychologistId] = useState(null); // Store psychologist ID
   const [psychologistProfile, setPsychologistProfile] = useState(null); // Store full psychologist profile
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [pendingAction, setPendingAction] = useState(null);
-  const [scheduledDate, setScheduledDate] = useState("");
-  const [scheduledTime, setScheduledTime] = useState("");
 
   // Real data states
   const [stats, setStats] = useState({
@@ -710,7 +706,7 @@ const DashboardNew = () => {
   );
 
   // Appointment Request Card
-  const AppointmentRequestCard = ({ request, onAction, onSchedule }) => (
+  const AppointmentRequestCard = ({ request, onAction }) => (
     <div className="bg-white rounded-lg border border-gray-100 p-4">
       <div className="flex items-start justify-between mb-3">
         <div>
@@ -740,13 +736,6 @@ const DashboardNew = () => {
         >
           <XCircle className="h-4 w-4 mr-1" />
           Decline
-        </button>
-        <button
-          onClick={() => onSchedule(request)}
-          className="flex items-center px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 transition-colors text-sm"
-        >
-          <CalendarDays className="h-4 w-4 mr-1" />
-          Schedule
         </button>
       </div>
     </div>
@@ -816,48 +805,6 @@ const DashboardNew = () => {
     } finally {
       setShowConfirmModal(false);
       setPendingAction(null);
-    }
-  };
-
-  const handleOpenSchedule = (request) => {
-    setPendingScheduleRequest(request);
-    // Set default date to today and time to 9 AM
-    const today = new Date();
-    setScheduledDate(today.toISOString().split("T")[0]);
-    setScheduledTime("09:00");
-  };
-
-  const handleConfirmSchedule = async () => {
-    if (!pendingScheduleRequest || !scheduledDate || !scheduledTime) return;
-
-    // Combine date and time into ISO string
-    const datetime = new Date(`${scheduledDate}T${scheduledTime}:00`);
-    const iso = datetime.toISOString();
-
-    // Update appointment in DB: set appointment_date and mark scheduled
-    const success = await appointmentService.setAppointmentSchedule(
-      pendingScheduleRequest.id,
-      iso,
-      "scheduled"
-    );
-    if (success) {
-      // Remove from requests, refresh calendar
-      setAppointmentRequests((prev) =>
-        prev.filter((r) => r.id !== pendingScheduleRequest.id)
-      );
-      // Refresh pending requests from backend
-      if (psychologistId) {
-        const pending =
-          await appointmentService.getPendingRequestsByPsychologist(
-            psychologistId
-          );
-        setAppointmentRequests(pending);
-      }
-      setCalendarReloadKey((k) => k + 1);
-      setPendingScheduleRequest(null);
-      setSelectedSlot(null);
-      setScheduledDate("");
-      setScheduledTime("");
     }
   };
 
@@ -1063,7 +1010,6 @@ const DashboardNew = () => {
                           key={request.id}
                           request={request}
                           onAction={handleAppointmentAction}
-                          onSchedule={handleOpenSchedule}
                         />
                       ))
                     ) : (
@@ -1167,106 +1113,6 @@ const DashboardNew = () => {
                       {selectedPatient.is_active ? "Active" : "Inactive"}
                     </span>
                   </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Schedule Appointment Modal (Updated with Date/Time Pickers) */}
-          {pendingScheduleRequest && (
-            <div className="fixed inset-0 bg-transparent backdrop-blur-md flex items-center justify-center p-4 z-50">
-              <div className="bg-white rounded-xl p-6 max-w-md w-full shadow-2xl">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900">
-                    Schedule Appointment
-                  </h3>
-                  <button
-                    onClick={() => {
-                      setPendingScheduleRequest(null);
-                      setSelectedSlot(null);
-                      setScheduledDate("");
-                      setScheduledTime("");
-                    }}
-                    className="text-gray-400 hover:text-gray-600"
-                  >
-                    ×
-                  </button>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="p-3 rounded-lg bg-gray-50 text-sm text-gray-700">
-                    <div className="font-medium">Patient Request</div>
-                    <div className="font-semibold">
-                      {pendingScheduleRequest.patientName}
-                    </div>
-                    <div className="text-gray-500">
-                      {pendingScheduleRequest.message}
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Select Date:
-                    </label>
-                    <input
-                      type="date"
-                      value={scheduledDate}
-                      onChange={(e) => setScheduledDate(e.target.value)}
-                      min={new Date().toISOString().split("T")[0]}
-                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                    />
-                  </div>
-
-                  <div className="space-y-3">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Select Time:
-                    </label>
-                    <input
-                      type="time"
-                      value={scheduledTime}
-                      onChange={(e) => setScheduledTime(e.target.value)}
-                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                    />
-                  </div>
-
-                  {scheduledDate && scheduledTime && (
-                    <div className="p-3 rounded-lg bg-emerald-50 text-sm text-emerald-800">
-                      <div className="font-medium">Scheduled For:</div>
-                      <div>
-                        {new Date(
-                          `${scheduledDate}T${scheduledTime}`
-                        ).toLocaleString("en-US", {
-                          timeZone: "Asia/Manila",
-                          year: "numeric",
-                          month: "long",
-                          day: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex gap-3 mt-6">
-                  <button
-                    onClick={() => {
-                      setPendingScheduleRequest(null);
-                      setSelectedSlot(null);
-                      setScheduledDate("");
-                      setScheduledTime("");
-                    }}
-                    className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleConfirmSchedule}
-                    disabled={!scheduledDate || !scheduledTime}
-                    className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Confirm
-                  </button>
                 </div>
               </div>
             </div>

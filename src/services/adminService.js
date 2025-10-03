@@ -1074,7 +1074,7 @@ export const adminService = {
       return {
         success: true,
         admins: admins || [],
-        count: admins?.length || 0,
+        count: (admins || []).length,
       };
     } catch (error) {
       console.error("Error in getAllAdmins:", error);

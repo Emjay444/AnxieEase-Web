@@ -390,21 +390,10 @@ export const authService = {
     }
   },
 
-  // Create new admin invitation (admin only) - same pattern as psychologist creation
+  // Create new admin invitation (admin only)
   async createAdmin(email, fullName) {
     try {
-      // Check if email already exists in admin_profiles
-      const { data: existingAdmins } = await supabase
-        .from("admin_profiles")
-        .select("email")
-        .eq("email", email);
-
-      if (existingAdmins && existingAdmins.length > 0) {
-        throw new Error("Email already exists in admin profiles");
-      }
-
-      // Don't create the admin_profiles record yet - just send the invitation
-      // The record will be created during setup when we have the real auth user ID
+      // Send the invitation email
       const emailResult = await supabase.auth.signInWithOtp({
         email,
         options: {
@@ -414,7 +403,6 @@ export const authService = {
           data: {
             role: "admin",
             full_name: fullName,
-            invitation_pending: true,
           },
         },
       });

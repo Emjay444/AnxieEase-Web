@@ -247,6 +247,7 @@ const AdminPanelNew = () => {
   const [showResetEmailModal, setShowResetEmailModal] = useState(false);
   const [psychologistToReset, setPsychologistToReset] = useState(null);
   const [isSendingResetEmail, setIsSendingResetEmail] = useState(false);
+  const [isTogglingPsychologistStatus, setIsTogglingPsychologistStatus] = useState(false);
 
   // State for deactivate blocked modal
   const [showDeactivateBlockedModal, setShowDeactivateBlockedModal] =
@@ -954,6 +955,7 @@ const AdminPanelNew = () => {
   };
 
   const handleDeactivatePsychologist = async (psychologist) => {
+    setIsTogglingPsychologistStatus(true);
     try {
       // Check if we're deactivating or activating
       const newStatus = !psychologist.is_active;
@@ -1004,6 +1006,11 @@ const AdminPanelNew = () => {
         });
         setShowErrorModal(true);
       }
+    } finally {
+      // Close the confirmation modal after the operation completes
+      setShowActivateConfirmModal(false);
+      setPsychologistToToggle(null);
+      setIsTogglingPsychologistStatus(false);
     }
   };
 
@@ -2607,50 +2614,88 @@ const AdminPanelNew = () => {
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600 mx-auto"></div>
                   <p className="text-gray-500 mt-2">Loading activity logs...</p>
                 </div>
-              ) : activityLogs.length > 0 ? (
-                (() => {
-                  // Apply date filtering and sorting
-                  let filteredAndSortedLogs = [...activityLogs];
+              ) : (() => {
+                // Apply date filtering and sorting
+                let filteredAndSortedLogs = [...activityLogs];
 
-                  // Apply date filter
-                  if (activityDateFilter) {
-                    const filterDate = new Date(activityDateFilter);
-                    filteredAndSortedLogs = filteredAndSortedLogs.filter(
-                      (log) => {
-                        const logDate = new Date(log.timestamp);
-                        return (
-                          logDate.getDate() === filterDate.getDate() &&
-                          logDate.getMonth() === filterDate.getMonth() &&
-                          logDate.getFullYear() === filterDate.getFullYear()
-                        );
-                      }
+                // Apply date filter
+                if (activityDateFilter) {
+                  const filterDate = new Date(activityDateFilter);
+                  filteredAndSortedLogs = filteredAndSortedLogs.filter(
+                    (log) => {
+                      const logDate = new Date(log.timestamp);
+                      return (
+                        logDate.getDate() === filterDate.getDate() &&
+                        logDate.getMonth() === filterDate.getMonth() &&
+                        logDate.getFullYear() === filterDate.getFullYear()
+                      );
+                    }
+                  );
+                }
+
+                // Apply sorting
+                filteredAndSortedLogs.sort((a, b) => {
+                  const dateA = new Date(a.timestamp);
+                  const dateB = new Date(b.timestamp);
+                  return activitySortOrder === "desc"
+                    ? dateB - dateA
+                    : dateA - dateB;
+                });
+
+                // Check if we have any results after filtering
+                if (filteredAndSortedLogs.length === 0) {
+                  if (activityLogs.length === 0) {
+                    // No logs at all
+                    return (
+                      <div className="text-center py-8">
+                        <Activity className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                        <p className="text-gray-500">No activity logs found</p>
+                        <p className="text-sm text-gray-400 mt-1">
+                          Activity will appear here as users interact with the system
+                        </p>
+                      </div>
+                    );
+                  } else {
+                    // No results after filtering
+                    return (
+                      <div className="text-center py-8">
+                        <Calendar className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                        <p className="text-gray-500">
+                          No activity found for{" "}
+                          {new Date(activityDateFilter).toLocaleDateString()}
+                        </p>
+                        <p className="text-sm text-gray-400 mt-1">
+                          Try selecting a different date or clear the filter
+                        </p>
+                        <button
+                          onClick={() => {
+                            setActivityDateFilter(null);
+                            setCurrentPage(1);
+                          }}
+                          className="mt-2 text-emerald-600 hover:text-emerald-700 text-sm font-medium"
+                        >
+                          Clear date filter
+                        </button>
+                      </div>
                     );
                   }
+                }
 
-                  // Apply sorting
-                  filteredAndSortedLogs.sort((a, b) => {
-                    const dateA = new Date(a.timestamp);
-                    const dateB = new Date(b.timestamp);
-                    return activitySortOrder === "desc"
-                      ? dateB - dateA
-                      : dateA - dateB;
-                  });
+                // Calculate pagination based on filtered results
+                const totalPages = Math.ceil(
+                  filteredAndSortedLogs.length / itemsPerPage
+                );
+                const startIndex = (currentPage - 1) * itemsPerPage;
+                const endIndex = startIndex + itemsPerPage;
+                const currentLogs = filteredAndSortedLogs.slice(
+                  startIndex,
+                  endIndex
+                );
 
-                  // Calculate pagination based on filtered results
-                  const totalPages = Math.ceil(
-                    filteredAndSortedLogs.length / itemsPerPage
-                  );
-                  const startIndex = (currentPage - 1) * itemsPerPage;
-                  const endIndex = startIndex + itemsPerPage;
-                  const currentLogs = filteredAndSortedLogs.slice(
-                    startIndex,
-                    endIndex
-                  );
-
-                  return (
-                    <>
-                      <div className="space-y-4">
-                        {currentLogs.map((log, index) => (
+                return (
+                  <>
+                    <div className="space-y-4">
+                      {currentLogs.map((log, index) => (
                           <div
                             key={log.id || index}
                             className="flex items-start space-x-4 p-4 bg-gray-50 rounded-lg border border-gray-100 hover:bg-gray-100 transition-colors"
@@ -2791,36 +2836,7 @@ const AdminPanelNew = () => {
                     </>
                   );
                 })()
-              ) : activityLogs.length === 0 ? (
-                <div className="text-center py-8">
-                  <Activity className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-500">No activity logs found</p>
-                  <p className="text-sm text-gray-400 mt-1">
-                    Activity will appear here as users interact with the system
-                  </p>
-                </div>
-              ) : (
-                // No results after filtering
-                <div className="text-center py-8">
-                  <Calendar className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-500">
-                    No activity found for{" "}
-                    {new Date(activityDateFilter).toLocaleDateString()}
-                  </p>
-                  <p className="text-sm text-gray-400 mt-1">
-                    Try selecting a different date or clear the filter
-                  </p>
-                  <button
-                    onClick={() => {
-                      setActivityDateFilter(null);
-                      setCurrentPage(1);
-                    }}
-                    className="mt-2 text-emerald-600 hover:text-emerald-700 text-sm font-medium"
-                  >
-                    Clear date filter
-                  </button>
-                </div>
-              )}
+              }
             </div>
           </div>
         )}
@@ -3819,8 +3835,10 @@ const AdminPanelNew = () => {
           <div
             className="absolute inset-0 bg-black/50 backdrop-blur-md"
             onClick={() => {
-              setShowActivateConfirmModal(false);
-              setPsychologistToToggle(null);
+              if (!isTogglingPsychologistStatus) {
+                setShowActivateConfirmModal(false);
+                setPsychologistToToggle(null);
+              }
             }}
           ></div>
 
@@ -3916,23 +3934,30 @@ const AdminPanelNew = () => {
                     setShowActivateConfirmModal(false);
                     setPsychologistToToggle(null);
                   }}
-                  className="flex-1 bg-gray-100 text-gray-900 py-3 px-4 rounded-lg hover:bg-gray-200 transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-gray-500"
+                  disabled={isTogglingPsychologistStatus}
+                  className="flex-1 bg-gray-100 text-gray-900 py-3 px-4 rounded-lg hover:bg-gray-200 transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={() => {
                     handleDeactivatePsychologist(psychologistToToggle);
-                    setShowActivateConfirmModal(false);
-                    setPsychologistToToggle(null);
                   }}
-                  className={`flex-1 py-3 px-4 rounded-lg text-sm font-medium transition-colors focus:outline-none focus:ring-2 text-white ${
+                  disabled={isTogglingPsychologistStatus}
+                  className={`flex-1 py-3 px-4 rounded-lg text-sm font-medium transition-colors focus:outline-none focus:ring-2 text-white disabled:opacity-50 disabled:cursor-not-allowed ${
                     psychologistToToggle.is_active
                       ? "bg-orange-600 hover:bg-orange-700 focus:ring-orange-500"
                       : "bg-green-600 hover:bg-green-700 focus:ring-green-500"
                   }`}
                 >
-                  {psychologistToToggle.is_active ? "Deactivate" : "Activate"}
+                  {isTogglingPsychologistStatus ? (
+                    <div className="flex items-center justify-center">
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      {psychologistToToggle.is_active ? "Deactivating..." : "Activating..."}
+                    </div>
+                  ) : (
+                    psychologistToToggle.is_active ? "Deactivate" : "Activate"
+                  )}
                 </button>
               </div>
             </div>
