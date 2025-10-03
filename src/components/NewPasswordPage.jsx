@@ -71,6 +71,23 @@ const NewPasswordPage = () => {
     setShowConfirmPassword(!showConfirmPassword);
   };
 
+  // Password requirements checker
+  const getPasswordRequirements = (pwd) => {
+    return {
+      length: pwd.length >= 8,
+      uppercase: /[A-Z]/.test(pwd),
+      lowercase: /[a-z]/.test(pwd),
+      number: /\d/.test(pwd),
+      special: /[!@#$%^&*(),.?":{}|<>]/.test(pwd)
+    };
+  };
+
+  // Check if all password requirements are met
+  const isPasswordValid = (pwd) => {
+    const requirements = getPasswordRequirements(pwd);
+    return Object.values(requirements).every(req => req);
+  };
+
   // Validate password
   const validatePassword = () => {
     // Reset errors
@@ -82,9 +99,9 @@ const NewPasswordPage = () => {
       return false;
     }
 
-    // Check password length
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters");
+    // Check all password requirements
+    if (!isPasswordValid(password)) {
+      setError("Password does not meet all requirements");
       return false;
     }
 
@@ -269,6 +286,34 @@ const NewPasswordPage = () => {
                     {showPassword ? "Hide" : "Show"}
                   </button>
                 </div>
+                
+                {/* Password Requirements List */}
+                {password && (
+                  <div className="mt-2 p-3 bg-white/50 rounded-lg border border-gray-200">
+                    <p className="text-sm font-medium text-gray-700 mb-2">Password Requirements:</p>
+                    <ul className="space-y-1">
+                      {[
+                        { key: 'length', text: 'At least 8 characters' },
+                        { key: 'uppercase', text: 'One uppercase letter (A-Z)' },
+                        { key: 'lowercase', text: 'One lowercase letter (a-z)' },
+                        { key: 'number', text: 'One number (0-9)' },
+                        { key: 'special', text: 'One special character (!@#$%^&*)' }
+                      ].map(requirement => {
+                        const isValid = getPasswordRequirements(password)[requirement.key];
+                        return (
+                          <li key={requirement.key} className="flex items-center text-sm">
+                            <span className={`mr-2 font-bold ${isValid ? 'text-green-500' : 'text-gray-400'}`}>
+                              {isValid ? '✓' : '○'}
+                            </span>
+                            <span className={isValid ? 'text-green-700 font-medium' : 'text-gray-600'}>
+                              {requirement.text}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -297,6 +342,20 @@ const NewPasswordPage = () => {
                     {showConfirmPassword ? "Hide" : "Show"}
                   </button>
                 </div>
+                
+                {/* Password Match Indicator */}
+                {confirmPassword && (
+                  <div className="mt-2 flex items-center text-sm">
+                    <span className={`mr-2 font-bold ${
+                      password === confirmPassword ? 'text-green-500' : 'text-red-500'
+                    }`}>
+                      {password === confirmPassword ? '✓' : '✗'}
+                    </span>
+                    <span className={password === confirmPassword ? 'text-green-700 font-medium' : 'text-red-600'}>
+                      {password === confirmPassword ? 'Passwords match' : 'Passwords do not match'}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {error && (
@@ -338,7 +397,7 @@ const NewPasswordPage = () => {
               <button
                 type="submit"
                 className="w-full py-2.5 rounded-lg text-white font-medium shadow-sm btn-gradient hover:opacity-95 active:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
-                disabled={isSubmitting || !token}
+                disabled={isSubmitting || !token || !isPasswordValid(password) || password !== confirmPassword}
               >
                 {isSubmitting ? (
                   <span className="inline-flex items-center">

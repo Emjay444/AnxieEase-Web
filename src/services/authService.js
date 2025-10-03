@@ -372,8 +372,10 @@ export const authService = {
         .from("psychologists")
         .insert([
           {
+            id: authData.user.id,
             user_id: authData.user.id,
-            name,
+            first_name: nameParts[0] || "",
+            last_name: nameParts.slice(1).join(" ") || "",
             email,
             is_active: true,
           },

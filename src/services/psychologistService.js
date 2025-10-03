@@ -14,7 +14,39 @@ export const psychologistService = {
     try {
       let allPsychologists = [];
 
-      // First, try to get psychologists from user_profiles table (which has avatar_url)
+      // First, get psychologists from psychologists table (primary source)
+      const { data: psychologists, error: psychologistsError } = await supabase
+        .from("psychologists")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (!psychologistsError && psychologists && psychologists.length > 0) {
+        // Format psychologists data to ensure consistent structure
+        const formattedPsychologists = psychologists.map((psych) => ({
+          id: psych.id,
+          user_id: psych.user_id,
+          name:
+            `${psych.first_name || ""} ${psych.middle_name || ""} ${
+              psych.last_name || ""
+            }`.trim() ||
+            psych.name || // Fallback to legacy name field
+            psych.email?.split("@")[0] ||
+            "Psychologist",
+          first_name: psych.first_name,
+          middle_name: psych.middle_name,
+          last_name: psych.last_name,
+          email: psych.email,
+          contact: psych.contact,
+          specialization: psych.specialization,
+          is_active: psych.is_active,
+          created_at: psych.created_at,
+          updated_at: psych.updated_at,
+          avatar_url: psych.avatar_url || null, // Include avatar_url from psychologists table
+        }));
+        allPsychologists.push(...formattedPsychologists);
+      }
+
+      // Also get psychologists from user_profiles table (for any legacy entries)
       const { data: userProfiles, error: userProfilesError } = await supabase
         .from("user_profiles")
         .select("*")
@@ -22,8 +54,14 @@ export const psychologistService = {
         .order("created_at", { ascending: false });
 
       if (!userProfilesError && userProfiles && userProfiles.length > 0) {
+        // Add user_profiles psychologists that are not already in the list (avoid duplicates by email)
+        const existingEmails = new Set(allPsychologists.map((p) => p.email));
+        const uniqueUserProfiles = userProfiles.filter(
+          (p) => !existingEmails.has(p.email)
+        );
+        
         // Format user_profiles data to match expected psychologist structure
-        const formattedUserProfiles = userProfiles.map((user) => ({
+        const formattedUserProfiles = uniqueUserProfiles.map((user) => ({
           id: user.id,
           user_id: user.id,
           name:
@@ -32,6 +70,9 @@ export const psychologistService = {
             }`.trim() ||
             user.email?.split("@")[0] ||
             "Psychologist",
+          first_name: user.first_name,
+          middle_name: user.middle_name,
+          last_name: user.last_name,
           email: user.email,
           contact: user.contact_number,
           specialization: user.specialization,
@@ -41,21 +82,6 @@ export const psychologistService = {
           avatar_url: user.avatar_url || null, // Include avatar_url from user_profiles
         }));
         allPsychologists.push(...formattedUserProfiles);
-      }
-
-      // Also get psychologists from psychologists table
-      const { data: psychologists, error: psychologistsError } = await supabase
-        .from("psychologists")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (!psychologistsError && psychologists && psychologists.length > 0) {
-        // Add psychologists that are not already in the list (avoid duplicates by email)
-        const existingEmails = new Set(allPsychologists.map((p) => p.email));
-        const uniquePsychologists = psychologists.filter(
-          (p) => !existingEmails.has(p.email)
-        );
-        allPsychologists.push(...uniquePsychologists);
       }
 
       // Sort by creation date (newest first)
@@ -286,15 +312,43 @@ export const psychologistService = {
   async updatePsychologist(id, updates) {
     try {
       // Prepare updates for psychologists table with correct column names
-      const psychologistUpdates = {
-        contact: updates.contact,
-        specialization: updates.specialization,
-        // Parse name into components if provided
-        ...(updates.name && {
-          first_name: updates.name.split(" ")[0] || "",
-          last_name: updates.name.split(" ").slice(1).join(" ") || "",
-        }),
-      };
+      const psychologistUpdates = {};
+
+      // Add fields only if they're provided
+      if (updates.contact !== undefined) {
+        psychologistUpdates.contact = updates.contact;
+      }
+      if (updates.specialization !== undefined) {
+        psychologistUpdates.specialization = updates.specialization;
+      }
+      if (updates.is_active !== undefined) {
+        psychologistUpdates.is_active = updates.is_active;
+      }
+
+      // Add individual name fields if provided
+      if (updates.first_name !== undefined) {
+        psychologistUpdates.first_name = updates.first_name;
+      }
+      if (updates.middle_name !== undefined) {
+        psychologistUpdates.middle_name = updates.middle_name;
+      }
+      if (updates.last_name !== undefined) {
+        psychologistUpdates.last_name = updates.last_name;
+      }
+
+      // Legacy support: Parse name into components if provided and individual fields aren't
+      if (updates.name && updates.name.trim() && !updates.first_name && !updates.last_name) {
+        const nameParts = updates.name.trim().split(" ");
+        psychologistUpdates.first_name = nameParts[0] || "";
+        psychologistUpdates.last_name = nameParts.slice(1).join(" ") || "";
+      }
+
+      console.log("Updating psychologist with data:", psychologistUpdates);
+
+      // Check if we have any fields to update
+      if (Object.keys(psychologistUpdates).length === 0) {
+        throw new Error("No valid fields provided for update");
+      }
 
       // First update the psychologists table with timeout
       const updatePromise = supabase
@@ -314,32 +368,29 @@ export const psychologistService = {
       ]);
 
       if (psychError) {
-        console.log("Psychologists table error:", psychError.message);
+        console.error("Psychologists table update error:", psychError.message);
+        throw psychError; // Throw the error instead of just logging it
       }
 
       // Also try to update user_profiles table if it exists (non-blocking)
       this.updateUserProfilesAsync(id, updates);
 
-      // Return the psychologists table data
+      // Return the updated psychologists table data
       if (psychData && psychData.length > 0) {
+        console.log("Successfully updated psychologist:", psychData[0]);
         return psychData[0];
       }
 
-      // Fallback to mock storage if database fails
-      if (psychError) {
-        const index = mockStorage.psychologists.findIndex((p) => p.id === id);
-        if (index !== -1) {
-          mockStorage.psychologists[index] = {
-            ...mockStorage.psychologists[index],
-            ...updates,
-          };
-          return mockStorage.psychologists[index];
-        }
-      }
-
-      return null;
+      throw new Error("No data returned from update operation");
     } catch (error) {
       console.error("Update psychologist error:", error.message);
+      
+      // Don't use fallback mock storage for real errors
+      if (error.message.includes("timeout") || error.message.includes("No data returned")) {
+        throw error;
+      }
+      
+      // Only fallback for database connection issues
       const index = mockStorage.psychologists.findIndex((p) => p.id === id);
       if (index !== -1) {
         mockStorage.psychologists[index] = {
@@ -348,7 +399,8 @@ export const psychologistService = {
         };
         return mockStorage.psychologists[index];
       }
-      return null;
+      
+      throw error;
     }
   },
 
@@ -448,6 +500,37 @@ export const psychologistService = {
   // Delete a psychologist (admin only)
   async deletePsychologist(id) {
     try {
+      // First, check if psychologist has any assigned patients
+      const { data: assignedPatients, error: patientsError } = await supabase
+        .from("user_profiles")
+        .select("id, first_name, last_name")
+        .eq("role", "patient")
+        .eq("assigned_psychologist_id", id);
+
+      if (patientsError) {
+        console.error(
+          "Error checking assigned patients:",
+          patientsError.message
+        );
+        throw patientsError;
+      }
+
+      // If psychologist has assigned patients, prevent deletion
+      if (assignedPatients && assignedPatients.length > 0) {
+        const patientNames = assignedPatients
+          .map((p) => {
+            const fullName = [p.first_name, p.last_name]
+              .filter(Boolean)
+              .join(" ");
+            return fullName || `Patient ${p.id.slice(0, 8)}`;
+          })
+          .join(", ");
+        throw new Error(
+          `Cannot delete psychologist. They have ${assignedPatients.length} assigned patient(s): ${patientNames}. Please reassign these patients to another psychologist first.`
+        );
+      }
+
+      // Proceed with deletion if no patients assigned
       const { error } = await supabase
         .from("psychologists")
         .delete()
@@ -465,6 +548,11 @@ export const psychologistService = {
       return true;
     } catch (error) {
       console.error("Delete psychologist error:", error.message);
+      // Don't use fallback mock deletion if it's a validation error
+      if (error.message.includes("Cannot delete psychologist")) {
+        throw error; // Re-throw validation errors to show to user
+      }
+      
       const index = mockStorage.psychologists.findIndex((p) => p.id === id);
       if (index !== -1) {
         mockStorage.psychologists.splice(index, 1);

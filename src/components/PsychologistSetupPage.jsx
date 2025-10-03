@@ -35,6 +35,23 @@ const PsychologistSetupPage = () => {
   const [source, setSource] = useState("invite");
   const [flowType, setFlowType] = useState("account_creation");
 
+  // Password requirements checker
+  const getPasswordRequirements = (pwd) => {
+    return {
+      length: pwd.length >= 8,
+      uppercase: /[A-Z]/.test(pwd),
+      lowercase: /[a-z]/.test(pwd),
+      number: /\d/.test(pwd),
+      special: /[!@#$%^&*(),.?":{}|<>]/.test(pwd)
+    };
+  };
+
+  // Check if all password requirements are met
+  const isPasswordValid = (pwd) => {
+    const requirements = getPasswordRequirements(pwd);
+    return Object.values(requirements).every(req => req);
+  };
+
   // After success, auto-redirect to login (except for verification which already redirects)
   useEffect(() => {
     if (showSuccessModal && flowType !== "email_verification") {
@@ -331,8 +348,8 @@ const PsychologistSetupPage = () => {
 
     if (!formData.password) {
       newErrors.password = "Password is required";
-    } else if (formData.password.length < 6) {
-      newErrors.password = "Password must be at least 6 characters";
+    } else if (!isPasswordValid(formData.password)) {
+      newErrors.password = "Password does not meet all requirements";
     }
 
     if (!formData.confirmPassword) {
@@ -619,6 +636,35 @@ const PsychologistSetupPage = () => {
                   )}
                 </button>
               </div>
+              
+              {/* Password Requirements List */}
+              {formData.password && (
+                <div className="mt-3 p-3 bg-white/50 rounded-lg border border-gray-200">
+                  <p className="text-sm font-medium text-gray-700 mb-2">Password Requirements:</p>
+                  <ul className="space-y-1">
+                    {[
+                      { key: 'length', text: 'At least 8 characters' },
+                      { key: 'uppercase', text: 'One uppercase letter (A-Z)' },
+                      { key: 'lowercase', text: 'One lowercase letter (a-z)' },
+                      { key: 'number', text: 'One number (0-9)' },
+                      { key: 'special', text: 'One special character (!@#$%^&*)' }
+                    ].map(requirement => {
+                      const isValid = getPasswordRequirements(formData.password)[requirement.key];
+                      return (
+                        <li key={requirement.key} className="flex items-center text-sm">
+                          <span className={`mr-2 font-bold ${isValid ? 'text-green-500' : 'text-gray-400'}`}>
+                            {isValid ? '✓' : '○'}
+                          </span>
+                          <span className={isValid ? 'text-green-700 font-medium' : 'text-gray-600'}>
+                            {requirement.text}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+              
               {errors.password && (
                 <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
                   <AlertCircle className="w-4 h-4" />
@@ -647,6 +693,21 @@ const PsychologistSetupPage = () => {
                   placeholder="Confirm your password"
                 />
               </div>
+              
+              {/* Password Match Indicator */}
+              {formData.confirmPassword && (
+                <div className="mt-2 flex items-center text-sm">
+                  <span className={`mr-2 font-bold ${
+                    formData.password === formData.confirmPassword ? 'text-green-500' : 'text-red-500'
+                  }`}>
+                    {formData.password === formData.confirmPassword ? '✓' : '✗'}
+                  </span>
+                  <span className={formData.password === formData.confirmPassword ? 'text-green-700 font-medium' : 'text-red-600'}>
+                    {formData.password === formData.confirmPassword ? 'Passwords match' : 'Passwords do not match'}
+                  </span>
+                </div>
+              )}
+              
               {errors.confirmPassword && (
                 <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
                   <AlertCircle className="w-4 h-4" />
@@ -658,9 +719,9 @@ const PsychologistSetupPage = () => {
             {/* Submit Button */}
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !isPasswordValid(formData.password) || formData.password !== formData.confirmPassword}
               className={`w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white transition duration-200 ${
-                loading
+                loading || !isPasswordValid(formData.password) || formData.password !== formData.confirmPassword
                   ? "bg-gray-400 cursor-not-allowed"
                   : "btn-gradient hover:shadow-lg transform hover:scale-[1.02]"
               }`}
@@ -682,7 +743,7 @@ const PsychologistSetupPage = () => {
               🔐 Setup Instructions:
             </h4>
             <ul className="text-xs text-emerald-700 space-y-1">
-              <li>• Create a secure password (minimum 6 characters)</li>
+              <li>• Create a secure password (minimum 8 characters with uppercase, lowercase, numbers, and special characters)</li>
               <li>• You'll be able to log in after completing setup</li>
               <li>• If you encounter issues, contact your administrator</li>
             </ul>

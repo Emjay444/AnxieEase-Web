@@ -9,6 +9,7 @@ import AddDoctorModal from "./AddDoctorModal";
 import ProfilePicture from "./ProfilePicture";
 import ChangePasswordOTPModal from "./ChangePasswordOTPModal";
 import { getFullName } from "../utils/helpers";
+import { getFullNameParts } from "../utils/helpers";
 import {
   Users,
   UserPlus,
@@ -224,7 +225,9 @@ const AdminPanelNew = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showOptionsMenu, setShowOptionsMenu] = useState(null);
   const [editFormData, setEditFormData] = useState({
-    name: "",
+    first_name: "",
+    middle_name: "",
+    last_name: "",
     email: "",
     contact: "",
     specialization: "",
@@ -851,7 +854,9 @@ const AdminPanelNew = () => {
   const handleEditPsychologist = (psychologist) => {
     setSelectedPsychologist(psychologist);
     setEditFormData({
-      name: getFullName(psychologist) || "",
+      first_name: psychologist.first_name || "",
+      middle_name: psychologist.middle_name || "",
+      last_name: psychologist.last_name || "",
       contact: psychologist.contact || "",
       specialization: psychologist.specialization || "",
     });
@@ -862,11 +867,22 @@ const AdminPanelNew = () => {
     try {
       setIsUpdatingPsychologist(true);
 
+      console.log("Updating psychologist with data:", {
+        id: selectedPsychologist.id,
+        first_name: editFormData.first_name,
+        middle_name: editFormData.middle_name,
+        last_name: editFormData.last_name,
+        contact: editFormData.contact,
+        specialization: editFormData.specialization,
+      });
+
       // Update in the database with timeout
       const updatePromise = psychologistService.updatePsychologist(
         selectedPsychologist.id,
         {
-          name: editFormData.name,
+          first_name: editFormData.first_name,
+          middle_name: editFormData.middle_name,
+          last_name: editFormData.last_name,
           contact: editFormData.contact,
           specialization: editFormData.specialization,
         }
@@ -882,10 +898,15 @@ const AdminPanelNew = () => {
         timeoutPromise,
       ]);
 
-      // Update local state
+      console.log("Update successful:", updatedPsychologist);
+
+      // Update local state with the individual name fields
       setPsychologists((prev) =>
         prev.map((p) =>
-          p.id === selectedPsychologist.id ? { ...p, ...editFormData } : p
+          p.id === selectedPsychologist.id ? { 
+            ...p, 
+            ...editFormData // This now contains first_name, middle_name, last_name directly
+          } : p
         )
       );
 
@@ -893,7 +914,7 @@ const AdminPanelNew = () => {
       await adminService.logActivity(
         user?.id,
         "Edit Psychologist",
-        `Updated psychologist information: ${editFormData.name}`
+        `Updated psychologist information: ${getFullName(editFormData)}`
       );
 
       // Refresh activity logs
@@ -903,13 +924,24 @@ const AdminPanelNew = () => {
       // Show success message
       setSuccessMessage({
         title: "Psychologist Updated Successfully!",
-        message: `${editFormData.name}'s information has been updated.`,
+        message: `${getFullName(editFormData)}'s information has been updated.`,
       });
       setShowSuccessModal(true);
       setShowEditModal(false);
     } catch (error) {
       console.error("Error updating psychologist:", error);
-      alert(`Error updating psychologist: ${error.message}`);
+      
+      // Show more specific error messages
+      let errorMessage = "Failed to update psychologist information.";
+      if (error.message.includes("timeout")) {
+        errorMessage = "Update operation timed out. Please check your connection and try again.";
+      } else if (error.message.includes("No data returned")) {
+        errorMessage = "Update completed but no confirmation received. Please refresh to see changes.";
+      } else {
+        errorMessage = `Error updating psychologist: ${error.message}`;
+      }
+      
+      alert(errorMessage);
     } finally {
       setIsUpdatingPsychologist(false);
     }
@@ -3451,19 +3483,50 @@ const AdminPanelNew = () => {
             </div>
 
             <div className="space-y-6">
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">
-                  Name *
-                </label>
-                <input
-                  type="text"
-                  value={editFormData.name}
-                  onChange={(e) =>
-                    setEditFormData({ ...editFormData, name: e.target.value })
-                  }
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-gray-50/50 transition-all duration-200 hover:bg-white"
-                  required
-                />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">
+                    First Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={editFormData.first_name}
+                    onChange={(e) =>
+                      setEditFormData({ ...editFormData, first_name: e.target.value })
+                    }
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-gray-50/50 transition-all duration-200 hover:bg-white"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">
+                    Middle Name
+                  </label>
+                  <input
+                    type="text"
+                    value={editFormData.middle_name}
+                    onChange={(e) =>
+                      setEditFormData({ ...editFormData, middle_name: e.target.value })
+                    }
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-gray-50/50 transition-all duration-200 hover:bg-white"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">
+                    Last Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={editFormData.last_name}
+                    onChange={(e) =>
+                      setEditFormData({ ...editFormData, last_name: e.target.value })
+                    }
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-gray-50/50 transition-all duration-200 hover:bg-white"
+                    required
+                  />
+                </div>
               </div>
 
               <div>
@@ -3555,7 +3618,7 @@ const AdminPanelNew = () => {
               </button>
               <button
                 onClick={handleSavePsychologistChanges}
-                disabled={isUpdatingPsychologist || !editFormData.name.trim()}
+                disabled={isUpdatingPsychologist || !editFormData.first_name.trim() || !editFormData.last_name.trim()}
                 className="px-6 py-3 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-xl hover:from-emerald-700 hover:to-emerald-800 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center transition-all duration-200 font-medium"
               >
                 {isUpdatingPsychologist && (
@@ -4739,7 +4802,7 @@ const AdminPanelNew = () => {
                       : "bg-red-600 hover:bg-red-700 text-white focus:ring-red-500"
                   }`}
                 >
-                  {deleteResult.success ? "Got it" : "Try Again"}
+                  {deleteResult.success ? "Got it" : "Cancel"}
                 </button>
               </div>
             </div>
