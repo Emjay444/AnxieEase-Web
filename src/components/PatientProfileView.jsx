@@ -1405,7 +1405,6 @@ const PatientProfileView = ({ patient, onBack, psychologistId }) => {
           </div>
         </div>
       </div>
-
     </div>
   );
 };

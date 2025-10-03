@@ -247,7 +247,8 @@ const AdminPanelNew = () => {
   const [showResetEmailModal, setShowResetEmailModal] = useState(false);
   const [psychologistToReset, setPsychologistToReset] = useState(null);
   const [isSendingResetEmail, setIsSendingResetEmail] = useState(false);
-  const [isTogglingPsychologistStatus, setIsTogglingPsychologistStatus] = useState(false);
+  const [isTogglingPsychologistStatus, setIsTogglingPsychologistStatus] =
+    useState(false);
 
   // State for deactivate blocked modal
   const [showDeactivateBlockedModal, setShowDeactivateBlockedModal] =
@@ -904,10 +905,12 @@ const AdminPanelNew = () => {
       // Update local state with the individual name fields
       setPsychologists((prev) =>
         prev.map((p) =>
-          p.id === selectedPsychologist.id ? { 
-            ...p, 
-            ...editFormData // This now contains first_name, middle_name, last_name directly
-          } : p
+          p.id === selectedPsychologist.id
+            ? {
+                ...p,
+                ...editFormData, // This now contains first_name, middle_name, last_name directly
+              }
+            : p
         )
       );
 
@@ -931,17 +934,19 @@ const AdminPanelNew = () => {
       setShowEditModal(false);
     } catch (error) {
       console.error("Error updating psychologist:", error);
-      
+
       // Show more specific error messages
       let errorMessage = "Failed to update psychologist information.";
       if (error.message.includes("timeout")) {
-        errorMessage = "Update operation timed out. Please check your connection and try again.";
+        errorMessage =
+          "Update operation timed out. Please check your connection and try again.";
       } else if (error.message.includes("No data returned")) {
-        errorMessage = "Update completed but no confirmation received. Please refresh to see changes.";
+        errorMessage =
+          "Update completed but no confirmation received. Please refresh to see changes.";
       } else {
         errorMessage = `Error updating psychologist: ${error.message}`;
       }
-      
+
       alert(errorMessage);
     } finally {
       setIsUpdatingPsychologist(false);
@@ -2614,88 +2619,92 @@ const AdminPanelNew = () => {
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600 mx-auto"></div>
                   <p className="text-gray-500 mt-2">Loading activity logs...</p>
                 </div>
-              ) : (() => {
-                // Apply date filtering and sorting
-                let filteredAndSortedLogs = [...activityLogs];
+              ) : (
+                (() => {
+                  // Apply date filtering and sorting
+                  let filteredAndSortedLogs = [...activityLogs];
 
-                // Apply date filter
-                if (activityDateFilter) {
-                  const filterDate = new Date(activityDateFilter);
-                  filteredAndSortedLogs = filteredAndSortedLogs.filter(
-                    (log) => {
-                      const logDate = new Date(log.timestamp);
-                      return (
-                        logDate.getDate() === filterDate.getDate() &&
-                        logDate.getMonth() === filterDate.getMonth() &&
-                        logDate.getFullYear() === filterDate.getFullYear()
-                      );
-                    }
-                  );
-                }
-
-                // Apply sorting
-                filteredAndSortedLogs.sort((a, b) => {
-                  const dateA = new Date(a.timestamp);
-                  const dateB = new Date(b.timestamp);
-                  return activitySortOrder === "desc"
-                    ? dateB - dateA
-                    : dateA - dateB;
-                });
-
-                // Check if we have any results after filtering
-                if (filteredAndSortedLogs.length === 0) {
-                  if (activityLogs.length === 0) {
-                    // No logs at all
-                    return (
-                      <div className="text-center py-8">
-                        <Activity className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                        <p className="text-gray-500">No activity logs found</p>
-                        <p className="text-sm text-gray-400 mt-1">
-                          Activity will appear here as users interact with the system
-                        </p>
-                      </div>
-                    );
-                  } else {
-                    // No results after filtering
-                    return (
-                      <div className="text-center py-8">
-                        <Calendar className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                        <p className="text-gray-500">
-                          No activity found for{" "}
-                          {new Date(activityDateFilter).toLocaleDateString()}
-                        </p>
-                        <p className="text-sm text-gray-400 mt-1">
-                          Try selecting a different date or clear the filter
-                        </p>
-                        <button
-                          onClick={() => {
-                            setActivityDateFilter(null);
-                            setCurrentPage(1);
-                          }}
-                          className="mt-2 text-emerald-600 hover:text-emerald-700 text-sm font-medium"
-                        >
-                          Clear date filter
-                        </button>
-                      </div>
+                  // Apply date filter
+                  if (activityDateFilter) {
+                    const filterDate = new Date(activityDateFilter);
+                    filteredAndSortedLogs = filteredAndSortedLogs.filter(
+                      (log) => {
+                        const logDate = new Date(log.timestamp);
+                        return (
+                          logDate.getDate() === filterDate.getDate() &&
+                          logDate.getMonth() === filterDate.getMonth() &&
+                          logDate.getFullYear() === filterDate.getFullYear()
+                        );
+                      }
                     );
                   }
-                }
 
-                // Calculate pagination based on filtered results
-                const totalPages = Math.ceil(
-                  filteredAndSortedLogs.length / itemsPerPage
-                );
-                const startIndex = (currentPage - 1) * itemsPerPage;
-                const endIndex = startIndex + itemsPerPage;
-                const currentLogs = filteredAndSortedLogs.slice(
-                  startIndex,
-                  endIndex
-                );
+                  // Apply sorting
+                  filteredAndSortedLogs.sort((a, b) => {
+                    const dateA = new Date(a.timestamp);
+                    const dateB = new Date(b.timestamp);
+                    return activitySortOrder === "desc"
+                      ? dateB - dateA
+                      : dateA - dateB;
+                  });
 
-                return (
-                  <>
-                    <div className="space-y-4">
-                      {currentLogs.map((log, index) => (
+                  // Check if we have any results after filtering
+                  if (filteredAndSortedLogs.length === 0) {
+                    if (activityLogs.length === 0) {
+                      // No logs at all
+                      return (
+                        <div className="text-center py-8">
+                          <Activity className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                          <p className="text-gray-500">
+                            No activity logs found
+                          </p>
+                          <p className="text-sm text-gray-400 mt-1">
+                            Activity will appear here as users interact with the
+                            system
+                          </p>
+                        </div>
+                      );
+                    } else {
+                      // No results after filtering
+                      return (
+                        <div className="text-center py-8">
+                          <Calendar className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                          <p className="text-gray-500">
+                            No activity found for{" "}
+                            {new Date(activityDateFilter).toLocaleDateString()}
+                          </p>
+                          <p className="text-sm text-gray-400 mt-1">
+                            Try selecting a different date or clear the filter
+                          </p>
+                          <button
+                            onClick={() => {
+                              setActivityDateFilter(null);
+                              setCurrentPage(1);
+                            }}
+                            className="mt-2 text-emerald-600 hover:text-emerald-700 text-sm font-medium"
+                          >
+                            Clear date filter
+                          </button>
+                        </div>
+                      );
+                    }
+                  }
+
+                  // Calculate pagination based on filtered results
+                  const totalPages = Math.ceil(
+                    filteredAndSortedLogs.length / itemsPerPage
+                  );
+                  const startIndex = (currentPage - 1) * itemsPerPage;
+                  const endIndex = startIndex + itemsPerPage;
+                  const currentLogs = filteredAndSortedLogs.slice(
+                    startIndex,
+                    endIndex
+                  );
+
+                  return (
+                    <>
+                      <div className="space-y-4">
+                        {currentLogs.map((log, index) => (
                           <div
                             key={log.id || index}
                             className="flex items-start space-x-4 p-4 bg-gray-50 rounded-lg border border-gray-100 hover:bg-gray-100 transition-colors"
@@ -2836,7 +2845,7 @@ const AdminPanelNew = () => {
                     </>
                   );
                 })()
-              }
+              )}
             </div>
           </div>
         )}
@@ -3508,13 +3517,16 @@ const AdminPanelNew = () => {
                     type="text"
                     value={editFormData.first_name}
                     onChange={(e) =>
-                      setEditFormData({ ...editFormData, first_name: e.target.value })
+                      setEditFormData({
+                        ...editFormData,
+                        first_name: e.target.value,
+                      })
                     }
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-gray-50/50 transition-all duration-200 hover:bg-white"
                     required
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-bold text-gray-700 mb-2">
                     Middle Name
@@ -3523,12 +3535,15 @@ const AdminPanelNew = () => {
                     type="text"
                     value={editFormData.middle_name}
                     onChange={(e) =>
-                      setEditFormData({ ...editFormData, middle_name: e.target.value })
+                      setEditFormData({
+                        ...editFormData,
+                        middle_name: e.target.value,
+                      })
                     }
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-gray-50/50 transition-all duration-200 hover:bg-white"
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-bold text-gray-700 mb-2">
                     Last Name *
@@ -3537,7 +3552,10 @@ const AdminPanelNew = () => {
                     type="text"
                     value={editFormData.last_name}
                     onChange={(e) =>
-                      setEditFormData({ ...editFormData, last_name: e.target.value })
+                      setEditFormData({
+                        ...editFormData,
+                        last_name: e.target.value,
+                      })
                     }
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-gray-50/50 transition-all duration-200 hover:bg-white"
                     required
@@ -3634,7 +3652,11 @@ const AdminPanelNew = () => {
               </button>
               <button
                 onClick={handleSavePsychologistChanges}
-                disabled={isUpdatingPsychologist || !editFormData.first_name.trim() || !editFormData.last_name.trim()}
+                disabled={
+                  isUpdatingPsychologist ||
+                  !editFormData.first_name.trim() ||
+                  !editFormData.last_name.trim()
+                }
                 className="px-6 py-3 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-xl hover:from-emerald-700 hover:to-emerald-800 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center transition-all duration-200 font-medium"
               >
                 {isUpdatingPsychologist && (
@@ -3953,10 +3975,14 @@ const AdminPanelNew = () => {
                   {isTogglingPsychologistStatus ? (
                     <div className="flex items-center justify-center">
                       <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      {psychologistToToggle.is_active ? "Deactivating..." : "Activating..."}
+                      {psychologistToToggle.is_active
+                        ? "Deactivating..."
+                        : "Activating..."}
                     </div>
+                  ) : psychologistToToggle.is_active ? (
+                    "Deactivate"
                   ) : (
-                    psychologistToToggle.is_active ? "Deactivate" : "Activate"
+                    "Activate"
                   )}
                 </button>
               </div>

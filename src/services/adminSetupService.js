@@ -94,10 +94,16 @@ export const adminSetupService = {
       console.log("🔗 Completing pending admin setup");
 
       const { adminService } = await import("./adminService");
-      const setupResult = await adminService.completePendingAdminSetup(email, session.user.id);
-      
+      const setupResult = await adminService.completePendingAdminSetup(
+        email,
+        session.user.id
+      );
+
       if (!setupResult.success) {
-        console.warn("⚠️ Could not complete pending admin setup:", setupResult.error);
+        console.warn(
+          "⚠️ Could not complete pending admin setup:",
+          setupResult.error
+        );
         // Fallback: create admin profile directly
         const { error: insertError } = await supabase
           .from("admin_profiles")
