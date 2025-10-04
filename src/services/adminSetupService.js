@@ -92,7 +92,7 @@ export const adminSetupService = {
 
       // Create the admin profile record directly
       console.log("🔗 Creating admin profile record");
-      
+
       const { error: insertError } = await supabase
         .from("admin_profiles")
         .insert({
@@ -103,7 +103,9 @@ export const adminSetupService = {
 
       if (insertError) {
         console.error("❌ Failed to create admin profile:", insertError);
-        throw new Error(`Failed to create admin profile: ${insertError.message}`);
+        throw new Error(
+          `Failed to create admin profile: ${insertError.message}`
+        );
       }
 
       console.log("✅ Admin profile created successfully");
