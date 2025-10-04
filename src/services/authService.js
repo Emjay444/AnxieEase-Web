@@ -403,6 +403,7 @@ export const authService = {
           data: {
             role: "admin",
             full_name: fullName,
+            invitation_pending: true,
           },
         },
       });

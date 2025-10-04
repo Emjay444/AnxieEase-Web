@@ -90,36 +90,23 @@ export const adminSetupService = {
 
       console.log("✅ Password set successfully");
 
-      // Create the admin profile record now that we have the real auth user ID
-      console.log("🔗 Completing pending admin setup");
+      // Create the admin profile record directly
+      console.log("🔗 Creating admin profile record");
+      
+      const { error: insertError } = await supabase
+        .from("admin_profiles")
+        .insert({
+          id: session.user.id,
+          email: email,
+          full_name: fullName,
+        });
 
-      const { adminService } = await import("./adminService");
-      const setupResult = await adminService.completePendingAdminSetup(
-        email,
-        session.user.id
-      );
-
-      if (!setupResult.success) {
-        console.warn(
-          "⚠️ Could not complete pending admin setup:",
-          setupResult.error
-        );
-        // Fallback: create admin profile directly
-        const { error: insertError } = await supabase
-          .from("admin_profiles")
-          .insert({
-            id: session.user.id,
-            email: email,
-            full_name: fullName,
-            setup_completed: true,
-          });
-
-        if (insertError) {
-          console.warn("⚠️ Could not create admin profile:", insertError);
-        }
-      } else {
-        console.log("✅ Pending admin setup completed successfully");
+      if (insertError) {
+        console.error("❌ Failed to create admin profile:", insertError);
+        throw new Error(`Failed to create admin profile: ${insertError.message}`);
       }
+
+      console.log("✅ Admin profile created successfully");
 
       console.log("🎉 Admin setup completed successfully!");
 
