@@ -59,7 +59,7 @@ export const psychologistService = {
         const uniqueUserProfiles = userProfiles.filter(
           (p) => !existingEmails.has(p.email)
         );
-        
+
         // Format user_profiles data to match expected psychologist structure
         const formattedUserProfiles = uniqueUserProfiles.map((user) => ({
           id: user.id,
@@ -337,7 +337,12 @@ export const psychologistService = {
       }
 
       // Legacy support: Parse name into components if provided and individual fields aren't
-      if (updates.name && updates.name.trim() && !updates.first_name && !updates.last_name) {
+      if (
+        updates.name &&
+        updates.name.trim() &&
+        !updates.first_name &&
+        !updates.last_name
+      ) {
         const nameParts = updates.name.trim().split(" ");
         psychologistUpdates.first_name = nameParts[0] || "";
         psychologistUpdates.last_name = nameParts.slice(1).join(" ") || "";
@@ -384,12 +389,15 @@ export const psychologistService = {
       throw new Error("No data returned from update operation");
     } catch (error) {
       console.error("Update psychologist error:", error.message);
-      
+
       // Don't use fallback mock storage for real errors
-      if (error.message.includes("timeout") || error.message.includes("No data returned")) {
+      if (
+        error.message.includes("timeout") ||
+        error.message.includes("No data returned")
+      ) {
         throw error;
       }
-      
+
       // Only fallback for database connection issues
       const index = mockStorage.psychologists.findIndex((p) => p.id === id);
       if (index !== -1) {
@@ -399,7 +407,7 @@ export const psychologistService = {
         };
         return mockStorage.psychologists[index];
       }
-      
+
       throw error;
     }
   },
@@ -552,7 +560,7 @@ export const psychologistService = {
       if (error.message.includes("Cannot delete psychologist")) {
         throw error; // Re-throw validation errors to show to user
       }
-      
+
       const index = mockStorage.psychologists.findIndex((p) => p.id === id);
       if (index !== -1) {
         mockStorage.psychologists.splice(index, 1);

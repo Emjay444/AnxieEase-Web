@@ -126,7 +126,10 @@ export const authService = {
             throw profileCheckError;
           }
           // Otherwise, continue with normal flow
-          console.log("Could not check user profile for patient role:", profileCheckError.message);
+          console.log(
+            "Could not check user profile for patient role:",
+            profileCheckError.message
+          );
         }
       }
 
