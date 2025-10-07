@@ -599,7 +599,7 @@ export const adminService = {
             patient.last_name?.toLowerCase() || patient.id.substring(0, 8)
           }@anxieease.com`,
         contact_number: patient.contact_number || "No contact number",
-        gender: patient.gender || "Not specified",
+        gender: patient.sex || "Not specified",
         birth_date: patient.birth_date || "Not specified",
         name:
           [patient.first_name, patient.middle_name, patient.last_name]
@@ -743,7 +743,7 @@ export const adminService = {
       // Get gender distribution
       const { data: genderData, error: genderError } = await supabase
         .from("user_profiles")
-        .select("gender")
+        .select("sex")
         .eq("role", "patient");
 
       if (genderError) {
@@ -786,7 +786,7 @@ export const adminService = {
 
       if (genderData) {
         genderData.forEach((user) => {
-          const gender = user.gender?.toLowerCase();
+          const gender = user.sex?.toLowerCase();
           if (gender === "male" || gender === "m") {
             genderStats.male++;
           } else if (gender === "female" || gender === "f") {

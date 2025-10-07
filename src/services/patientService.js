@@ -135,7 +135,7 @@ export const patientService = {
               hour12: true,
             }),
             // Add additional fields for dashboard display
-            gender: user.gender || null,
+            gender: user.sex || null,
             contact_number: user.contact_number || null,
             emergency_contact: user.emergency_contact || null,
             birth_date: user.birth_date || null,

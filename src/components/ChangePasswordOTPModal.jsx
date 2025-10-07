@@ -155,7 +155,7 @@ const ChangePasswordOTPModal = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+    <div className="fixed inset-0 bg-gray-900 bg-opacity-30 backdrop-blur-sm flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-xl p-8 max-w-md w-full shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">

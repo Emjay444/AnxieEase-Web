@@ -149,7 +149,7 @@ export const psychologistService = {
           email: user.email || "No email",
           contact_number: user.contact_number || null,
           emergency_contact: user.emergency_contact || null,
-          gender: user.gender || null,
+          gender: user.sex || null,
           birth_date: user.birth_date || null,
           age: age,
           assigned_psychologist_id: psychologistId,
