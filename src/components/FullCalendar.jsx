@@ -25,6 +25,9 @@ const FullCalendar = ({
   const [showDayAppointments, setShowDayAppointments] = useState(false);
   const [selectedDay, setSelectedDay] = useState(null);
   const [hideExpired, setHideExpired] = useState(false);
+  const [calendarError, setCalendarError] = useState(null);
+  const [showDeclineModal, setShowDeclineModal] = useState(false);
+  const [declineReason, setDeclineReason] = useState("");
 
   useEffect(() => {
     const active = inline || isOpen;
@@ -333,9 +336,32 @@ const FullCalendar = ({
                 )}
               </div>
 
+              {calendarError && (
+                <div className="mt-4 p-3 rounded-lg bg-red-50 border border-red-200">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      <svg className="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="ml-3">
+                      <h4 className="text-sm font-medium text-red-800">
+                        Scheduling Conflict
+                      </h4>
+                      <p className="text-sm text-red-700 mt-1">
+                        {calendarError}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="flex gap-3 mt-6">
                 <button
-                  onClick={handleCloseEventDetails}
+                  onClick={() => {
+                    handleCloseEventDetails();
+                    setCalendarError(null);
+                  }}
                   className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
                 >
                   Close
@@ -348,14 +374,9 @@ const FullCalendar = ({
                     return (
                       <div className="flex gap-3 w-full">
                         <button
-                          onClick={async () => {
-                            await appointmentService.updateAppointmentStatus(
-                              selectedEvent.id,
-                              "declined",
-                              "Declined by psychologist"
-                            );
-                            await loadAppointments();
-                            setShowEventDetails(false);
+                          onClick={() => {
+                            setShowDeclineModal(true);
+                            setCalendarError(null);
                           }}
                           className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
                         >
@@ -363,11 +384,18 @@ const FullCalendar = ({
                         </button>
                         <button
                           onClick={async () => {
-                            await appointmentService.updateAppointmentStatus(
+                            setCalendarError(null);
+                            const result = await appointmentService.updateAppointmentStatus(
                               selectedEvent.id,
                               "scheduled",
                               "Accepted by psychologist"
                             );
+                            
+                            if (typeof result === 'object' && !result.success) {
+                              setCalendarError(result.error);
+                              return;
+                            }
+                            
                             await loadAppointments();
                             setShowEventDetails(false);
                           }}
@@ -708,6 +736,100 @@ const FullCalendar = ({
                 </button>
                 <button className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors">
                   Edit Appointment
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Decline Reason Modal */}
+        {showDeclineModal && selectedEvent && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-70">
+            <div className="bg-white rounded-xl p-6 max-w-md w-full shadow-2xl">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Decline Appointment
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowDeclineModal(false);
+                    setDeclineReason("");
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <p className="text-sm text-gray-700">
+                  You are about to decline the appointment with{" "}
+                  <span className="font-medium">{selectedEvent.resource?.patientName}</span>
+                </p>
+
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Reason for declining (optional)
+                  </label>
+                  <textarea
+                    value={declineReason}
+                    onChange={(e) => setDeclineReason(e.target.value)}
+                    placeholder="e.g., Time conflict, unavailable, need to reschedule..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent resize-none"
+                    rows={3}
+                    maxLength={200}
+                    autoFocus
+                  />
+                  <div className="text-xs text-gray-500 text-right">
+                    {declineReason.length}/200 characters
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-lg bg-amber-50 border border-amber-200">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      <svg className="w-5 h-5 text-amber-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="ml-3">
+                      <p className="text-sm text-amber-800">
+                        The patient will be notified of your decision and the reason you provide.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowDeclineModal(false);
+                    setDeclineReason("");
+                  }}
+                  className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    const message = declineReason.trim() 
+                      ? `Declined: ${declineReason.trim()}`
+                      : "Declined by psychologist";
+                      
+                    await appointmentService.updateAppointmentStatus(
+                      selectedEvent.id,
+                      "declined",
+                      message
+                    );
+                    await loadAppointments();
+                    setShowEventDetails(false);
+                    setShowDeclineModal(false);
+                    setDeclineReason("");
+                  }}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                >
+                  Decline Appointment
                 </button>
               </div>
             </div>

@@ -21,6 +21,7 @@ import {
   Eye,
   EyeOff,
   ArrowLeft,
+  FileText,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { psychologistService } from "../services/psychologistService";
@@ -821,6 +822,7 @@ const ChangePasswordModal = React.memo(
 
 import FullCalendar from "./FullCalendar";
 import PatientProfileView from "./PatientProfileView";
+import ReportGeneration from "./ReportGeneration";
 
 const DashboardNew = () => {
   const { user } = useAuth();
@@ -831,9 +833,12 @@ const DashboardNew = () => {
   const [calendarReloadKey, setCalendarReloadKey] = useState(0);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showProfileOverview, setShowProfileOverview] = useState(false);
+  const [showReportGeneration, setShowReportGeneration] = useState(false);
   const [psychologistId, setPsychologistId] = useState(null); // Store psychologist ID
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [pendingAction, setPendingAction] = useState(null);
+  const [appointmentError, setAppointmentError] = useState(null);
+  const [declineReason, setDeclineReason] = useState("");
 
   // Real data states
   const [stats, setStats] = useState({
@@ -1463,16 +1468,28 @@ const DashboardNew = () => {
     if (!pendingAction) return;
 
     try {
+      setAppointmentError(null); // Clear any previous errors
       const { requestId, action } = pendingAction;
       const status = action === "approve" ? "scheduled" : "declined"; // Use "scheduled" not "approved"
-      const ok = await appointmentService.updateAppointmentStatus(
+      const message = action === "approve" 
+        ? "Approved by psychologist"
+        : declineReason.trim() 
+          ? `Declined: ${declineReason.trim()}`
+          : "Declined by psychologist";
+          
+      const result = await appointmentService.updateAppointmentStatus(
         requestId,
         status,
-        action === "approve"
-          ? "Approved by psychologist"
-          : "Declined by psychologist"
+        message
       );
-      if (ok) {
+      
+      // Handle conflict detection
+      if (typeof result === 'object' && !result.success) {
+        setAppointmentError(result.error);
+        return; // Don't close modal or clear pending action, let user see error
+      }
+      
+      if (result) {
         // Remove from local list and refresh from backend to stay in sync
         setAppointmentRequests((prev) =>
           prev.filter((req) => req.id !== requestId)
@@ -1489,9 +1506,14 @@ const DashboardNew = () => {
       }
     } catch (e) {
       console.error("Failed to update appointment request:", e);
+      setAppointmentError("An error occurred while updating the appointment. Please try again.");
     } finally {
-      setShowConfirmModal(false);
-      setPendingAction(null);
+      // Only close if no error occurred
+      if (!appointmentError) {
+        setShowConfirmModal(false);
+        setPendingAction(null);
+        setDeclineReason("");
+      }
     }
   };
 
@@ -1520,8 +1542,14 @@ const DashboardNew = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Patient Profile View */}
-      {showPatientProfile && selectedPatient ? (
+      {/* Report Generation View */}
+      {showReportGeneration ? (
+        <ReportGeneration
+          psychologistId={psychologistId}
+          onBack={() => setShowReportGeneration(false)}
+        />
+      ) : /* Patient Profile View */
+      showPatientProfile && selectedPatient ? (
         <PatientProfileView
           patient={selectedPatient}
           psychologistId={psychologistId}
@@ -1594,6 +1622,14 @@ const DashboardNew = () => {
                     </button>
 
                     <button
+                      onClick={() => setShowReportGeneration(true)}
+                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      title="Generate Reports"
+                    >
+                      <FileText className="h-5 w-5" />
+                    </button>
+
+                    <button
                       onClick={() => setShowProfileModal(true)}
                       className="p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
                       title="Profile Settings"
@@ -1622,6 +1658,25 @@ const DashboardNew = () => {
                 icon={Calendar}
                 color="emerald"
               />
+            </div>
+
+            {/* Quick Actions */}
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 mb-6">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-gray-900">Quick Actions</h2>
+                <div className="flex items-center space-x-3">
+                  <button
+                    onClick={() => setShowReportGeneration(true)}
+                    className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    <FileText className="h-4 w-4" />
+                    <span>Generate Reports</span>
+                  </button>
+                </div>
+              </div>
+              <p className="text-sm text-gray-600 mt-2">
+                Generate comprehensive patient reports in PDF or CSV format for your records and analysis.
+              </p>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1910,32 +1965,69 @@ const DashboardNew = () => {
                 </div>
 
                 <div className="space-y-4">
-                  <p className="text-sm text-gray-700">
-                    Are you sure you want to {pendingAction.action} this
-                    appointment request?
-                  </p>
-                  <div className="p-3 rounded-lg bg-gray-50 text-sm text-gray-700">
-                    <div className="font-medium">
-                      {pendingAction.action === "approve"
-                        ? "This will:"
-                        : "This will:"}
+                  {appointmentError ? (
+                    <div className="p-3 rounded-lg bg-red-50 border border-red-200">
+                      <div className="flex items-center">
+                        <AlertCircle className="h-5 w-5 text-red-600 mr-2" />
+                        <div>
+                          <h4 className="text-sm font-medium text-red-800">
+                            Scheduling Conflict
+                          </h4>
+                          <p className="text-sm text-red-700 mt-1">
+                            {appointmentError}
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                    <ul className="mt-1 text-xs space-y-1">
-                      {pendingAction.action === "approve" ? (
-                        <>
-                          <li>• Change status to "scheduled"</li>
-                          <li>• Show appointment in calendar</li>
-                          <li>• Remove from pending requests</li>
-                        </>
-                      ) : (
-                        <>
-                          <li>• Change status to "declined"</li>
-                          <li>• Remove from pending requests</li>
-                          <li>• Notify patient of decline</li>
-                        </>
+                  ) : (
+                    <>
+                      <p className="text-sm text-gray-700">
+                        Are you sure you want to {pendingAction.action} this
+                        appointment request?
+                      </p>
+                      <div className="p-3 rounded-lg bg-gray-50 text-sm text-gray-700">
+                        <div className="font-medium">
+                          {pendingAction.action === "approve"
+                            ? "This will:"
+                            : "This will:"}
+                        </div>
+                        <ul className="mt-1 text-xs space-y-1">
+                          {pendingAction.action === "approve" ? (
+                            <>
+                              <li>• Change status to "scheduled"</li>
+                              <li>• Show appointment in calendar</li>
+                              <li>• Remove from pending requests</li>
+                            </>
+                          ) : (
+                            <>
+                              <li>• Change status to "declined"</li>
+                              <li>• Remove from pending requests</li>
+                              <li>• Notify patient with your reason</li>
+                            </>
+                          )}
+                        </ul>
+                      </div>
+
+                      {pendingAction.action === "decline" && (
+                        <div className="space-y-2">
+                          <label className="block text-sm font-medium text-gray-700">
+                            Reason for declining (optional)
+                          </label>
+                          <textarea
+                            value={declineReason}
+                            onChange={(e) => setDeclineReason(e.target.value)}
+                            placeholder="e.g., Time conflict, unavailable, need to reschedule..."
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent resize-none"
+                            rows={3}
+                            maxLength={200}
+                          />
+                          <div className="text-xs text-gray-500 text-right">
+                            {declineReason.length}/200 characters
+                          </div>
+                        </div>
                       )}
-                    </ul>
-                  </div>
+                    </>
+                  )}
                 </div>
 
                 <div className="flex gap-3 mt-6">
@@ -1943,21 +2035,25 @@ const DashboardNew = () => {
                     onClick={() => {
                       setShowConfirmModal(false);
                       setPendingAction(null);
+                      setAppointmentError(null);
+                      setDeclineReason("");
                     }}
                     className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
                   >
-                    Cancel
+                    {appointmentError ? "Close" : "Cancel"}
                   </button>
-                  <button
-                    onClick={confirmAppointmentAction}
-                    className={`flex-1 px-4 py-2 text-white rounded-lg transition-colors ${
-                      pendingAction.action === "approve"
-                        ? "bg-emerald-600 hover:bg-emerald-700"
-                        : "bg-red-600 hover:bg-red-700"
-                    }`}
-                  >
-                    {pendingAction.action === "approve" ? "Approve" : "Decline"}
-                  </button>
+                  {!appointmentError && (
+                    <button
+                      onClick={confirmAppointmentAction}
+                      className={`flex-1 px-4 py-2 text-white rounded-lg transition-colors ${
+                        pendingAction.action === "approve"
+                          ? "bg-emerald-600 hover:bg-emerald-700"
+                          : "bg-red-600 hover:bg-red-700"
+                      }`}
+                    >
+                      {pendingAction.action === "approve" ? "Approve" : "Decline"}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

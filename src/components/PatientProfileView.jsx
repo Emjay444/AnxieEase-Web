@@ -72,7 +72,7 @@ const PatientProfileView = ({ patient, onBack, psychologistId }) => {
   const [attackSeriesFull, setAttackSeriesFull] = useState([]);
   const [severityData, setSeverityData] = useState([]);
   const [attacksPage, setAttacksPage] = useState(1);
-  const [attacksPageSize, setAttacksPageSize] = useState(10);
+  const [attacksPageSize, setAttacksPageSize] = useState(5);
   const [severityFilter, setSeverityFilter] = useState("all"); // all, 1m, 3m, 6m, 1y
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth()); // 0-11
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
@@ -1060,20 +1060,6 @@ const PatientProfileView = ({ patient, onBack, psychologistId }) => {
                           of {anxietyRecords.length}
                         </div>
                         <div className="flex items-center gap-2">
-                          <select
-                            className="border border-gray-200 rounded-lg px-2 py-1 text-gray-700"
-                            value={attacksPageSize}
-                            onChange={(e) => {
-                              setAttacksPage(1);
-                              setAttacksPageSize(parseInt(e.target.value, 10));
-                            }}
-                          >
-                            {[5, 10, 20, 50].map((s) => (
-                              <option key={s} value={s}>
-                                {s}/page
-                              </option>
-                            ))}
-                          </select>
                           <button
                             className="px-3 py-1.5 rounded-lg border border-gray-200 disabled:opacity-50"
                             disabled={attacksPage === 1}
@@ -1333,9 +1319,43 @@ const PatientProfileView = ({ patient, onBack, psychologistId }) => {
                           </span>
                         </div>
                         {appointment.responseMessage && (
-                          <p className="text-sm text-gray-700 mt-2">
-                            {appointment.responseMessage}
-                          </p>
+                          <div className={`mt-2 p-2 rounded-lg text-sm ${
+                            appointment.status === "declined" 
+                              ? "bg-red-50 border border-red-200" 
+                              : appointment.status === "scheduled"
+                              ? "bg-green-50 border border-green-200"
+                              : "bg-gray-50 border border-gray-200"
+                          }`}>
+                            <div className="flex items-start">
+                              {appointment.status === "declined" && (
+                                <XCircle className="h-4 w-4 text-red-600 mr-2 mt-0.5 flex-shrink-0" />
+                              )}
+                              {appointment.status === "scheduled" && (
+                                <CheckCircle className="h-4 w-4 text-green-600 mr-2 mt-0.5 flex-shrink-0" />
+                              )}
+                              <div>
+                                <p className={`font-medium ${
+                                  appointment.status === "declined" 
+                                    ? "text-red-800" 
+                                    : appointment.status === "scheduled"
+                                    ? "text-green-800"
+                                    : "text-gray-800"
+                                }`}>
+                                  {appointment.status === "declined" 
+                                    ? "Psychologist Response:" 
+                                    : "Psychologist Note:"}
+                                </p>
+                                <p className={appointment.status === "declined" 
+                                  ? "text-red-700" 
+                                  : appointment.status === "scheduled"
+                                  ? "text-green-700"
+                                  : "text-gray-700"
+                                }>
+                                  {appointment.responseMessage}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
                         )}
                       </div>
                     ))}
