@@ -1471,24 +1471,25 @@ const DashboardNew = () => {
       setAppointmentError(null); // Clear any previous errors
       const { requestId, action } = pendingAction;
       const status = action === "approve" ? "scheduled" : "declined"; // Use "scheduled" not "approved"
-      const message = action === "approve" 
-        ? "Approved by psychologist"
-        : declineReason.trim() 
+      const message =
+        action === "approve"
+          ? "Approved by psychologist"
+          : declineReason.trim()
           ? `Declined: ${declineReason.trim()}`
           : "Declined by psychologist";
-          
+
       const result = await appointmentService.updateAppointmentStatus(
         requestId,
         status,
         message
       );
-      
+
       // Handle conflict detection
-      if (typeof result === 'object' && !result.success) {
+      if (typeof result === "object" && !result.success) {
         setAppointmentError(result.error);
         return; // Don't close modal or clear pending action, let user see error
       }
-      
+
       if (result) {
         // Remove from local list and refresh from backend to stay in sync
         setAppointmentRequests((prev) =>
@@ -1506,7 +1507,9 @@ const DashboardNew = () => {
       }
     } catch (e) {
       console.error("Failed to update appointment request:", e);
-      setAppointmentError("An error occurred while updating the appointment. Please try again.");
+      setAppointmentError(
+        "An error occurred while updating the appointment. Please try again."
+      );
     } finally {
       // Only close if no error occurred
       if (!appointmentError) {
@@ -1663,7 +1666,9 @@ const DashboardNew = () => {
             {/* Quick Actions */}
             <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 mb-6">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-gray-900">Quick Actions</h2>
+                <h2 className="text-lg font-semibold text-gray-900">
+                  Quick Actions
+                </h2>
                 <div className="flex items-center space-x-3">
                   <button
                     onClick={() => setShowReportGeneration(true)}
@@ -1675,7 +1680,8 @@ const DashboardNew = () => {
                 </div>
               </div>
               <p className="text-sm text-gray-600 mt-2">
-                Generate comprehensive patient reports in PDF or CSV format for your records and analysis.
+                Generate comprehensive patient reports in PDF or CSV format for
+                your records and analysis.
               </p>
             </div>
 
@@ -2051,7 +2057,9 @@ const DashboardNew = () => {
                           : "bg-red-600 hover:bg-red-700"
                       }`}
                     >
-                      {pendingAction.action === "approve" ? "Approve" : "Decline"}
+                      {pendingAction.action === "approve"
+                        ? "Approve"
+                        : "Decline"}
                     </button>
                   )}
                 </div>

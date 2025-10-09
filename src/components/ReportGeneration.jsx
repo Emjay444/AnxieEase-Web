@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   FileText,
   Download,
@@ -12,19 +12,19 @@ import {
   X,
   Search,
   Filter,
-  Loader
-} from 'lucide-react';
-import { reportService } from '../services/reportService';
-import { psychologistService } from '../services/psychologistService';
-import ProfilePicture from './ProfilePicture';
+  Loader,
+} from "lucide-react";
+import { reportService } from "../services/reportService";
+import { psychologistService } from "../services/psychologistService";
+import ProfilePicture from "./ProfilePicture";
 
 const ReportGeneration = ({ psychologistId, onBack }) => {
   const [loading, setLoading] = useState(true);
   const [patients, setPatients] = useState([]);
   const [selectedPatients, setSelectedPatients] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [reportType, setReportType] = useState('individual'); // 'individual' or 'batch'
-  const [exportFormat, setExportFormat] = useState('pdf'); // 'pdf' or 'csv'
+  const [searchTerm, setSearchTerm] = useState("");
+  const [reportType, setReportType] = useState("individual"); // 'individual' or 'batch'
+  const [exportFormat, setExportFormat] = useState("pdf"); // 'pdf' or 'csv'
   const [generating, setGenerating] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [previewData, setPreviewData] = useState(null);
@@ -35,16 +35,21 @@ const ReportGeneration = ({ psychologistId, onBack }) => {
     const loadPatients = async () => {
       try {
         setLoading(true);
-        const patientsData = await psychologistService.getPsychologistPatients(psychologistId);
-        console.log('ReportGeneration: Loaded patients with avatar data:', patientsData.map(p => ({
-          name: p.name,
-          avatar_url: p.avatar_url,
-          id: p.id
-        })));
+        const patientsData = await psychologistService.getPsychologistPatients(
+          psychologistId
+        );
+        console.log(
+          "ReportGeneration: Loaded patients with avatar data:",
+          patientsData.map((p) => ({
+            name: p.name,
+            avatar_url: p.avatar_url,
+            id: p.id,
+          }))
+        );
         setPatients(patientsData);
       } catch (error) {
-        console.error('Error loading patients:', error);
-        setError('Failed to load patients');
+        console.error("Error loading patients:", error);
+        setError("Failed to load patients");
       } finally {
         setLoading(false);
       }
@@ -56,18 +61,21 @@ const ReportGeneration = ({ psychologistId, onBack }) => {
   }, [psychologistId]);
 
   // Filter patients based on search term
-  const filteredPatients = patients.filter(patient => {
+  const filteredPatients = patients.filter((patient) => {
     const searchLower = searchTerm.toLowerCase();
-    const name = (patient.name || `${patient.first_name || ''} ${patient.last_name || ''}`.trim()).toLowerCase();
-    const email = (patient.email || '').toLowerCase();
+    const name = (
+      patient.name ||
+      `${patient.first_name || ""} ${patient.last_name || ""}`.trim()
+    ).toLowerCase();
+    const email = (patient.email || "").toLowerCase();
     return name.includes(searchLower) || email.includes(searchLower);
   });
 
   // Toggle patient selection
   const togglePatientSelection = (patientId) => {
-    setSelectedPatients(prev => {
+    setSelectedPatients((prev) => {
       if (prev.includes(patientId)) {
-        return prev.filter(id => id !== patientId);
+        return prev.filter((id) => id !== patientId);
       } else {
         return [...prev, patientId];
       }
@@ -76,7 +84,7 @@ const ReportGeneration = ({ psychologistId, onBack }) => {
 
   // Select all filtered patients
   const selectAllPatients = () => {
-    const allFilteredIds = filteredPatients.map(p => p.id);
+    const allFilteredIds = filteredPatients.map((p) => p.id);
     setSelectedPatients(allFilteredIds);
   };
 
@@ -89,12 +97,15 @@ const ReportGeneration = ({ psychologistId, onBack }) => {
   const generatePreview = async (patientId) => {
     try {
       setGenerating(true);
-      const reportData = await reportService.generatePatientReportData(patientId, psychologistId);
+      const reportData = await reportService.generatePatientReportData(
+        patientId,
+        psychologistId
+      );
       setPreviewData(reportData);
       setShowReportModal(true);
     } catch (error) {
-      console.error('Error generating preview:', error);
-      setError('Failed to generate report preview');
+      console.error("Error generating preview:", error);
+      setError("Failed to generate report preview");
     } finally {
       setGenerating(false);
     }
@@ -105,21 +116,25 @@ const ReportGeneration = ({ psychologistId, onBack }) => {
     try {
       setGenerating(true);
       setError(null);
-      
-      const reportData = await reportService.generatePatientReportData(patientId, psychologistId);
-      
-      if (exportFormat === 'pdf') {
+
+      const reportData = await reportService.generatePatientReportData(
+        patientId,
+        psychologistId
+      );
+
+      if (exportFormat === "pdf") {
         await reportService.exportPatientDataPDF(reportData);
       } else {
         await reportService.exportPatientDataCSV(reportData);
       }
-      
+
       // Show success message
-      const patient = patients.find(p => p.id === patientId);
-      alert(`Report generated successfully for ${patient?.name || patient?.id}!`);
-      
+      const patient = patients.find((p) => p.id === patientId);
+      alert(
+        `Report generated successfully for ${patient?.name || patient?.id}!`
+      );
     } catch (error) {
-      console.error('Error generating individual report:', error);
+      console.error("Error generating individual report:", error);
       setError(`Failed to generate report: ${error.message}`);
     } finally {
       setGenerating(false);
@@ -129,20 +144,25 @@ const ReportGeneration = ({ psychologistId, onBack }) => {
   // Generate batch report
   const generateBatchReport = async () => {
     if (selectedPatients.length === 0) {
-      setError('Please select at least one patient');
+      setError("Please select at least one patient");
       return;
     }
 
     try {
       setGenerating(true);
       setError(null);
-      
-      await reportService.generateBatchPatientReport(selectedPatients, psychologistId, exportFormat);
-      
-      alert(`Batch report generated successfully for ${selectedPatients.length} patients!`);
-      
+
+      await reportService.generateBatchPatientReport(
+        selectedPatients,
+        psychologistId,
+        exportFormat
+      );
+
+      alert(
+        `Batch report generated successfully for ${selectedPatients.length} patients!`
+      );
     } catch (error) {
-      console.error('Error generating batch report:', error);
+      console.error("Error generating batch report:", error);
       setError(`Failed to generate batch report: ${error.message}`);
     } finally {
       setGenerating(false);
@@ -174,8 +194,12 @@ const ReportGeneration = ({ psychologistId, onBack }) => {
                 <X className="h-5 w-5" />
               </button>
               <div>
-                <h1 className="text-xl font-bold text-gray-900">Report Generation</h1>
-                <p className="text-sm text-gray-600">Generate comprehensive patient reports</p>
+                <h1 className="text-xl font-bold text-gray-900">
+                  Report Generation
+                </h1>
+                <p className="text-sm text-gray-600">
+                  Generate comprehensive patient reports
+                </p>
               </div>
             </div>
             <div className="flex items-center space-x-3">
@@ -212,37 +236,57 @@ const ReportGeneration = ({ psychologistId, onBack }) => {
 
         {/* Report Type Selection */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Report Type</h2>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">
+            Report Type
+          </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <button
-              onClick={() => setReportType('individual')}
+              onClick={() => setReportType("individual")}
               className={`p-4 border-2 rounded-lg text-left transition-colors ${
-                reportType === 'individual'
-                  ? 'border-emerald-500 bg-emerald-50'
-                  : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                reportType === "individual"
+                  ? "border-emerald-500 bg-emerald-50"
+                  : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
               }`}
             >
               <div className="flex items-center space-x-3">
-                <FileText className={`h-6 w-6 ${reportType === 'individual' ? 'text-emerald-600' : 'text-gray-400'}`} />
+                <FileText
+                  className={`h-6 w-6 ${
+                    reportType === "individual"
+                      ? "text-emerald-600"
+                      : "text-gray-400"
+                  }`}
+                />
                 <div>
-                  <h3 className="font-medium text-gray-900">Individual Reports</h3>
-                  <p className="text-sm text-gray-600">Generate detailed reports for single patients</p>
+                  <h3 className="font-medium text-gray-900">
+                    Individual Reports
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    Generate detailed reports for single patients
+                  </p>
                 </div>
               </div>
             </button>
             <button
-              onClick={() => setReportType('batch')}
+              onClick={() => setReportType("batch")}
               className={`p-4 border-2 rounded-lg text-left transition-colors ${
-                reportType === 'batch'
-                  ? 'border-emerald-500 bg-emerald-50'
-                  : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                reportType === "batch"
+                  ? "border-emerald-500 bg-emerald-50"
+                  : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
               }`}
             >
               <div className="flex items-center space-x-3">
-                <Users className={`h-6 w-6 ${reportType === 'batch' ? 'text-emerald-600' : 'text-gray-400'}`} />
+                <Users
+                  className={`h-6 w-6 ${
+                    reportType === "batch"
+                      ? "text-emerald-600"
+                      : "text-gray-400"
+                  }`}
+                />
                 <div>
                   <h3 className="font-medium text-gray-900">Batch Reports</h3>
-                  <p className="text-sm text-gray-600">Generate summary reports for multiple patients</p>
+                  <p className="text-sm text-gray-600">
+                    Generate summary reports for multiple patients
+                  </p>
                 </div>
               </div>
             </button>
@@ -256,7 +300,7 @@ const ReportGeneration = ({ psychologistId, onBack }) => {
               <h2 className="text-lg font-semibold text-gray-900">
                 Select Patients ({filteredPatients.length} available)
               </h2>
-              {reportType === 'batch' && (
+              {reportType === "batch" && (
                 <div className="flex items-center space-x-2">
                   <span className="text-sm text-gray-600">
                     {selectedPatients.length} selected
@@ -277,7 +321,7 @@ const ReportGeneration = ({ psychologistId, onBack }) => {
                 </div>
               )}
             </div>
-            
+
             {/* Search */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -303,14 +347,15 @@ const ReportGeneration = ({ psychologistId, onBack }) => {
                   <div
                     key={patient.id}
                     className={`border rounded-lg p-4 transition-colors ${
-                      reportType === 'batch' && selectedPatients.includes(patient.id)
-                        ? 'border-emerald-500 bg-emerald-50'
-                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                      reportType === "batch" &&
+                      selectedPatients.includes(patient.id)
+                        ? "border-emerald-500 bg-emerald-50"
+                        : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
                     }`}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-3">
-                        {reportType === 'batch' && (
+                        {reportType === "batch" && (
                           <input
                             type="checkbox"
                             checked={selectedPatients.includes(patient.id)}
@@ -318,21 +363,29 @@ const ReportGeneration = ({ psychologistId, onBack }) => {
                             className="h-4 w-4 text-emerald-600 focus:ring-emerald-500 border-gray-300 rounded"
                           />
                         )}
-                        <ProfilePicture 
-                          patient={patient} 
-                          size={40} 
+                        <ProfilePicture
+                          patient={patient}
+                          size={40}
                           className=""
                         />
                         <div>
                           <h3 className="font-medium text-gray-900">
-                            {patient.name || `${patient.first_name || ''} ${patient.last_name || ''}`.trim() || 'Unnamed Patient'}
+                            {patient.name ||
+                              `${patient.first_name || ""} ${
+                                patient.last_name || ""
+                              }`.trim() ||
+                              "Unnamed Patient"}
                           </h3>
-                          <p className="text-sm text-gray-600">{patient.email || 'No email'}</p>
-                          <p className="text-xs text-gray-500">ID: {patient.id}</p>
+                          <p className="text-sm text-gray-600">
+                            {patient.email || "No email"}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            ID: {patient.id}
+                          </p>
                         </div>
                       </div>
-                      
-                      {reportType === 'individual' && (
+
+                      {reportType === "individual" && (
                         <div className="flex items-center space-x-2">
                           <button
                             onClick={() => generatePreview(patient.id)}
@@ -365,15 +418,15 @@ const ReportGeneration = ({ psychologistId, onBack }) => {
           </div>
 
           {/* Batch Report Actions */}
-          {reportType === 'batch' && (
+          {reportType === "batch" && (
             <div className="p-6 border-t border-gray-200 bg-gray-50">
               <div className="flex items-center justify-between">
                 <div className="text-sm text-gray-600">
-                  {selectedPatients.length > 0 ? (
-                    `${selectedPatients.length} patient${selectedPatients.length !== 1 ? 's' : ''} selected for batch report`
-                  ) : (
-                    'Select patients to generate a batch report'
-                  )}
+                  {selectedPatients.length > 0
+                    ? `${selectedPatients.length} patient${
+                        selectedPatients.length !== 1 ? "s" : ""
+                      } selected for batch report`
+                    : "Select patients to generate a batch report"}
                 </div>
                 <button
                   onClick={generateBatchReport}
@@ -384,7 +437,7 @@ const ReportGeneration = ({ psychologistId, onBack }) => {
                     <Loader className="h-4 w-4 animate-spin" />
                   ) : (
                     <>
-                      {exportFormat === 'pdf' ? (
+                      {exportFormat === "pdf" ? (
                         <FileDown className="h-4 w-4" />
                       ) : (
                         <FileSpreadsheet className="h-4 w-4" />
@@ -405,7 +458,9 @@ const ReportGeneration = ({ psychologistId, onBack }) => {
           <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900">Report Preview</h3>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Report Preview
+                </h3>
                 <button
                   onClick={() => setShowReportModal(false)}
                   className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"
@@ -414,52 +469,89 @@ const ReportGeneration = ({ psychologistId, onBack }) => {
                 </button>
               </div>
             </div>
-            
+
             <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
               <div className="space-y-6">
                 {/* Patient Info */}
                 <div>
-                  <h4 className="font-semibold text-gray-900 mb-2">Patient Information</h4>
+                  <h4 className="font-semibold text-gray-900 mb-2">
+                    Patient Information
+                  </h4>
                   <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                    <p><span className="font-medium">Name:</span> {previewData.patient.name || 'N/A'}</p>
-                    <p><span className="font-medium">ID:</span> {previewData.patient.id}</p>
-                    <p><span className="font-medium">Email:</span> {previewData.patient.email || 'N/A'}</p>
+                    <p>
+                      <span className="font-medium">Name:</span>{" "}
+                      {previewData.patient.name || "N/A"}
+                    </p>
+                    <p>
+                      <span className="font-medium">ID:</span>{" "}
+                      {previewData.patient.id}
+                    </p>
+                    <p>
+                      <span className="font-medium">Email:</span>{" "}
+                      {previewData.patient.email || "N/A"}
+                    </p>
                   </div>
                 </div>
 
                 {/* Statistics */}
                 <div>
-                  <h4 className="font-semibold text-gray-900 mb-2">Summary Statistics</h4>
+                  <h4 className="font-semibold text-gray-900 mb-2">
+                    Summary Statistics
+                  </h4>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <div className="bg-blue-50 rounded-lg p-3 text-center">
-                      <div className="text-xl font-bold text-blue-600">{previewData.stats.totalSessions}</div>
-                      <div className="text-xs text-blue-800">Total Sessions</div>
+                      <div className="text-xl font-bold text-blue-600">
+                        {previewData.stats.totalSessions}
+                      </div>
+                      <div className="text-xs text-blue-800">
+                        Total Sessions
+                      </div>
                     </div>
                     <div className="bg-green-50 rounded-lg p-3 text-center">
-                      <div className="text-xl font-bold text-green-600">{previewData.stats.totalMoodEntries}</div>
+                      <div className="text-xl font-bold text-green-600">
+                        {previewData.stats.totalMoodEntries}
+                      </div>
                       <div className="text-xs text-green-800">Mood Entries</div>
                     </div>
                     <div className="bg-purple-50 rounded-lg p-3 text-center">
-                      <div className="text-xl font-bold text-purple-600">{previewData.stats.avgMoodScore}/10</div>
-                      <div className="text-xs text-purple-800">Avg Mood Score</div>
+                      <div className="text-xl font-bold text-purple-600">
+                        {previewData.stats.avgMoodScore}/10
+                      </div>
+                      <div className="text-xs text-purple-800">
+                        Avg Mood Score
+                      </div>
                     </div>
                     <div className="bg-orange-50 rounded-lg p-3 text-center">
-                      <div className="text-xl font-bold text-orange-600">{previewData.stats.avgStressLevel}/10</div>
-                      <div className="text-xs text-orange-800">Avg Stress Level</div>
+                      <div className="text-xl font-bold text-orange-600">
+                        {previewData.stats.avgStressLevel}/10
+                      </div>
+                      <div className="text-xs text-orange-800">
+                        Avg Stress Level
+                      </div>
                     </div>
                   </div>
-                  
+
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-3">
                     <div className="bg-red-50 rounded-lg p-3 text-center">
-                      <div className="text-xl font-bold text-red-600">{previewData.stats.totalAnxietyAttacks}</div>
-                      <div className="text-xs text-red-800">Anxiety Attacks</div>
+                      <div className="text-xl font-bold text-red-600">
+                        {previewData.stats.totalAnxietyAttacks}
+                      </div>
+                      <div className="text-xs text-red-800">
+                        Anxiety Attacks
+                      </div>
                     </div>
                     <div className="bg-yellow-50 rounded-lg p-3 text-center">
-                      <div className="text-xl font-bold text-yellow-600">{previewData.stats.attackRatePerWeek}</div>
-                      <div className="text-xs text-yellow-800">Attacks/Week</div>
+                      <div className="text-xl font-bold text-yellow-600">
+                        {previewData.stats.attackRatePerWeek}
+                      </div>
+                      <div className="text-xs text-yellow-800">
+                        Attacks/Week
+                      </div>
                     </div>
                     <div className="bg-indigo-50 rounded-lg p-3 text-center">
-                      <div className="text-sm font-bold text-indigo-600">{previewData.stats.improvementTrend}</div>
+                      <div className="text-sm font-bold text-indigo-600">
+                        {previewData.stats.improvementTrend}
+                      </div>
                       <div className="text-xs text-indigo-800">Trend</div>
                     </div>
                   </div>
@@ -468,15 +560,33 @@ const ReportGeneration = ({ psychologistId, onBack }) => {
                 {/* Monthly Attack Analysis */}
                 {previewData.stats.totalAnxietyAttacks > 0 && (
                   <div>
-                    <h4 className="font-semibold text-gray-900 mb-2">Anxiety Attack Analysis</h4>
+                    <h4 className="font-semibold text-gray-900 mb-2">
+                      Anxiety Attack Analysis
+                    </h4>
                     <div className="bg-gray-50 rounded-lg p-4 space-y-2">
                       <div className="flex justify-between">
-                        <span className="font-medium text-gray-700">Month with Most Attacks:</span>
-                        <span className="text-gray-900">{previewData.stats.mostAttacksMonth} ({previewData.stats.monthlyAttackData[previewData.stats.mostAttacksMonth] || 0})</span>
+                        <span className="font-medium text-gray-700">
+                          Month with Most Attacks:
+                        </span>
+                        <span className="text-gray-900">
+                          {previewData.stats.mostAttacksMonth} (
+                          {previewData.stats.monthlyAttackData[
+                            previewData.stats.mostAttacksMonth
+                          ] || 0}
+                          )
+                        </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="font-medium text-gray-700">Month with Least Attacks:</span>
-                        <span className="text-gray-900">{previewData.stats.leastAttacksMonth} ({previewData.stats.monthlyAttackData[previewData.stats.leastAttacksMonth] || 0})</span>
+                        <span className="font-medium text-gray-700">
+                          Month with Least Attacks:
+                        </span>
+                        <span className="text-gray-900">
+                          {previewData.stats.leastAttacksMonth} (
+                          {previewData.stats.monthlyAttackData[
+                            previewData.stats.leastAttacksMonth
+                          ] || 0}
+                          )
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -484,43 +594,76 @@ const ReportGeneration = ({ psychologistId, onBack }) => {
 
                 {/* Stress Distribution */}
                 <div>
-                  <h4 className="font-semibold text-gray-900 mb-2">Stress Level Distribution</h4>
+                  <h4 className="font-semibold text-gray-900 mb-2">
+                    Stress Level Distribution
+                  </h4>
                   <div className="grid grid-cols-3 gap-3">
                     <div className="bg-green-50 rounded-lg p-3 text-center">
-                      <div className="text-lg font-bold text-green-600">{previewData.stats.stressDistribution?.low || 0}</div>
-                      <div className="text-xs text-green-800">Low Stress Days</div>
+                      <div className="text-lg font-bold text-green-600">
+                        {previewData.stats.stressDistribution?.low || 0}
+                      </div>
+                      <div className="text-xs text-green-800">
+                        Low Stress Days
+                      </div>
                     </div>
                     <div className="bg-yellow-50 rounded-lg p-3 text-center">
-                      <div className="text-lg font-bold text-yellow-600">{previewData.stats.stressDistribution?.medium || 0}</div>
-                      <div className="text-xs text-yellow-800">Medium Stress Days</div>
+                      <div className="text-lg font-bold text-yellow-600">
+                        {previewData.stats.stressDistribution?.medium || 0}
+                      </div>
+                      <div className="text-xs text-yellow-800">
+                        Medium Stress Days
+                      </div>
                     </div>
                     <div className="bg-red-50 rounded-lg p-3 text-center">
-                      <div className="text-lg font-bold text-red-600">{previewData.stats.stressDistribution?.high || 0}</div>
-                      <div className="text-xs text-red-800">High Stress Days</div>
+                      <div className="text-lg font-bold text-red-600">
+                        {previewData.stats.stressDistribution?.high || 0}
+                      </div>
+                      <div className="text-xs text-red-800">
+                        High Stress Days
+                      </div>
                     </div>
                   </div>
                 </div>
 
                 {/* Recent Activity */}
                 <div>
-                  <h4 className="font-semibold text-gray-900 mb-2">Recent Mood Logs</h4>
+                  <h4 className="font-semibold text-gray-900 mb-2">
+                    Recent Mood Logs
+                  </h4>
                   <div className="space-y-2 max-h-40 overflow-y-auto">
                     {previewData.moodLogs?.slice(0, 5).map((log, index) => (
-                      <div key={index} className="bg-gray-50 rounded-lg p-3 text-sm">
+                      <div
+                        key={index}
+                        className="bg-gray-50 rounded-lg p-3 text-sm"
+                      >
                         <div className="flex justify-between items-start">
                           <div>
-                            <span className="font-medium">{log.mood || 'N/A'}</span>
-                            <span className="text-gray-600 ml-2">Stress: {log.stress_level || 'N/A'}</span>
+                            <span className="font-medium">
+                              {log.mood || "N/A"}
+                            </span>
+                            <span className="text-gray-600 ml-2">
+                              Stress: {log.stress_level || "N/A"}
+                            </span>
                           </div>
                           <span className="text-gray-500">
-                            {log.log_date ? new Date(log.log_date).toLocaleDateString() : 'N/A'}
+                            {log.log_date
+                              ? new Date(log.log_date).toLocaleDateString()
+                              : "N/A"}
                           </span>
                         </div>
-                        {log.symptoms && Array.isArray(log.symptoms) && log.symptoms.length > 0 && (
-                          <div className="text-gray-600 mt-1">Symptoms: {log.symptoms.join(', ')}</div>
-                        )}
+                        {log.symptoms &&
+                          Array.isArray(log.symptoms) &&
+                          log.symptoms.length > 0 && (
+                            <div className="text-gray-600 mt-1">
+                              Symptoms: {log.symptoms.join(", ")}
+                            </div>
+                          )}
                       </div>
-                    )) || <p className="text-gray-500 text-sm">No mood logs available</p>}
+                    )) || (
+                      <p className="text-gray-500 text-sm">
+                        No mood logs available
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -537,7 +680,7 @@ const ReportGeneration = ({ psychologistId, onBack }) => {
                 <button
                   onClick={async () => {
                     setShowReportModal(false);
-                    if (exportFormat === 'pdf') {
+                    if (exportFormat === "pdf") {
                       await reportService.exportPatientDataPDF(previewData);
                     } else {
                       await reportService.exportPatientDataCSV(previewData);

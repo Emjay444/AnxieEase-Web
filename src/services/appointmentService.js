@@ -312,10 +312,14 @@ export const appointmentService = {
   },
 
   // Check for appointment time conflicts
-  async checkTimeConflicts(psychologistId, appointmentDate, excludeAppointmentId = null) {
+  async checkTimeConflicts(
+    psychologistId,
+    appointmentDate,
+    excludeAppointmentId = null
+  ) {
     try {
       const appointmentTime = new Date(appointmentDate);
-      
+
       // Check for appointments within 1 hour window (30 min before and after)
       const startWindow = new Date(appointmentTime.getTime() - 30 * 60 * 1000);
       const endWindow = new Date(appointmentTime.getTime() + 30 * 60 * 1000);
@@ -340,9 +344,9 @@ export const appointmentService = {
         return { hasConflict: false, conflicts: [] };
       }
 
-      return { 
-        hasConflict: data.length > 0, 
-        conflicts: data 
+      return {
+        hasConflict: data.length > 0,
+        conflicts: data,
       };
     } catch (error) {
       console.error("Check time conflicts error:", error.message);
@@ -360,7 +364,11 @@ export const appointmentService = {
       });
 
       // If we're scheduling/accepting an appointment, check for conflicts first
-      if (status === "scheduled" || status === "approved" || status === "accepted") {
+      if (
+        status === "scheduled" ||
+        status === "approved" ||
+        status === "accepted"
+      ) {
         // First get the appointment details to check for conflicts
         const { data: appointmentData, error: fetchError } = await supabase
           .from("appointments")
@@ -369,24 +377,31 @@ export const appointmentService = {
           .single();
 
         if (fetchError) {
-          console.error("Error fetching appointment for conflict check:", fetchError.message);
+          console.error(
+            "Error fetching appointment for conflict check:",
+            fetchError.message
+          );
           return false;
         }
 
-        if (appointmentData?.appointment_date && appointmentData?.psychologist_id) {
+        if (
+          appointmentData?.appointment_date &&
+          appointmentData?.psychologist_id
+        ) {
           const conflictCheck = await this.checkTimeConflicts(
-            appointmentData.psychologist_id, 
-            appointmentData.appointment_date, 
+            appointmentData.psychologist_id,
+            appointmentData.appointment_date,
             appointmentId
           );
 
           if (conflictCheck.hasConflict) {
             console.warn("Time conflict detected:", conflictCheck.conflicts);
             // Return error object instead of false to provide more context
-            return { 
-              success: false, 
-              error: "Time conflict detected. There is already an accepted appointment within 1 hour of this time slot.",
-              conflicts: conflictCheck.conflicts 
+            return {
+              success: false,
+              error:
+                "Time conflict detected. There is already an accepted appointment within 1 hour of this time slot.",
+              conflicts: conflictCheck.conflicts,
             };
           }
         }

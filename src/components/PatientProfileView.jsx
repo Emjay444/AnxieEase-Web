@@ -1319,13 +1319,15 @@ const PatientProfileView = ({ patient, onBack, psychologistId }) => {
                           </span>
                         </div>
                         {appointment.responseMessage && (
-                          <div className={`mt-2 p-2 rounded-lg text-sm ${
-                            appointment.status === "declined" 
-                              ? "bg-red-50 border border-red-200" 
-                              : appointment.status === "scheduled"
-                              ? "bg-green-50 border border-green-200"
-                              : "bg-gray-50 border border-gray-200"
-                          }`}>
+                          <div
+                            className={`mt-2 p-2 rounded-lg text-sm ${
+                              appointment.status === "declined"
+                                ? "bg-red-50 border border-red-200"
+                                : appointment.status === "scheduled"
+                                ? "bg-green-50 border border-green-200"
+                                : "bg-gray-50 border border-gray-200"
+                            }`}
+                          >
                             <div className="flex items-start">
                               {appointment.status === "declined" && (
                                 <XCircle className="h-4 w-4 text-red-600 mr-2 mt-0.5 flex-shrink-0" />
@@ -1334,23 +1336,28 @@ const PatientProfileView = ({ patient, onBack, psychologistId }) => {
                                 <CheckCircle className="h-4 w-4 text-green-600 mr-2 mt-0.5 flex-shrink-0" />
                               )}
                               <div>
-                                <p className={`font-medium ${
-                                  appointment.status === "declined" 
-                                    ? "text-red-800" 
-                                    : appointment.status === "scheduled"
-                                    ? "text-green-800"
-                                    : "text-gray-800"
-                                }`}>
-                                  {appointment.status === "declined" 
-                                    ? "Psychologist Response:" 
+                                <p
+                                  className={`font-medium ${
+                                    appointment.status === "declined"
+                                      ? "text-red-800"
+                                      : appointment.status === "scheduled"
+                                      ? "text-green-800"
+                                      : "text-gray-800"
+                                  }`}
+                                >
+                                  {appointment.status === "declined"
+                                    ? "Psychologist Response:"
                                     : "Psychologist Note:"}
                                 </p>
-                                <p className={appointment.status === "declined" 
-                                  ? "text-red-700" 
-                                  : appointment.status === "scheduled"
-                                  ? "text-green-700"
-                                  : "text-gray-700"
-                                }>
+                                <p
+                                  className={
+                                    appointment.status === "declined"
+                                      ? "text-red-700"
+                                      : appointment.status === "scheduled"
+                                      ? "text-green-700"
+                                      : "text-gray-700"
+                                  }
+                                >
                                   {appointment.responseMessage}
                                 </p>
                               </div>
