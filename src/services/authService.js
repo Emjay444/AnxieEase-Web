@@ -99,6 +99,40 @@ export const authService = {
         data.user?.user_metadata?.role ||
         (await this.getUserRole(data.user.id));
 
+      // Check if this user is a patient - patients cannot sign in
+      if (role === "patient") {
+        // Sign out the user immediately
+        await supabase.auth.signOut();
+        throw new Error("Invalid login credentials");
+      }
+
+      // Additional check in user_profiles table if no role found
+      if (!role) {
+        try {
+          const { data: userProfile, error: profileError } = await supabase
+            .from("user_profiles")
+            .select("role")
+            .eq("email", email)
+            .single();
+
+          if (!profileError && userProfile && userProfile.role === "patient") {
+            // Sign out the user immediately
+            await supabase.auth.signOut();
+            throw new Error("Invalid login credentials");
+          }
+        } catch (profileCheckError) {
+          // If it's our custom error message, re-throw it
+          if (profileCheckError.message.includes("Invalid login credentials")) {
+            throw profileCheckError;
+          }
+          // Otherwise, continue with normal flow
+          console.log(
+            "Could not check user profile for patient role:",
+            profileCheckError.message
+          );
+        }
+      }
+
       // If this is a psychologist, update their user_id
       if (role === "psychologist") {
         try {

@@ -129,8 +129,6 @@ const LoginPage = () => {
           navigate("/admin");
         } else if (role === "psychologist") {
           navigate("/dashboard");
-        } else {
-          navigate("/patient-profile");
         }
       }, 800);
     } catch (err) {
