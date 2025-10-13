@@ -42,6 +42,10 @@ export const psychologistService = {
           created_at: psych.created_at,
           updated_at: psych.updated_at,
           avatar_url: psych.avatar_url || null, // Include avatar_url from psychologists table
+          // Add missing fields for gender and birth date display
+          sex: psych.sex || null,
+          birth_date: psych.birth_date || null,
+          license_number: psych.license_number || null,
         }));
         allPsychologists.push(...formattedPsychologists);
       }

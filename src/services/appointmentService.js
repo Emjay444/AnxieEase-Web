@@ -1,6 +1,41 @@
 import { supabase } from "./supabaseClient";
 
 export const appointmentService = {
+  // Clean up mismatched appointments (when patients are reassigned)
+  async cleanupMismatchedAppointments() {
+    try {
+      const { data, error } = await supabase.rpc('cleanup_mismatched_appointments');
+      
+      if (error) {
+        console.error("Error cleaning up appointments:", error.message);
+        return { success: false, error: error.message };
+      }
+      
+      console.log("Appointment cleanup result:", data);
+      return { success: true, data: data[0] };
+    } catch (error) {
+      console.error("Cleanup mismatched appointments error:", error.message);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Check for appointment assignment issues
+  async checkAppointmentAssignments() {
+    try {
+      const { data, error } = await supabase.rpc('check_appointment_assignments');
+      
+      if (error) {
+        console.error("Error checking appointments:", error.message);
+        return [];
+      }
+      
+      return data || [];
+    } catch (error) {
+      console.error("Check appointment assignments error:", error.message);
+      return [];
+    }
+  },
+
   // Get appointments for a psychologist or a user
   async getAppointmentsByPsychologist(userId) {
     try {

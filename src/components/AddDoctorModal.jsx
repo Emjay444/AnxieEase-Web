@@ -123,8 +123,8 @@ const AddDoctorModal = memo(({ show, onClose, onSave, isLoading = false }) => {
       }
 
       if (!formData.sex) {
-        newErrors.sex = "Gender is required";
-        summaryErrors.push("Gender is required");
+        newErrors.sex = "Sex is required";
+        summaryErrors.push("Sex is required");
       }
     }
 
@@ -215,7 +215,7 @@ const AddDoctorModal = memo(({ show, onClose, onSave, isLoading = false }) => {
         aria-modal="true"
       >
         <div className="modal-header">
-          <h2 id="modal-title">Create Doctor Account</h2>
+          <h2 id="modal-title">Create Psychologist Account</h2>
           <button
             className="close-button"
             onClick={onClose}
@@ -343,7 +343,7 @@ const AddDoctorModal = memo(({ show, onClose, onSave, isLoading = false }) => {
 
                   <div className="form-group">
                     <label htmlFor="sex">
-                      Gender<span className="required-marker">*</span>
+                      Sex<span className="required-marker">*</span>
                     </label>
                     <select
                       id="sex"
@@ -355,14 +355,10 @@ const AddDoctorModal = memo(({ show, onClose, onSave, isLoading = false }) => {
                       aria-invalid={errors.sex ? "true" : "false"}
                     >
                       <option value="" disabled>
-                        Select gender
+                        Select sex
                       </option>
                       <option value="Male">Male</option>
                       <option value="Female">Female</option>
-                      <option value="Other">Other</option>
-                      <option value="Prefer not to say">
-                        Prefer not to say
-                      </option>
                     </select>
                     {errors.sex && (
                       <div className="field-error" role="alert">

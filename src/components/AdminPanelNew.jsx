@@ -3313,7 +3313,7 @@ const AdminPanelNew = () => {
                           <Users className="h-5 w-5 text-emerald-600 mt-0.5 flex-shrink-0" />
                           <div className="flex-1">
                             <p className="text-sm font-medium text-gray-700">
-                              Gender
+                              Sex
                             </p>
                             <p className="text-gray-900 font-semibold">
                               {selectedPsychologist.sex || (
