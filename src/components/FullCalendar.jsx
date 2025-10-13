@@ -45,10 +45,11 @@ const FullCalendar = ({
         data = await appointmentService.getAppointments();
       }
 
-      // Transform appointments for calendar format
+      // Transform appointments for calendar format with consistent Asia/Manila timezone
       const calendarEvents = (data || []).map((appt) => {
         const startRaw =
           appt.appointment_date || appt.requestedDate || appt.requestedDatetime;
+        // Handle timezone conversion for Philippines (Asia/Manila)
         const start = startRaw ? new Date(startRaw) : new Date();
         const end = new Date(start.getTime() + 60 * 60 * 1000);
         const title =
@@ -263,11 +264,21 @@ const FullCalendar = ({
                   <Clock className="text-emerald-600" size={20} />
                   <div>
                     <p className="font-medium text-gray-900">
-                      {moment(selectedEvent.start).format("MMMM Do, YYYY")}
+                      {new Date(selectedEvent.start).toLocaleDateString("en-PH", {
+                        year: "numeric", 
+                        month: "long", 
+                        day: "numeric",
+                        timeZone: "Asia/Manila"
+                      })}
                     </p>
                     <p className="text-sm text-gray-600">
                       Requested time:{" "}
-                      {moment(selectedEvent.start).format("h:mm A")}
+                      {new Date(selectedEvent.start).toLocaleTimeString("en-PH", {
+                        hour: "numeric",
+                        minute: "2-digit", 
+                        hour12: true,
+                        timeZone: "Asia/Manila"
+                      })} (Philippines Time)
                     </p>
                   </div>
                 </div>

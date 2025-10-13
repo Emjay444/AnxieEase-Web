@@ -386,22 +386,22 @@ export const appointmentService = {
         ...appointmentData,
       };
 
-      // Normalize appointment_date to UTC if provided without timezone info.
+      // Normalize appointment_date to handle Asia/Manila timezone consistently
       if (
         payload.appointment_date &&
         typeof payload.appointment_date === "string"
       ) {
         const s = payload.appointment_date;
         const hasTZ = /[zZ]|[\+\-]\d{2}:?\d{2}$/.test(s);
-        // If no timezone is present, assume Asia/Manila local time and convert to UTC ISO
+        // If no timezone is present, assume Asia/Manila local time (Philippines timezone)
         if (!hasTZ) {
-          // Accept formats like "YYYY-MM-DD HH:mm" or "YYYY-MM-DDTHH:mm" (optionally with :ss)
+          // Accept formats like "YYYY-MM-DD HH:mm" or "YYYY-MM-DDTHH:mm" 
           const normalized = s.trim().replace(" ", "T");
-          // Append Asia/Manila offset
-          const iso = new Date(
-            `${normalized}${normalized.includes(":") ? "" : "T00:00"}+08:00`
-          ).toISOString();
+          // Append Asia/Manila offset (+08:00) and convert to UTC ISO for database storage
+          const withTimezone = `${normalized}${normalized.includes(":") ? "" : "T00:00"}+08:00`;
+          const iso = new Date(withTimezone).toISOString();
           payload.appointment_date = iso;
+          console.log(`Timezone conversion: ${s} → ${withTimezone} → ${iso}`);
         }
       }
       const { data, error } = await supabase

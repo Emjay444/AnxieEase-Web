@@ -16,17 +16,19 @@ WHERE id IS NOT NULL AND setup_completed IS NULL;
 -- We'll use a different approach - use a placeholder UUID for pending invitations
 -- and update it when the admin completes setup
 
--- Step 4: Modify the user sync trigger to exclude admin role users
--- This prevents auto-creation of user_profiles records for admin invitations
+-- Step 4: Modify the user sync trigger to exclude admin and psychologist role users
+-- This prevents auto-creation of user_profiles records for admin and psychologist invitations
+-- user_profiles table should only contain patient data
 CREATE OR REPLACE FUNCTION sync_user_email()
 RETURNS TRIGGER AS $$
 BEGIN
-  -- Skip sync for admin role users to prevent conflicts with admin_profiles
-  IF (NEW.raw_user_meta_data->>'role' = 'admin') THEN
-    RETURN NEW; -- Don't create/update user_profiles for admin invitations
+  -- Skip sync for admin and psychologist role users
+  -- user_profiles is for patients only
+  IF (NEW.raw_user_meta_data->>'role' = 'admin' OR NEW.raw_user_meta_data->>'role' = 'psychologist') THEN
+    RETURN NEW; -- Don't create/update user_profiles for admin or psychologist invitations
   END IF;
   
-  -- For non-admin users, update the corresponding user_profiles record
+  -- For patient users only, update the corresponding user_profiles record
   UPDATE public.user_profiles 
   SET email = NEW.email 
   WHERE id = NEW.id;
@@ -45,11 +47,17 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Step 6: Clean up any existing user_profiles records that have admin role
--- These should only exist in admin_profiles table
+-- Step 6: Clean up any existing user_profiles records that have admin or psychologist role
+-- Admins should only exist in admin_profiles table
+-- Psychologists should only exist in psychologists table
+-- user_profiles is for patients only
 DELETE FROM user_profiles 
 WHERE role = 'admin' 
 AND email IN (SELECT email FROM admin_profiles);
+
+DELETE FROM user_profiles 
+WHERE role = 'psychologist' 
+AND email IN (SELECT email FROM psychologists);
 
 -- Step 7: Verify the setup
 SELECT 'Admin invitation flow configured successfully' as status;

@@ -1404,10 +1404,11 @@ const DashboardNew = () => {
       </div>
       <div className="text-right">
         <p className="text-sm font-medium text-gray-900">
-          {new Date(appointment.appointment_date).toLocaleTimeString("en-US", {
+          {new Date(appointment.appointment_date).toLocaleTimeString("en-PH", {
             hour: "numeric",
             minute: "2-digit",
             hour12: true,
+            timeZone: "Asia/Manila",
           })}
         </p>
         <p className="text-xs text-gray-500">Today</p>

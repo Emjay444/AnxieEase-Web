@@ -208,18 +208,8 @@ export const psychologistSetupService = {
           }
         }
 
-        // Best-effort: ensure user_profiles reflects role and verification
-        try {
-          const { error: profileErr } = await supabase
-            .from("user_profiles")
-            .update({ role: "psychologist", is_email_verified: true })
-            .eq("email", email);
-          if (profileErr) {
-            console.log("user_profiles update skipped:", profileErr.message);
-          }
-        } catch (e) {
-          console.log("user_profiles update non-fatal error:", e?.message);
-        }
+        // Note: user_profiles is for patients only
+        // Psychologists are stored in the psychologists table only
 
         // Best-effort: persist role in auth metadata too
         try {
