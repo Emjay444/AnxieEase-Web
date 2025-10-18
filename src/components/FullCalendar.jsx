@@ -99,27 +99,23 @@ const FullCalendar = ({
   };
 
   const eventStyleGetter = (event) => {
-    let backgroundColor = "#059669"; // emerald-600 (default scheduled/others)
-    let borderColor = "#047857"; // emerald-700
+    let backgroundColor = "#3b82f6"; // blue-500 (default for approved appointments)
+    let borderColor = "#1d4ed8"; // blue-700
 
     const status = (event.resource?.status || "").toString().toLowerCase();
 
     if (status === "completed") {
+      backgroundColor = "#22c55e"; // green-500
+      borderColor = "#16a34a"; // green-600
+    } else if (status === "expired") {
       backgroundColor = "#6b7280"; // gray-500
       borderColor = "#4b5563"; // gray-600
-    } else if (status === "expired") {
-      backgroundColor = "#6b7280"; // gray-500 (same base as completed)
-      borderColor = "#9ca3af"; // gray-400 to differentiate slightly
-    } else if (
-      status === "cancelled" ||
-      status === "canceled" ||
-      status === "declined"
-    ) {
-      backgroundColor = "#dc2626"; // red-600
-      borderColor = "#b91c1c"; // red-700
-    } else if (status === "pending") {
-      backgroundColor = "#d97706"; // amber-600
-      borderColor = "#b45309"; // amber-700
+    } else if (status === "declined") {
+      backgroundColor = "#ef4444"; // red-500
+      borderColor = "#dc2626"; // red-600
+    } else if (status === "pending" || status === "requested") {
+      backgroundColor = "#eab308"; // yellow-500
+      borderColor = "#ca8a04"; // yellow-600
     }
 
     return {
@@ -145,7 +141,7 @@ const FullCalendar = ({
         return appointments.filter((e) => {
           const s = (e.resource?.status || "").toLowerCase().trim();
           if (s === "expired" || s === "completed") return false;
-          if (s === "declined" || s === "cancelled" || s === "canceled") {
+          if (s === "declined") {
             const start = e.start instanceof Date ? e.start : new Date(e.start);
             return !(start < todayStart);
           }
@@ -204,24 +200,24 @@ const FullCalendar = ({
           <div className="flex items-center gap-6 text-sm justify-between">
             <div className="flex items-center gap-6">
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-emerald-600 rounded"></div>
-                <span>Scheduled</span>
+                <div className="w-3 h-3 bg-blue-500 rounded"></div>
+                <span>Approved</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-amber-600 rounded"></div>
-                <span>Pending</span>
+                <div className="w-3 h-3 bg-green-500 rounded"></div>
+                <span>Completed</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-red-500 rounded"></div>
+                <span>Declined</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 bg-gray-400 rounded"></div>
                 <span>Expired</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-gray-500 rounded"></div>
-                <span>Completed</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-red-600 rounded"></div>
-                <span>Cancelled</span>
+                <div className="w-3 h-3 bg-yellow-500 rounded"></div>
+                <span>Pending</span>
               </div>
             </div>
             <label className="flex items-center gap-2 select-none">
@@ -317,19 +313,21 @@ const FullCalendar = ({
                   <div
                     className={`w-3 h-3 rounded-full ${
                       selectedEvent.resource?.status === "completed"
-                        ? "bg-gray-500"
+                        ? "bg-green-500"
                         : selectedEvent.resource?.status === "expired"
                         ? "bg-gray-400"
-                        : selectedEvent.resource?.status === "cancelled"
-                        ? "bg-red-600"
+                        : selectedEvent.resource?.status === "declined"
+                        ? "bg-red-500"
                         : selectedEvent.resource?.status === "pending"
-                        ? "bg-amber-600"
-                        : "bg-emerald-600"
+                        ? "bg-yellow-500"
+                        : selectedEvent.resource?.status === "requested"
+                        ? "bg-yellow-500"
+                        : "bg-blue-500"
                     }`}
                   ></div>
                   <div>
                     <p className="font-medium text-gray-900 capitalize">
-                      {selectedEvent.resource?.status || "scheduled"}
+                      {selectedEvent.resource?.status || "approved"}
                     </p>
                     <p className="text-sm text-gray-600">Status</p>
                   </div>
@@ -407,7 +405,7 @@ const FullCalendar = ({
                             const result =
                               await appointmentService.updateAppointmentStatus(
                                 selectedEvent.id,
-                                "scheduled",
+                                "approved",
                                 "Accepted by psychologist"
                               );
 
@@ -424,20 +422,6 @@ const FullCalendar = ({
                           Accept
                         </button>
                       </div>
-                    );
-                  }
-                  if (status === "scheduled") {
-                    return (
-                      <button
-                        onClick={() => {
-                          alert(
-                            "Reschedule flow to be implemented with reason input."
-                          );
-                        }}
-                        className="flex-1 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors"
-                      >
-                        Reschedule
-                      </button>
                     );
                   }
                   return null;
@@ -534,24 +518,24 @@ const FullCalendar = ({
           <div className="flex items-center gap-6 text-sm justify-between">
             <div className="flex items-center gap-6">
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-emerald-600 rounded"></div>
-                <span>Scheduled</span>
+                <div className="w-3 h-3 bg-blue-500 rounded"></div>
+                <span>Approved</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-amber-600 rounded"></div>
-                <span>Pending</span>
+                <div className="w-3 h-3 bg-green-500 rounded"></div>
+                <span>Completed</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-red-500 rounded"></div>
+                <span>Declined</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 bg-gray-400 rounded"></div>
                 <span>Expired</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-gray-500 rounded"></div>
-                <span>Completed</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-red-600 rounded"></div>
-                <span>Cancelled</span>
+                <div className="w-3 h-3 bg-yellow-500 rounded"></div>
+                <span>Pending</span>
               </div>
             </div>
             <label className="flex items-center gap-2 select-none">
@@ -625,18 +609,21 @@ const FullCalendar = ({
                             "pending"
                               ? "bg-amber-100 text-amber-700"
                               : (evt.resource?.status || "").toLowerCase() ===
+                                "requested"
+                              ? "bg-amber-100 text-amber-700"
+                              : (evt.resource?.status || "").toLowerCase() ===
                                 "expired"
                               ? "bg-gray-100 text-gray-600"
                               : (evt.resource?.status || "").toLowerCase() ===
                                 "completed"
-                              ? "bg-gray-100 text-gray-700"
+                              ? "bg-green-100 text-green-700"
                               : (evt.resource?.status || "").toLowerCase() ===
-                                "cancelled"
+                                "declined"
                               ? "bg-red-100 text-red-700"
-                              : "bg-emerald-100 text-emerald-700"
+                              : "bg-blue-100 text-blue-700"
                           }`}
                         >
-                          {evt.resource?.status || "scheduled"}
+                          {evt.resource?.status || "approved"}
                         </span>
                       </div>
                       {evt.resource?.reason && (
@@ -717,19 +704,21 @@ const FullCalendar = ({
                   <div
                     className={`w-3 h-3 rounded-full ${
                       selectedEvent.resource?.status === "completed"
-                        ? "bg-gray-500"
+                        ? "bg-green-500"
                         : selectedEvent.resource?.status === "expired"
                         ? "bg-gray-400"
-                        : selectedEvent.resource?.status === "cancelled"
-                        ? "bg-red-600"
+                        : selectedEvent.resource?.status === "declined"
+                        ? "bg-red-500"
                         : selectedEvent.resource?.status === "pending"
-                        ? "bg-amber-600"
-                        : "bg-emerald-600"
+                        ? "bg-yellow-500"
+                        : selectedEvent.resource?.status === "requested"
+                        ? "bg-yellow-500"
+                        : "bg-blue-500"
                     }`}
                   ></div>
                   <div>
                     <p className="font-medium text-gray-900 capitalize">
-                      {selectedEvent.resource?.status || "scheduled"}
+                      {selectedEvent.resource?.status || "approved"}
                     </p>
                     <p className="text-sm text-gray-600">Status</p>
                   </div>

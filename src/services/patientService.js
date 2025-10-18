@@ -470,12 +470,23 @@ export const patientService = {
           .eq("user_id", patientId)
           .order("date", { ascending: false });
 
+        console.log("Wellness logs query result:", { wellnessData, wellnessError, count: wellnessData?.length });
+
         // If wellness_logs data exists and no error, format it to match expected structure
         if (!wellnessError && wellnessData && wellnessData.length > 0) {
-          console.log("Found wellness logs data:", wellnessData);
+          console.log("✅ Found wellness logs data:", wellnessData.length, "entries");
+          console.log("📋 Sample wellness log:", wellnessData[0]);
 
           // Map the wellness_logs data to the expected format
           return wellnessData.map((log) => {
+            console.log("Processing log:", { 
+              date: log.date, 
+              feelings: log.feelings, 
+              stress_level: log.stress_level, 
+              symptoms: log.symptoms,
+              journal: log.journal 
+            });
+            
             // Convert numeric stress level to text and preserve original value
             let stressLevelText = "Low";
             let stressLevelValue = log.stress_level || 1;
@@ -493,20 +504,31 @@ export const patientService = {
 
             // Extract mood from feelings array if it exists
             let mood = "Neutral";
-            if (log.feelings && log.feelings.length > 0) {
-              // Handle feelings data whether it's an array or string representation
+            if (log.feelings) {
+              // Handle feelings data whether it's an array, object, or string representation
               try {
-                const feelingsArray =
-                  typeof log.feelings === "string"
-                    ? JSON.parse(log.feelings.replace(/'/g, '"'))
-                    : log.feelings;
-
-                mood =
-                  Array.isArray(feelingsArray) && feelingsArray.length > 0
-                    ? feelingsArray[0]
-                    : "Neutral";
+                let feelingsArray = log.feelings;
+                
+                // If it's a string, parse it
+                if (typeof feelingsArray === "string") {
+                  feelingsArray = JSON.parse(feelingsArray.replace(/'/g, '"'));
+                }
+                
+                // If it's an array, get the first item
+                if (Array.isArray(feelingsArray) && feelingsArray.length > 0) {
+                  mood = feelingsArray[0];
+                } 
+                // If it's an object with a mood/feeling property
+                else if (typeof feelingsArray === 'object' && feelingsArray.mood) {
+                  mood = feelingsArray.mood;
+                } 
+                else if (typeof feelingsArray === 'object' && feelingsArray.feeling) {
+                  mood = feelingsArray.feeling;
+                }
+                
+                console.log("Parsed mood:", mood, "from feelings:", log.feelings);
               } catch (e) {
-                console.error("Error parsing feelings:", e);
+                console.error("Error parsing feelings:", e, log.feelings);
               }
             }
 
@@ -515,22 +537,28 @@ export const patientService = {
             if (log.symptoms) {
               // Handle symptoms data whether it's an array or string representation
               try {
-                symptoms =
-                  typeof log.symptoms === "string"
-                    ? JSON.parse(log.symptoms.replace(/'/g, '"'))
-                    : log.symptoms;
+                let symptomsData = log.symptoms;
+                
+                // If it's a string, parse it  
+                if (typeof symptomsData === "string") {
+                  symptomsData = JSON.parse(symptomsData.replace(/'/g, '"'));
+                }
 
                 // Ensure symptoms is an array
-                if (!Array.isArray(symptoms)) {
-                  symptoms = [String(symptoms)];
+                if (Array.isArray(symptomsData)) {
+                  symptoms = symptomsData.length > 0 ? symptomsData : ["None"];
+                } else if (symptomsData) {
+                  symptoms = [String(symptomsData)];
                 }
+                
+                console.log("Parsed symptoms:", symptoms, "from log.symptoms:", log.symptoms);
               } catch (e) {
-                console.error("Error parsing symptoms:", e);
+                console.error("Error parsing symptoms:", e, log.symptoms);
                 symptoms = ["None"];
               }
             }
 
-            return {
+            const mappedLog = {
               id: log.id,
               patient_id: log.user_id,
               log_date: log.date,
@@ -538,21 +566,33 @@ export const patientService = {
               stress_level: stressLevelText,
               stress_level_value: stressLevelValue, // Include numeric value
               symptoms: symptoms,
-              notes: log.journal || "",
               created_at: log.created_at,
             };
+            
+            console.log("✅ Mapped log:", mappedLog);
+            return mappedLog;
+          });
+        } else {
+          console.log("⚠️ No wellness logs found or error:", { 
+            hasError: !!wellnessError, 
+            errorMessage: wellnessError?.message,
+            dataLength: wellnessData?.length || 0 
           });
         }
 
         // Try mood_logs table as fallback (no need to try anxiety_logs since it's 404)
+        console.log("Trying mood_logs table as fallback...");
         const { data, error } = await supabase
           .from("mood_logs")
           .select("*")
           .eq("patient_id", patientId)
           .order("log_date", { ascending: false });
 
+        console.log("Mood logs query result:", { data, error, count: data?.length });
+
         // If no error, return the data or empty array
         if (!error) {
+          console.log("✅ Returning", data?.length || 0, "mood logs");
           return data || [];
         }
 

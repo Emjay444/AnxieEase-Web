@@ -51,6 +51,7 @@ const DashboardNew = () => {
   const [psychologistProfile, setPsychologistProfile] = useState(null); // Store full psychologist profile
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [pendingAction, setPendingAction] = useState(null);
+  const [declineReason, setDeclineReason] = useState("");
 
   // Real data states
   const [stats, setStats] = useState({
@@ -229,7 +230,10 @@ const DashboardNew = () => {
             appt.appointment_date || appt.requestedDate || appt.requestDate;
           if (!apptRaw) return false;
           const apptDate = new Date(apptRaw).toDateString();
-          return apptDate === today;
+          const isToday = apptDate === today;
+          // Exclude declined and expired appointments from today's list
+          const isActiveStatus = appt.status !== "declined" && appt.status !== "expired";
+          return isToday && isActiveStatus;
         });
         setTodayAppointments(todayAppts);
 
@@ -779,15 +783,29 @@ const DashboardNew = () => {
 
     try {
       const { requestId, action } = pendingAction;
-      const status = action === "approve" ? "scheduled" : "declined"; // Use "scheduled" not "approved"
-      const ok = await appointmentService.updateAppointmentStatus(
+      const status = action === "approve" ? "approved" : "declined";
+      
+      // Build the response message
+      let responseMessage = "";
+      if (action === "approve") {
+        responseMessage = "Approved by psychologist";
+      } else {
+        responseMessage = declineReason ? `Declined by psychologist: ${declineReason}` : "Declined by psychologist";
+      }
+      
+      const result = await appointmentService.updateAppointmentStatus(
         requestId,
         status,
-        action === "approve"
-          ? "Approved by psychologist"
-          : "Declined by psychologist"
+        responseMessage
       );
-      if (ok) {
+      
+      // Check if result is an error object (for conflicts)
+      if (typeof result === "object" && result.success === false) {
+        alert(`Cannot approve appointment: ${result.error}`);
+        return;
+      }
+      
+      if (result) {
         // Remove from local list and refresh from backend to stay in sync
         setAppointmentRequests((prev) =>
           prev.filter((req) => req.id !== requestId)
@@ -804,9 +822,11 @@ const DashboardNew = () => {
       }
     } catch (e) {
       console.error("Failed to update appointment request:", e);
+      alert("An error occurred while updating the appointment");
     } finally {
       setShowConfirmModal(false);
       setPendingAction(null);
+      setDeclineReason("");
     }
   };
 
@@ -1153,7 +1173,7 @@ const DashboardNew = () => {
                     <ul className="mt-1 text-xs space-y-1">
                       {pendingAction.action === "approve" ? (
                         <>
-                          <li>• Change status to "scheduled"</li>
+                          <li>• Change status to "approved"</li>
                           <li>• Show appointment in calendar</li>
                           <li>• Remove from pending requests</li>
                         </>
@@ -1166,6 +1186,24 @@ const DashboardNew = () => {
                       )}
                     </ul>
                   </div>
+
+                  {pendingAction.action === "decline" && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Reason for Decline (Optional)
+                      </label>
+                      <textarea
+                        value={declineReason}
+                        onChange={(e) => setDeclineReason(e.target.value)}
+                        placeholder="Please provide a reason for declining this appointment..."
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm"
+                        rows={3}
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        The patient will see this reason in their requests
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex gap-3 mt-6">
@@ -1173,6 +1211,7 @@ const DashboardNew = () => {
                     onClick={() => {
                       setShowConfirmModal(false);
                       setPendingAction(null);
+                      setDeclineReason("");
                     }}
                     className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
                   >

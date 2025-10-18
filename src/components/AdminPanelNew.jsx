@@ -2872,14 +2872,6 @@ const AdminPanelNew = () => {
                     <h3 className="text-lg font-medium text-gray-900">
                       Account Information
                     </h3>
-                    <button
-                      onClick={() => setShowDeleteOwnAccountModal(true)}
-                      className="flex items-center space-x-2 px-3 py-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors text-sm border border-red-200 hover:border-red-300"
-                      title="Delete My Account"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      <span>Delete Account</span>
-                    </button>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>

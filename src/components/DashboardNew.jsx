@@ -1007,7 +1007,10 @@ const DashboardNew = () => {
             appt.appointment_date || appt.requestedDate || appt.requestDate;
           if (!apptRaw) return false;
           const apptDate = new Date(apptRaw).toDateString();
-          return apptDate === today;
+          const isToday = apptDate === today;
+          // Exclude declined and expired appointments from today's list
+          const isActiveStatus = appt.status !== "declined" && appt.status !== "expired";
+          return isToday && isActiveStatus;
         });
         setTodayAppointments(todayAppts);
 

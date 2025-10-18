@@ -55,9 +55,12 @@ export const appointmentService = {
 
       console.log("Found appointments:", appointments);
 
+      // First, fix any appointments that were wrongly expired (future appointments marked as expired)
+      const fixedAppointments = await this.fixWronglyExpiredAppointments(appointments);
+
       // Auto-update past scheduled appointments to completed, and past pending to expired
       const afterComplete = await this.updatePastAppointmentsToCompleted(
-        appointments
+        fixedAppointments
       );
       const updatedAppointments =
         await this.updatePastPendingAppointmentsToExpired(afterComplete);
@@ -118,12 +121,66 @@ export const appointmentService = {
     }
   },
 
-  // Helper method to update past scheduled appointments to completed
+  // Fix appointments that were wrongly marked as expired (future appointments)
+  async fixWronglyExpiredAppointments(appointments) {
+    try {
+      const now = new Date();
+      
+      // Find appointments marked as expired but with future dates
+      const wronglyExpired = appointments.filter((appt) => {
+        if (appt.status !== 'expired') return false;
+        if (!appt.appointment_date) return false;
+        const appointmentDate = new Date(appt.appointment_date);
+        const isFuture = appointmentDate > now;
+        
+        if (isFuture) {
+          console.log(`Found wrongly expired appointment ${appt.id}:`, {
+            appointmentDate: appointmentDate.toISOString(),
+            now: now.toISOString(),
+            willRevert: true
+          });
+        }
+        
+        return isFuture;
+      });
+
+      if (wronglyExpired.length > 0) {
+        console.log(
+          `Reverting ${wronglyExpired.length} wrongly expired appointments back to requested status`
+        );
+        
+        const updatePromises = wronglyExpired.map((appt) =>
+          supabase
+            .from("appointments")
+            .update({
+              status: "requested",
+              response_message: null,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", appt.id)
+        );
+        
+        await Promise.all(updatePromises);
+
+        // Return updated appointments with corrected status
+        return appointments.map((appt) =>
+          wronglyExpired.find((p) => p.id === appt.id)
+            ? { ...appt, status: "requested", response_message: null }
+            : appt
+        );
+      }
+
+      return appointments;
+    } catch (error) {
+      console.error("Error fixing wrongly expired appointments:", error);
+      return appointments;
+    }
+  },
+
   async updatePastAppointmentsToCompleted(appointments) {
     try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0); // Start of today
-      console.log("Today's date (start of day):", today.toISOString());
+      const now = new Date(); // Current time, not just date
+      console.log("Current time:", now.toISOString());
 
       // Debug: Log all appointments with their status and date
       appointments.forEach((appt) => {
@@ -131,58 +188,58 @@ export const appointmentService = {
           `Appointment ${appt.id}: status="${appt.status}", date="${appt.appointment_date}"`
         );
       });
-      // Treat legacy equivalents of scheduled as scheduled too
-      const scheduledLike = new Set([
-        "scheduled",
+      // Treat legacy equivalents of approved as approved too
+      // "scheduled" is legacy, "approved" is the current standard
+      const approvedLike = new Set([
         "approved",
+        "scheduled", // legacy
         "accept",
         "accepted",
         "confirm",
         "confirmed",
       ]);
 
-      const pastScheduledAppointments = appointments.filter((appt) => {
+      const pastApprovedAppointments = appointments.filter((appt) => {
         if (!appt.appointment_date) {
           console.log(`Skipping appointment ${appt.id}: no appointment_date`);
           return false;
         }
 
         const status = (appt.status || "").toLowerCase().trim();
-        if (!scheduledLike.has(status)) {
+        if (!approvedLike.has(status)) {
           console.log(
-            `Skipping appointment ${appt.id}: status is "${status}" not scheduled-like`
+            `Skipping appointment ${appt.id}: status is "${status}" not approved-like`
           );
           return false;
         }
 
         const appointmentDate = new Date(appt.appointment_date);
-        appointmentDate.setHours(0, 0, 0, 0);
         console.log(
           `Appointment ${
             appt.id
           }: date=${appointmentDate.toISOString()}, isPast=${
-            appointmentDate < today
+            appointmentDate < now
           }`
         );
 
-        return appointmentDate < today;
+        return appointmentDate < now;
       });
 
       console.log(
-        `Found ${pastScheduledAppointments.length} past scheduled appointments to complete:`,
-        pastScheduledAppointments.map((a) => ({
+        `Found ${pastApprovedAppointments.length} past approved appointments to complete:`,
+        pastApprovedAppointments.map((a) => ({
           id: a.id,
           date: a.appointment_date,
           status: a.status,
         }))
       );
 
-      if (pastScheduledAppointments.length > 0) {
+      if (pastApprovedAppointments.length > 0) {
         console.log(
-          `Auto-completing ${pastScheduledAppointments.length} past appointments`
+          `Auto-completing ${pastApprovedAppointments.length} past appointments`
         );
 
-        const updatePromises = pastScheduledAppointments.map((appt) =>
+        const updatePromises = pastApprovedAppointments.map((appt) =>
           supabase
             .from("appointments")
             .update({
@@ -198,10 +255,10 @@ export const appointmentService = {
 
         // Return updated appointments with new status
         return appointments.map((appt) => {
-          const isPastScheduled = pastScheduledAppointments.find(
+          const isPastApproved = pastApprovedAppointments.find(
             (p) => p.id === appt.id
           );
-          if (isPastScheduled) {
+          if (isPastApproved) {
             console.log(`Marking appointment ${appt.id} as completed`);
             return { ...appt, status: "completed" };
           }
@@ -219,22 +276,30 @@ export const appointmentService = {
   // Helper method to update past pending/requested appointments to expired
   async updatePastPendingAppointmentsToExpired(appointments) {
     try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      const now = new Date(); // Current time, not just date
       const pendingLike = new Set(["pending", "requested", "request"]);
 
       const pastPending = appointments.filter((appt) => {
         if (!appt.appointment_date) return false;
         const status = (appt.status || "").toLowerCase().trim();
         if (!pendingLike.has(status)) return false;
-        const d = new Date(appt.appointment_date);
-        d.setHours(0, 0, 0, 0);
-        return d < today;
+        const appointmentDate = new Date(appt.appointment_date);
+        
+        // Log for debugging
+        console.log(`Checking appointment ${appt.id}:`, {
+          appointmentDate: appointmentDate.toISOString(),
+          now: now.toISOString(),
+          isPast: appointmentDate < now,
+          status: appt.status
+        });
+        
+        return appointmentDate < now;
       });
 
       if (pastPending.length > 0) {
         console.log(
-          `Auto-expiring ${pastPending.length} past pending appointments`
+          `Auto-expiring ${pastPending.length} past pending appointments`,
+          pastPending.map(a => ({ id: a.id, date: a.appointment_date }))
         );
         const updatePromises = pastPending.map((appt) =>
           supabase
@@ -363,7 +428,7 @@ export const appointmentService = {
         .from("appointments")
         .select("id, appointment_date, status")
         .eq("psychologist_id", psychologistId)
-        .in("status", ["scheduled", "approved", "accepted"]) // Only check accepted appointments
+        .in("status", ["approved"]) // Only check approved appointments
         .gte("appointment_date", startWindow.toISOString())
         .lte("appointment_date", endWindow.toISOString());
 
@@ -400,8 +465,8 @@ export const appointmentService = {
 
       // If we're scheduling/accepting an appointment, check for conflicts first
       if (
-        status === "scheduled" ||
         status === "approved" ||
+        status === "scheduled" || // legacy
         status === "accepted"
       ) {
         // First get the appointment details to check for conflicts

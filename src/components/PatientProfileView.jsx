@@ -21,6 +21,7 @@ import {
   Edit,
   Save,
   X,
+  ChevronDown,
 } from "lucide-react";
 import {
   LineChart,
@@ -40,8 +41,10 @@ import { patientService } from "../services/patientService";
 import { appointmentService } from "../services/appointmentService";
 import { supabase } from "../services/supabaseClient";
 import { anxietyService } from "../services/anxietyService";
+import { journalService } from "../services/journalService";
 import SuccessModal from "./SuccessModal";
 import ConfirmModal from "./ConfirmModal";
+import JournalModal from "./JournalModal";
 import ProfilePicture from "./ProfilePicture";
 
 const PatientProfileView = ({ patient, onBack, psychologistId }) => {
@@ -49,6 +52,8 @@ const PatientProfileView = ({ patient, onBack, psychologistId }) => {
   const [activeTab, setActiveTab] = useState("overview");
   const [patientData, setPatientData] = useState(patient); // Create state for patient data
   const [moodLogs, setMoodLogs] = useState([]);
+  const [journals, setJournals] = useState([]);
+  const [selectedJournal, setSelectedJournal] = useState(null);
   const [patientNotes, setPatientNotes] = useState([]);
   const [patientAppointments, setPatientAppointments] = useState([]);
   const [patientRequests, setPatientRequests] = useState([]);
@@ -76,10 +81,16 @@ const PatientProfileView = ({ patient, onBack, psychologistId }) => {
   const [severityFilter, setSeverityFilter] = useState("all"); // all, 1m, 3m, 6m, 1y
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth()); // 0-11
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  // Mood logs pagination
+  const [moodLogsPage, setMoodLogsPage] = useState(1);
+  const [moodLogsPageSize] = useState(10);
   // UI state: confirmations
   const [noteConfirmOpen, setNoteConfirmOpen] = useState(false);
   const [noteDeleteConfirmOpen, setNoteDeleteConfirmOpen] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [showRequestConfirmModal, setShowRequestConfirmModal] = useState(false);
+  const [pendingRequestAction, setPendingRequestAction] = useState(null);
+  const [requestDeclineReason, setRequestDeclineReason] = useState("");
 
   // Helpers: normalize severity (supports severity_level) and colors
   const normalizeSeverity = (r) => {
@@ -115,7 +126,7 @@ const PatientProfileView = ({ patient, onBack, psychologistId }) => {
     return "Unknown";
   };
   const SEVERITY_COLORS = {
-    Severe: "#7C3AED",
+    Severe: "#EF4444",
     Moderate: "#F59E0B",
     Mild: "#10B981",
     Unknown: "#9CA3AF",
@@ -144,6 +155,10 @@ const PatientProfileView = ({ patient, onBack, psychologistId }) => {
       // Load mood logs
       const mood = await patientService.getPatientMoodLogs(patient.id);
       setMoodLogs(mood);
+
+      // Load journals
+      const journalEntries = await journalService.getPatientJournals(patient.id);
+      setJournals(journalEntries);
 
       // Load patient notes
       const notes = await patientService.getPatientNotes(patient.id);
@@ -330,56 +345,106 @@ const PatientProfileView = ({ patient, onBack, psychologistId }) => {
   };
 
   const handleRequestAction = async (requestId, action) => {
+    // Show confirmation modal instead of immediately processing
+    setPendingRequestAction({ requestId, action });
+    setShowRequestConfirmModal(true);
+  };
+
+  const confirmRequestAction = async () => {
+    if (!pendingRequestAction) return;
+
     try {
+      const { requestId, action } = pendingRequestAction;
       const status = action === "approve" ? "approved" : "declined";
-      await appointmentService.updateAppointmentStatus(requestId, status);
+      
+      // Build the response message
+      let responseMessage = "";
+      if (action === "approve") {
+        responseMessage = "Approved by psychologist";
+      } else {
+        responseMessage = requestDeclineReason ? `Declined by psychologist: ${requestDeclineReason}` : "Declined by psychologist";
+      }
+      
+      await appointmentService.updateAppointmentStatus(requestId, status, responseMessage);
       loadPatientData(); // Refresh
+      setShowRequestConfirmModal(false);
+      setPendingRequestAction(null);
+      setRequestDeclineReason("");
     } catch (error) {
       console.error("Error updating request:", error);
     }
   };
 
-  // Prepare chart data
-  const moodChartData = moodLogs
-    .slice(0, 14)
-    .reverse()
-    .map((log) => {
-      const d = log.log_date ? new Date(log.log_date) : null;
-      const dateLabel =
-        d && !isNaN(d.getTime())
-          ? d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
-          : "";
-      const stressVal =
-        typeof log.stress_level_value === "number"
-          ? log.stress_level_value
-          : parseFloat(log.stress_level_value) || 0;
-      const moodVal =
-        log.mood === "Happy"
-          ? 8
-          : log.mood === "Calm"
-          ? 7
-          : log.mood === "Neutral"
-          ? 5
-          : log.mood === "Anxious"
-          ? 3
-          : log.mood === "Sad"
-          ? 2
-          : 0;
-      return { date: dateLabel, stress: stressVal, mood: moodVal };
-    })
-    .filter(
-      (p) =>
-        p.date && typeof p.stress === "number" && typeof p.mood === "number"
-    );
-
-  const symptomData = moodLogs.reduce((acc, log) => {
-    log.symptoms?.forEach((symptom) => {
-      if (symptom !== "None") {
-        acc[symptom] = (acc[symptom] || 0) + 1;
-      }
+  // Prepare chart data filtered by selected month and year
+  const moodChartData = (() => {
+    // Filter mood logs by selected month and year
+    const filteredLogs = moodLogs.filter((log) => {
+      const logDate = new Date(log.log_date || log.created_at);
+      return (
+        logDate.getMonth() === selectedMonth &&
+        logDate.getFullYear() === selectedYear
+      );
     });
-    return acc;
-  }, {});
+    
+    console.log("🔍 Filtered mood logs for chart:", filteredLogs.length, filteredLogs);
+    
+    const chartData = filteredLogs
+      .slice(0, 100) // Limit to 100 data points for performance
+      .reverse()
+      .map((log) => {
+        const d = log.log_date ? new Date(log.log_date) : (log.created_at ? new Date(log.created_at) : null);
+        let dateLabel = "";
+        
+        if (d && !isNaN(d.getTime())) {
+          dateLabel = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+        }
+        
+        const stressVal =
+          typeof log.stress_level_value === "number"
+            ? log.stress_level_value
+            : parseFloat(log.stress_level_value) || 0;
+        const moodVal =
+          log.mood === "Happy"
+            ? 8
+            : log.mood === "Calm"
+            ? 7
+            : log.mood === "Neutral"
+            ? 5
+            : log.mood === "Anxious"
+            ? 3
+            : log.mood === "Sad"
+            ? 2
+            : 0;
+        
+        const dataPoint = { date: dateLabel, stress: stressVal, mood: moodVal };
+        console.log("📊 Chart data point:", dataPoint, "from log:", log);
+        return dataPoint;
+      })
+      .filter(
+        (p) =>
+          p.date && typeof p.stress === "number" && typeof p.mood === "number"
+      );
+    
+    console.log("📈 Final moodChartData:", chartData);
+    return chartData;
+  })();
+
+  const symptomData = moodLogs
+    .filter((log) => {
+      const logDate = new Date(log.log_date || log.created_at);
+      return (
+        logDate.getMonth() === selectedMonth &&
+        logDate.getFullYear() === selectedYear
+      );
+    })
+    .reduce((acc, log) => {
+      log.symptoms?.forEach((symptom) => {
+        if (symptom !== "None") {
+          acc[symptom] = (acc[symptom] || 0) + 1;
+        }
+      });
+      return acc;
+    }, {});
 
   const symptomChartData = Object.entries(symptomData).map(
     ([symptom, count]) => ({
@@ -477,15 +542,6 @@ const PatientProfileView = ({ patient, onBack, psychologistId }) => {
               </div>
             </div>
             <div className="flex items-center space-x-2">
-              <span
-                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                  patientData.is_active
-                    ? "bg-green-100 text-green-800"
-                    : "bg-red-100 text-red-800"
-                }`}
-              >
-                {patientData.is_active ? "Active" : "Inactive"}
-              </span>
             </div>
           </div>
         </div>
@@ -572,6 +628,7 @@ const PatientProfileView = ({ patient, onBack, psychologistId }) => {
                 { id: "overview", name: "Overview", icon: Activity },
                 { id: "anxiety", name: "Anxiety", icon: AlertTriangle },
                 { id: "mood", name: "Mood Analytics", icon: Heart },
+                { id: "journaling", name: "Journaling", icon: FileText },
                 { id: "notes", name: "Notes", icon: FileText },
                 { id: "appointments", name: "Appointments", icon: Calendar },
                 { id: "requests", name: "Requests", icon: MessageSquare },
@@ -627,21 +684,23 @@ const PatientProfileView = ({ patient, onBack, psychologistId }) => {
                           </span>
                         </div>
                       )}
-                      {patientData.gender && (
+                      {(patientData.gender || patientData.sex) && (
                         <div className="flex items-center text-sm">
                           <User className="h-4 w-4 text-gray-400 mr-2" />
-                          <span className="capitalize">
-                            {patientData.gender.toLowerCase()}
+                          Sex: <span className="ml-1 capitalize">
+                            {(patientData.gender || patientData.sex).toLowerCase()}
                           </span>
+                        </div>
+                      )}
+                      {patientData.birth_date && (
+                        <div className="flex items-center text-sm">
+                          <Calendar className="h-4 w-4 text-gray-400 mr-2" />
+                          Birthday: {patientData.birth_date}
                         </div>
                       )}
                       <div className="flex items-center text-sm">
                         <Calendar className="h-4 w-4 text-gray-400 mr-2" />
                         Joined: {patientData.date_added}
-                      </div>
-                      <div className="flex items-center text-sm">
-                        <User className="h-4 w-4 text-gray-400 mr-2" />
-                        Status: {patientData.is_active ? "Active" : "Inactive"}
                       </div>
                     </div>
                   </div>
@@ -690,7 +749,7 @@ const PatientProfileView = ({ patient, onBack, psychologistId }) => {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <div>
                     <h3 className="font-semibold text-gray-900 mb-4">
-                      Stress Level Trend (Last 2 Weeks)
+                      Stress Level Trend
                     </h3>
                     {moodChartData.length > 0 ? (
                       <ResponsiveContainer width="100%" height={220}>
@@ -711,15 +770,61 @@ const PatientProfileView = ({ patient, onBack, psychologistId }) => {
                       </ResponsiveContainer>
                     ) : (
                       <div className="h-[220px] flex items-center justify-center rounded-lg border border-dashed border-gray-200 text-gray-500">
-                        No mood data yet
+                        No data yet
                       </div>
                     )}
                   </div>
 
                   <div>
-                    <h3 className="font-semibold text-gray-900 mb-4">
-                      Common Symptoms
-                    </h3>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3">
+                      <h3 className="font-semibold text-gray-900">
+                        Common Symptoms
+                      </h3>
+                      <div className="flex items-center gap-3">
+                        <select
+                          value={selectedMonth}
+                          onChange={(e) =>
+                            setSelectedMonth(parseInt(e.target.value))
+                          }
+                          className="px-3 py-1.5 rounded-lg text-sm border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        >
+                          {[
+                            "January",
+                            "February",
+                            "March",
+                            "April",
+                            "May",
+                            "June",
+                            "July",
+                            "August",
+                            "September",
+                            "October",
+                            "November",
+                            "December",
+                          ].map((month, index) => (
+                            <option key={index} value={index}>
+                              {month}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          value={selectedYear}
+                          onChange={(e) =>
+                            setSelectedYear(parseInt(e.target.value))
+                          }
+                          className="px-3 py-1.5 rounded-lg text-sm border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        >
+                          {Array.from(
+                            { length: 5 },
+                            (_, i) => new Date().getFullYear() - i
+                          ).map((year) => (
+                            <option key={year} value={year}>
+                              {year}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
                     {symptomChartData.length > 0 ? (
                       <ResponsiveContainer width="100%" height={220}>
                         <PieChart
@@ -1095,9 +1200,55 @@ const PatientProfileView = ({ patient, onBack, psychologistId }) => {
             {activeTab === "mood" && (
               <div className="space-y-6">
                 <div>
-                  <h3 className="font-semibold text-gray-900 mb-4">
-                    Mood & Stress Trends
-                  </h3>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3">
+                    <h3 className="font-semibold text-gray-900">
+                      Mood & Stress Trends
+                    </h3>
+                    <div className="flex items-center gap-3">
+                      <select
+                        value={selectedMonth}
+                        onChange={(e) =>
+                          setSelectedMonth(parseInt(e.target.value))
+                        }
+                        className="px-3 py-1.5 rounded-lg text-sm border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      >
+                        {[
+                          "January",
+                          "February",
+                          "March",
+                          "April",
+                          "May",
+                          "June",
+                          "July",
+                          "August",
+                          "September",
+                          "October",
+                          "November",
+                          "December",
+                        ].map((month, index) => (
+                          <option key={index} value={index}>
+                            {month}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={selectedYear}
+                        onChange={(e) =>
+                          setSelectedYear(parseInt(e.target.value))
+                        }
+                        className="px-3 py-1.5 rounded-lg text-sm border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      >
+                        {Array.from(
+                          { length: 5 },
+                          (_, i) => new Date().getFullYear() - i
+                        ).map((year) => (
+                          <option key={year} value={year}>
+                            {year}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
                   {moodChartData.length > 0 ? (
                     <ResponsiveContainer width="100%" height={300}>
                       <LineChart data={moodChartData}>
@@ -1137,36 +1288,146 @@ const PatientProfileView = ({ patient, onBack, psychologistId }) => {
                     Recent Mood Logs
                   </h3>
                   {moodLogs.length > 0 ? (
-                    <div className="space-y-3">
-                      {moodLogs.slice(0, 10).map((log, index) => (
-                        <div
-                          key={index}
-                          className="bg-gray-50 rounded-lg p-4 ring-1 ring-gray-100"
-                        >
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="font-medium text-gray-900">
-                              {log.mood}
+                    <>
+                      <div className="space-y-3">
+                        {moodLogs
+                          .slice(
+                            (moodLogsPage - 1) * moodLogsPageSize,
+                            moodLogsPage * moodLogsPageSize
+                          )
+                          .map((log, index) => (
+                            <div
+                              key={index}
+                              className="bg-gray-50 rounded-lg p-4 ring-1 ring-gray-100"
+                            >
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="font-medium text-gray-900">
+                                  {log.mood}
+                                </span>
+                                <span className="text-sm text-gray-500">
+                                  {new Date(log.log_date).toLocaleDateString()}
+                                </span>
+                              </div>
+                              <div className="flex items-center space-x-4 text-sm text-gray-600">
+                                <span>Stress: {log.stress_level}</span>
+                                <span>
+                                  Symptoms: {log.symptoms?.join(", ") || "None"}
+                                </span>
+                              </div>
+                              {log.notes && (
+                                <p className="text-sm text-gray-700 mt-2">
+                                  {log.notes}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                      </div>
+                      
+                      {/* Pagination Controls */}
+                      {moodLogs.length > moodLogsPageSize && (
+                        <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-200">
+                          <p className="text-sm text-gray-600">
+                            Showing {((moodLogsPage - 1) * moodLogsPageSize) + 1} to{" "}
+                            {Math.min(moodLogsPage * moodLogsPageSize, moodLogs.length)} of{" "}
+                            {moodLogs.length} mood logs
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setMoodLogsPage((p) => Math.max(1, p - 1))}
+                              disabled={moodLogsPage === 1}
+                              className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                              Previous
+                            </button>
+                            <span className="text-sm text-gray-600">
+                              Page {moodLogsPage} of {Math.ceil(moodLogs.length / moodLogsPageSize)}
                             </span>
-                            <span className="text-sm text-gray-500">
-                              {new Date(log.log_date).toLocaleDateString()}
-                            </span>
+                            <button
+                              onClick={() =>
+                                setMoodLogsPage((p) =>
+                                  Math.min(Math.ceil(moodLogs.length / moodLogsPageSize), p + 1)
+                                )
+                              }
+                              disabled={moodLogsPage >= Math.ceil(moodLogs.length / moodLogsPageSize)}
+                              className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                              Next
+                            </button>
                           </div>
-                          <div className="flex items-center space-x-4 text-sm text-gray-600">
-                            <span>Stress: {log.stress_level}</span>
-                            <span>
-                              Symptoms: {log.symptoms?.join(", ") || "None"}
-                            </span>
-                          </div>
-                          {log.notes && (
-                            <p className="text-sm text-gray-700 mt-2">
-                              {log.notes}
-                            </p>
-                          )}
                         </div>
-                      ))}
-                    </div>
+                      )}
+                    </>
                   ) : (
                     <p className="text-sm text-gray-500">No mood logs yet.</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Journaling Tab */}
+            {activeTab === "journaling" && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-4">
+                    Patient Journal Entries
+                  </h3>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Personal journal entries shared by the patient with you
+                  </p>
+                  {journals.length > 0 ? (
+                    <div className="space-y-4">
+                      {journals.map((journal, index) => (
+                          <div
+                            key={journal.id || index}
+                            onClick={() => setSelectedJournal(journal)}
+                            className="bg-white rounded-lg p-5 border border-gray-200 hover:shadow-md hover:border-emerald-200 transition-all cursor-pointer"
+                          >
+                            <div className="flex items-start justify-between mb-3">
+                              <div className="flex items-center space-x-3">
+                                <div className="p-2 rounded-lg bg-emerald-50">
+                                  <FileText className="h-5 w-5 text-emerald-600" />
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-medium text-gray-900">
+                                      {new Date(journal.date).toLocaleDateString('en-US', {
+                                        year: 'numeric',
+                                        month: 'long',
+                                        day: 'numeric'
+                                      })}
+                                    </p>
+                                    <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-xs font-medium">
+                                      Shared
+                                    </span>
+                                  </div>
+                                  {journal.title && (
+                                    <p className="text-sm font-medium text-gray-700 mt-1">
+                                      {journal.title}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="prose prose-sm max-w-none">
+                              <p className="text-gray-700 line-clamp-3">
+                                {journal.content}
+                              </p>
+                            </div>
+                            <div className="mt-3 text-sm text-emerald-600 font-medium flex items-center gap-1">
+                              <span>Click to view full journal</span>
+                              <ChevronDown className="h-4 w-4" />
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-12 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                      <FileText className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+                      <p className="text-gray-500 mb-1">No journal entries shared yet</p>
+                      <p className="text-sm text-gray-400">
+                        Journal entries will appear here when the patient shares them
+                      </p>
+                    </div>
                   )}
                 </div>
               </div>
@@ -1308,10 +1569,12 @@ const PatientProfileView = ({ patient, onBack, psychologistId }) => {
                             className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                               appointment.status === "completed"
                                 ? "bg-green-100 text-green-800"
-                                : appointment.status === "scheduled"
+                                : appointment.status === "approved"
                                 ? "bg-blue-100 text-blue-800"
-                                : appointment.status === "cancelled"
+                                : appointment.status === "declined"
                                 ? "bg-red-100 text-red-800"
+                                : appointment.status === "expired"
+                                ? "bg-gray-100 text-gray-800"
                                 : "bg-yellow-100 text-yellow-800"
                             }`}
                           >
@@ -1323,8 +1586,8 @@ const PatientProfileView = ({ patient, onBack, psychologistId }) => {
                             className={`mt-2 p-2 rounded-lg text-sm ${
                               appointment.status === "declined"
                                 ? "bg-red-50 border border-red-200"
-                                : appointment.status === "scheduled"
-                                ? "bg-green-50 border border-green-200"
+                                : appointment.status === "approved"
+                                ? "bg-blue-50 border border-blue-200"
                                 : "bg-gray-50 border border-gray-200"
                             }`}
                           >
@@ -1332,16 +1595,16 @@ const PatientProfileView = ({ patient, onBack, psychologistId }) => {
                               {appointment.status === "declined" && (
                                 <XCircle className="h-4 w-4 text-red-600 mr-2 mt-0.5 flex-shrink-0" />
                               )}
-                              {appointment.status === "scheduled" && (
-                                <CheckCircle className="h-4 w-4 text-green-600 mr-2 mt-0.5 flex-shrink-0" />
+                              {appointment.status === "approved" && (
+                                <CheckCircle className="h-4 w-4 text-blue-600 mr-2 mt-0.5 flex-shrink-0" />
                               )}
                               <div>
                                 <p
                                   className={`font-medium ${
                                     appointment.status === "declined"
                                       ? "text-red-800"
-                                      : appointment.status === "scheduled"
-                                      ? "text-green-800"
+                                      : appointment.status === "approved"
+                                      ? "text-blue-800"
                                       : "text-gray-800"
                                   }`}
                                 >
@@ -1353,8 +1616,8 @@ const PatientProfileView = ({ patient, onBack, psychologistId }) => {
                                   className={
                                     appointment.status === "declined"
                                       ? "text-red-700"
-                                      : appointment.status === "scheduled"
-                                      ? "text-green-700"
+                                      : appointment.status === "approved"
+                                      ? "text-blue-700"
                                       : "text-gray-700"
                                   }
                                 >
@@ -1431,6 +1694,106 @@ const PatientProfileView = ({ patient, onBack, psychologistId }) => {
             )}
           </div>
         </div>
+
+        {/* Request Action Confirmation Modal */}
+        {showRequestConfirmModal && pendingRequestAction && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-xl p-6 max-w-md w-full shadow-2xl">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Confirm Action
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowRequestConfirmModal(false);
+                    setPendingRequestAction(null);
+                    setRequestDeclineReason("");
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <p className="text-sm text-gray-700">
+                  Are you sure you want to {pendingRequestAction.action} this
+                  appointment request?
+                </p>
+                <div className="p-3 rounded-lg bg-gray-50 text-sm text-gray-700">
+                  <div className="font-medium">
+                    {pendingRequestAction.action === "approve"
+                      ? "This will:"
+                      : "This will:"}
+                  </div>
+                  <ul className="mt-1 text-xs space-y-1">
+                    {pendingRequestAction.action === "approve" ? (
+                      <>
+                        <li>• Change status to "approved"</li>
+                        <li>• Show appointment in patient's list</li>
+                        <li>• Remove from pending requests</li>
+                      </>
+                    ) : (
+                      <>
+                        <li>• Change status to "declined"</li>
+                        <li>• Remove from pending requests</li>
+                        <li>• Notify patient of decline</li>
+                      </>
+                    )}
+                  </ul>
+                </div>
+
+                {pendingRequestAction.action === "decline" && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Reason for Decline (Optional)
+                    </label>
+                    <textarea
+                      value={requestDeclineReason}
+                      onChange={(e) => setRequestDeclineReason(e.target.value)}
+                      placeholder="Please provide a reason for declining this appointment..."
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm"
+                      rows={3}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      The patient will see this reason in their appointments
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowRequestConfirmModal(false);
+                    setPendingRequestAction(null);
+                    setRequestDeclineReason("");
+                  }}
+                  className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmRequestAction}
+                  className={`flex-1 px-4 py-2 text-white rounded-lg transition-colors ${
+                    pendingRequestAction.action === "approve"
+                      ? "bg-emerald-600 hover:bg-emerald-700"
+                      : "bg-red-600 hover:bg-red-700"
+                  }`}
+                >
+                  {pendingRequestAction.action === "approve" ? "Approve" : "Decline"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Journal Modal */}
+        <JournalModal
+          isOpen={selectedJournal !== null}
+          onClose={() => setSelectedJournal(null)}
+          journal={selectedJournal}
+        />
       </div>
     </div>
   );
