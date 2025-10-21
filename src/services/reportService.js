@@ -495,9 +495,6 @@ export const reportService = {
     const {
       patient,
       moodLogs,
-      patientNotes,
-      sessionLogs,
-      appointments,
       stats,
     } = reportData;
 
@@ -505,9 +502,15 @@ export const reportService = {
     const pdf = new jsPDF("p", "mm", "a4");
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
-    let yPosition = 20;
+    let yPosition = 25;
     const margin = 20;
-    const lineHeight = 7;
+    const lineHeight = 6;
+
+    // Modern clean color palette
+    const primaryColor = [16, 185, 129]; // Emerald-500
+    const textDark = [55, 65, 81]; // Gray-700
+    const textMedium = [107, 114, 128]; // Gray-500
+    const textLight = [156, 163, 175]; // Gray-400
 
     // Helper function to add text with word wrapping
     const addWrappedText = (text, x, y, maxWidth, fontSize = 10) => {
@@ -521,370 +524,359 @@ export const reportService = {
     const checkNewPage = (requiredSpace = 20) => {
       if (yPosition + requiredSpace > pageHeight - margin) {
         pdf.addPage();
-        yPosition = 20;
+        yPosition = 25;
+        return true;
       }
+      return false;
     };
 
-    // Title
-    pdf.setFontSize(20);
+    // Helper to draw subtle border
+    const drawBorder = (x, y, width, height, color = [229, 231, 235], lineWidth = 0.3) => {
+      pdf.setDrawColor(...color);
+      pdf.setLineWidth(lineWidth);
+      pdf.rect(x, y, width, height);
+    };
+
+    // Helper to add clean section header
+    const addSectionHeader = (title) => {
+      checkNewPage(20);
+      pdf.setTextColor(...primaryColor);
+      pdf.setFontSize(14);
+      pdf.setFont("helvetica", "bold");
+      pdf.text(title, margin, yPosition);
+      
+      // Minimal underline accent
+      pdf.setDrawColor(...primaryColor);
+      pdf.setLineWidth(0.8);
+      pdf.line(margin, yPosition + 2, margin + 45, yPosition + 2);
+      
+      yPosition += 14;
+      pdf.setTextColor(...textDark);
+    };
+
+    // Clean minimal header
+    pdf.setFillColor(255, 255, 255);
+    pdf.rect(0, 0, pageWidth, 40, "F");
+    
+    pdf.setTextColor(...primaryColor);
+    pdf.setFontSize(24);
     pdf.setFont("helvetica", "bold");
-    pdf.text("Patient Report", margin, yPosition);
-    yPosition += 15;
+    pdf.text("Patient Report", margin, 18);
+    
+    pdf.setFontSize(9);
+    pdf.setFont("helvetica", "normal");
+    pdf.setTextColor(...textMedium);
+    pdf.text(`${new Date().toLocaleDateString("en-US", { year: 'numeric', month: 'long', day: 'numeric' })} • ${new Date().toLocaleTimeString("en-US", { hour: '2-digit', minute: '2-digit' })}`, margin, 28);
+    
+    // Subtle separator
+    pdf.setDrawColor(...textLight);
+    pdf.setLineWidth(0.2);
+    pdf.line(margin, 34, pageWidth - margin, 34);
+    
+    yPosition = 48;
+    pdf.setTextColor(...textDark);
 
-    // Patient information
-    pdf.setFontSize(14);
-    pdf.text("Patient Information", margin, yPosition);
-    yPosition += 10;
-
+    // Patient Information - Clean white card with minimal border
+    checkNewPage(32);
+    pdf.setFillColor(255, 255, 255);
+    pdf.rect(margin, yPosition, pageWidth - 2 * margin, 28, "F");
+    drawBorder(margin, yPosition, pageWidth - 2 * margin, 28);
+    
+    pdf.setFontSize(11);
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(...primaryColor);
+    pdf.text("Patient Information", margin + 4, yPosition + 7);
+    
     pdf.setFontSize(10);
     pdf.setFont("helvetica", "normal");
-    yPosition = addWrappedText(
-      `Name: ${
-        patient.name ||
-        `${patient.first_name || ""} ${patient.last_name || ""}`.trim()
-      }`,
-      margin,
-      yPosition,
-      pageWidth - 2 * margin
-    );
-    yPosition = addWrappedText(
-      `Patient ID: ${patient.id}`,
-      margin,
-      yPosition,
-      pageWidth - 2 * margin
-    );
-    yPosition = addWrappedText(
-      `Email: ${patient.email || "N/A"}`,
-      margin,
-      yPosition,
-      pageWidth - 2 * margin
-    );
-    yPosition = addWrappedText(
-      `Report Generated: ${new Date().toLocaleString()}`,
-      margin,
-      yPosition,
-      pageWidth - 2 * margin
-    );
-    yPosition += 10;
+    pdf.setTextColor(...textDark);
+    
+    const patientName = patient.name || `${patient.first_name || ""} ${patient.last_name || ""}`.trim() || "Unnamed Patient";
+    pdf.text(patientName, margin + 4, yPosition + 15);
+    
+    pdf.setFontSize(9);
+    pdf.setTextColor(...textMedium);
+    pdf.text(`${patient.email || "N/A"}`, margin + 4, yPosition + 22);
+    
+    yPosition += 38;
 
-    // Summary Statistics
-    checkNewPage(80);
-    pdf.setFontSize(14);
-    pdf.setFont("helvetica", "bold");
-    pdf.text("Summary Statistics", margin, yPosition);
-    yPosition += 10;
+    // Summary Statistics Section
+    addSectionHeader("Summary Statistics");
+    
+    // Clean statistics grid - white boxes with subtle borders
+    const statsData = [
+      { label: "Sessions", value: stats.totalSessions, color: [59, 130, 246] },
+      { label: "Mood Entries", value: stats.totalMoodEntries, color: [16, 185, 129] },
+      { label: "Avg Mood", value: `${stats.avgMoodScore}/10`, color: [168, 85, 247] },
+      { label: "Avg Stress", value: `${stats.avgStressLevel}/10`, color: [249, 115, 22] },
+    ];
+    
+    const boxWidth = (pageWidth - 2 * margin - 12) / 2;
+    const boxHeight = 24;
+    let xPos = margin;
+    let row = 0;
+    
+    statsData.forEach((stat, index) => {
+      if (index % 2 === 0 && index > 0) {
+        row++;
+        xPos = margin;
+      }
+      
+      const yPos = yPosition + (row * (boxHeight + 6));
+      
+      // White background with border
+      pdf.setFillColor(255, 255, 255);
+      pdf.rect(xPos, yPos, boxWidth, boxHeight, "F");
+      drawBorder(xPos, yPos, boxWidth, boxHeight);
+      
+      pdf.setFontSize(20);
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(...stat.color);
+      pdf.text(String(stat.value), xPos + 4, yPos + 12);
+      
+      pdf.setFontSize(9);
+      pdf.setFont("helvetica", "normal");
+      pdf.setTextColor(...textMedium);
+      pdf.text(stat.label, xPos + 4, yPos + 19);
+      
+      xPos += boxWidth + 6;
+    });
+    
+    yPosition += (Math.ceil(statsData.length / 2) * (boxHeight + 6)) + 8;
 
+    // Additional stats row
+    const additionalStats = [
+      { label: "Common Mood", value: stats.mostCommonMood, color: [236, 72, 153] },
+      { label: "Anxiety Attacks", value: stats.totalAnxietyAttacks, color: [239, 68, 68] },
+      { label: "Attack Rate/Week", value: stats.attackRatePerWeek, color: [234, 179, 8] },
+    ];
+    
+    xPos = margin;
+    row = 0;
+    
+    additionalStats.forEach((stat, index) => {
+      if (index % 2 === 0 && index > 0) {
+        row++;
+        xPos = margin;
+      }
+      
+      const yPos = yPosition + (row * (boxHeight + 6));
+      checkNewPage(30);
+      
+      pdf.setFillColor(255, 255, 255);
+      pdf.rect(xPos, yPos, boxWidth, boxHeight, "F");
+      drawBorder(xPos, yPos, boxWidth, boxHeight);
+      
+      pdf.setFontSize(18);
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(...stat.color);
+      pdf.text(String(stat.value), xPos + 4, yPos + 12);
+      
+      pdf.setFontSize(9);
+      pdf.setFont("helvetica", "normal");
+      pdf.setTextColor(...textMedium);
+      pdf.text(stat.label, xPos + 4, yPos + 19);
+      
+      xPos += boxWidth + 6;
+    });
+    
+    yPosition += (Math.ceil(additionalStats.length / 2) * (boxHeight + 6)) + 8;
+
+    // Improvement Trend - Clean inline display
+    checkNewPage(16);
+    const trendColor = stats.improvementTrend === "Improving" ? [16, 185, 129] : 
+                       stats.improvementTrend === "Worsening" ? [239, 68, 68] : 
+                       [107, 114, 128];
+    
+    pdf.setFillColor(255, 255, 255);
+    pdf.rect(margin, yPosition, pageWidth - 2 * margin, 14, "F");
+    drawBorder(margin, yPosition, pageWidth - 2 * margin, 14);
+    
     pdf.setFontSize(10);
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(...textDark);
+    pdf.text("Trend:", margin + 4, yPosition + 6);
+    
+    pdf.setTextColor(...trendColor);
+    pdf.text(stats.improvementTrend, margin + 22, yPosition + 6);
+    
+    pdf.setFontSize(8);
     pdf.setFont("helvetica", "normal");
-    yPosition = addWrappedText(
-      `Total Sessions: ${stats.totalSessions}`,
-      margin,
-      yPosition,
-      pageWidth - 2 * margin
-    );
-    yPosition = addWrappedText(
-      `Total Mood Entries: ${stats.totalMoodEntries}`,
-      margin,
-      yPosition,
-      pageWidth - 2 * margin
-    );
-    yPosition = addWrappedText(
-      `Average Mood Score: ${stats.avgMoodScore}/10`,
-      margin,
-      yPosition,
-      pageWidth - 2 * margin
-    );
-    yPosition = addWrappedText(
-      `Average Stress Level: ${stats.avgStressLevel}/10`,
-      margin,
-      yPosition,
-      pageWidth - 2 * margin
-    );
-    yPosition = addWrappedText(
-      `Most Common Mood: ${stats.mostCommonMood}`,
-      margin,
-      yPosition,
-      pageWidth - 2 * margin
-    );
-    yPosition = addWrappedText(
-      `Total Anxiety Attacks: ${stats.totalAnxietyAttacks}`,
-      margin,
-      yPosition,
-      pageWidth - 2 * margin
-    );
-    yPosition = addWrappedText(
-      `Attack Rate (per week): ${stats.attackRatePerWeek}`,
-      margin,
-      yPosition,
-      pageWidth - 2 * margin
-    );
-    yPosition = addWrappedText(
-      `Improvement Trend: ${stats.improvementTrend}`,
-      margin,
-      yPosition,
-      pageWidth - 2 * margin
-    );
-    yPosition = addWrappedText(
-      `Last Activity: ${
-        stats.lastActivity
-          ? new Date(stats.lastActivity).toLocaleDateString()
-          : "N/A"
-      }`,
-      margin,
-      yPosition,
-      pageWidth - 2 * margin
-    );
-    yPosition += 10;
+    pdf.setTextColor(...textMedium);
+    pdf.text(`Last: ${stats.lastActivity ? new Date(stats.lastActivity).toLocaleDateString("en-US", { month: 'short', day: 'numeric' }) : "N/A"}`, margin + 4, yPosition + 11);
+    
+    yPosition += 22;
 
     // Anxiety Attack Analysis
     if (stats.totalAnxietyAttacks > 0) {
-      checkNewPage(40);
-      pdf.setFontSize(14);
+      addSectionHeader("Anxiety Attack Analysis");
+      
+      pdf.setFillColor(255, 255, 255);
+      pdf.rect(margin, yPosition, pageWidth - 2 * margin, 22, "F");
+      drawBorder(margin, yPosition, pageWidth - 2 * margin, 22);
+      
+      pdf.setFontSize(9);
       pdf.setFont("helvetica", "bold");
-      pdf.text("Anxiety Attack Analysis", margin, yPosition);
-      yPosition += 10;
-
-      pdf.setFontSize(10);
+      pdf.setTextColor(...textDark);
+      pdf.text("Most Attacks:", margin + 4, yPosition + 7);
       pdf.setFont("helvetica", "normal");
-      yPosition = addWrappedText(
-        `Month with Most Attacks: ${stats.mostAttacksMonth} (${
-          stats.monthlyAttackData[stats.mostAttacksMonth] || 0
-        } attacks)`,
-        margin,
-        yPosition,
-        pageWidth - 2 * margin
-      );
-      yPosition = addWrappedText(
-        `Month with Least Attacks: ${stats.leastAttacksMonth} (${
-          stats.monthlyAttackData[stats.leastAttacksMonth] || 0
-        } attacks)`,
-        margin,
-        yPosition,
-        pageWidth - 2 * margin
-      );
-      yPosition += 10;
-
-      // Monthly breakdown
+      pdf.setTextColor(...textMedium);
+      pdf.text(`${stats.mostAttacksMonth} (${stats.monthlyAttackData[stats.mostAttacksMonth] || 0} attacks)`, margin + 30, yPosition + 7);
+      
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(...textDark);
+      pdf.text("Least Attacks:", margin + 4, yPosition + 14);
+      pdf.setFont("helvetica", "normal");
+      pdf.setTextColor(...textMedium);
+      pdf.text(`${stats.leastAttacksMonth} (${stats.monthlyAttackData[stats.leastAttacksMonth] || 0} attacks)`, margin + 30, yPosition + 14);
+      
+      yPosition += 26;
+      
+      // Monthly breakdown - condensed
       if (Object.keys(stats.monthlyAttackData).length > 0) {
-        pdf.setFontSize(12);
+        checkNewPage(30);
+        pdf.setFontSize(10);
         pdf.setFont("helvetica", "bold");
-        pdf.text("Monthly Attack Breakdown:", margin, yPosition);
+        pdf.setTextColor(...textDark);
+        pdf.text("Monthly Breakdown", margin, yPosition);
         yPosition += 7;
 
-        pdf.setFontSize(9);
+        pdf.setFontSize(8);
         pdf.setFont("helvetica", "normal");
+        pdf.setTextColor(...textMedium);
         Object.entries(stats.monthlyAttackData)
           .sort(([, a], [, b]) => b - a)
           .forEach(([month, count]) => {
             checkNewPage(5);
-            yPosition = addWrappedText(
-              `${month}: ${count} attacks`,
-              margin + 5,
-              yPosition,
-              pageWidth - 2 * margin - 5,
-              9
-            );
+            pdf.text(`${month}: ${count}`, margin + 2, yPosition);
+            yPosition += 5;
           });
-        yPosition += 5;
+        yPosition += 6;
       }
     }
 
-    // Stress Level Distribution
-    checkNewPage(30);
-    pdf.setFontSize(14);
-    pdf.setFont("helvetica", "bold");
-    pdf.text("Stress Level Distribution", margin, yPosition);
-    yPosition += 10;
-
-    pdf.setFontSize(10);
-    pdf.setFont("helvetica", "normal");
-    yPosition = addWrappedText(
-      `Low Stress Days: ${stats.stressDistribution.low}`,
-      margin,
-      yPosition,
-      pageWidth - 2 * margin
-    );
-    yPosition = addWrappedText(
-      `Medium Stress Days: ${stats.stressDistribution.medium}`,
-      margin,
-      yPosition,
-      pageWidth - 2 * margin
-    );
-    yPosition = addWrappedText(
-      `High Stress Days: ${stats.stressDistribution.high}`,
-      margin,
-      yPosition,
-      pageWidth - 2 * margin
-    );
-    yPosition += 10;
-
-    // Top Symptoms
-    if (Object.keys(stats.symptomFrequency).length > 0) {
-      checkNewPage(40);
-      pdf.setFontSize(14);
+    // Stress Level Distribution - Clean horizontal layout
+    addSectionHeader("Stress Distribution");
+    
+    const stressBoxWidth = (pageWidth - 2 * margin - 10) / 3;
+    const stressBoxHeight = 26;
+    const stressData = [
+      { label: "Low", value: stats.stressDistribution.low, color: [16, 185, 129] },
+      { label: "Medium", value: stats.stressDistribution.medium, color: [234, 179, 8] },
+      { label: "High", value: stats.stressDistribution.high, color: [239, 68, 68] },
+    ];
+    
+    xPos = margin;
+    stressData.forEach((item) => {
+      pdf.setFillColor(255, 255, 255);
+      pdf.rect(xPos, yPosition, stressBoxWidth, stressBoxHeight, "F");
+      drawBorder(xPos, yPosition, stressBoxWidth, stressBoxHeight);
+      
+      pdf.setFontSize(22);
       pdf.setFont("helvetica", "bold");
-      pdf.text("Most Common Symptoms", margin, yPosition);
-      yPosition += 10;
-
-      pdf.setFontSize(9);
+      pdf.setTextColor(...item.color);
+      pdf.text(String(item.value), xPos + stressBoxWidth / 2, yPosition + 13, { align: "center" });
+      
+      pdf.setFontSize(8);
       pdf.setFont("helvetica", "normal");
+      pdf.setTextColor(...textMedium);
+      pdf.text(item.label, xPos + stressBoxWidth / 2, yPosition + 20, { align: "center" });
+      
+      xPos += stressBoxWidth + 5;
+    });
+    
+    yPosition += stressBoxHeight + 12;
+
+    // Top Symptoms - Clean list
+    if (Object.keys(stats.symptomFrequency).length > 0) {
+      addSectionHeader("Common Symptoms");
 
       const topSymptoms = Object.entries(stats.symptomFrequency)
         .sort(([, a], [, b]) => b - a)
         .slice(0, 8);
 
       topSymptoms.forEach(([symptom, frequency], index) => {
-        checkNewPage(5);
-        yPosition = addWrappedText(
-          `${index + 1}. ${symptom}: ${frequency} times`,
-          margin,
-          yPosition,
-          pageWidth - 2 * margin,
-          9
-        );
+        checkNewPage(6);
+        pdf.setFontSize(9);
+        pdf.setFont("helvetica", "normal");
+        pdf.setTextColor(...textDark);
+        pdf.text(`${index + 1}. ${symptom}`, margin, yPosition);
+        
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(...primaryColor);
+        pdf.text(`${frequency}×`, margin + 75, yPosition);
+        
+        yPosition += 5.5;
       });
-      yPosition += 10;
+      yPosition += 8;
     }
 
-    // Mood Logs Section
+    // Mood Logs Section - Clean table-like layout
     if (moodLogs && moodLogs.length > 0) {
-      checkNewPage(60);
-      pdf.setFontSize(14);
-      pdf.setFont("helvetica", "bold");
-      pdf.text("Recent Mood Logs", margin, yPosition);
-      yPosition += 10;
+      addSectionHeader("Recent Mood Logs");
 
-      pdf.setFontSize(9);
-      pdf.setFont("helvetica", "normal");
-
-      // Take last 10 mood logs
       const recentMoodLogs = moodLogs.slice(0, 10);
       recentMoodLogs.forEach((log, index) => {
-        checkNewPage(25);
+        // Estimate row height first to decide page break cleanly
         const date = log.log_date
-          ? new Date(log.log_date).toLocaleDateString()
+          ? new Date(log.log_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })
           : "N/A";
-        yPosition = addWrappedText(
-          `${index + 1}. ${date} - Mood: ${log.mood || "N/A"}, Stress: ${
-            log.stress_level || "N/A"
-          }`,
-          margin,
-          yPosition,
-          pageWidth - 2 * margin,
-          9
-        );
 
-        if (
-          log.symptoms &&
-          Array.isArray(log.symptoms) &&
-          log.symptoms.length > 0
-        ) {
-          yPosition = addWrappedText(
-            `   Symptoms: ${log.symptoms.join(", ")}`,
-            margin,
-            yPosition,
-            pageWidth - 2 * margin,
-            8
-          );
+        const symptomsText = log.symptoms && Array.isArray(log.symptoms) && log.symptoms.length
+          ? log.symptoms.join(", ")
+          : "";
+        const symptomLines = symptomsText
+          ? pdf.splitTextToSize(symptomsText, pageWidth - 2 * margin - 4).slice(0, 1)
+          : [];
+        const rowHeight = 12 + (symptomLines.length ? 5 : 0) + 4; // header + optional symptoms + padding
+
+        checkNewPage(rowHeight + 6);
+
+        const startY = yPosition;
+
+        // Alternating row background sized to content
+        if (index % 2 === 0) {
+          pdf.setFillColor(249, 250, 251); // very light gray
+          pdf.rect(margin, startY - 2, pageWidth - 2 * margin, rowHeight, "F");
         }
 
-        if (log.notes && log.notes.trim()) {
-          yPosition = addWrappedText(
-            `   Notes: ${log.notes}`,
-            margin,
-            yPosition,
-            pageWidth - 2 * margin,
-            8
-          );
+        // Left column: Date (small) + Mood (bold)
+        pdf.setFontSize(9);
+        pdf.setFont("helvetica", "normal");
+        pdf.setTextColor(...textDark);
+        pdf.text(date, margin + 2, startY + 2);
+
+        pdf.setFont("helvetica", "bold");
+        pdf.text(log.mood || "N/A", margin + 2, startY + 8);
+
+        // Right column: Stress, right-aligned
+        pdf.setFont("helvetica", "normal");
+        pdf.setTextColor(...textMedium);
+        pdf.text(`Stress: ${log.stress_level || "N/A"}`, pageWidth - margin, startY + 2, { align: "right" });
+
+        // Symptoms line (light)
+        if (symptomLines.length) {
+          pdf.setFontSize(8);
+          pdf.setTextColor(...textLight);
+          pdf.text(symptomLines, margin + 2, startY + 14);
         }
-        yPosition += 3;
-      });
-      yPosition += 5;
-    }
 
-    // Appointments Section
-    if (appointments && appointments.length > 0) {
-      checkNewPage(60);
-      pdf.setFontSize(14);
-      pdf.setFont("helvetica", "bold");
-      pdf.text("Appointments", margin, yPosition);
-      yPosition += 10;
-
-      pdf.setFontSize(9);
-      pdf.setFont("helvetica", "normal");
-
-      appointments.slice(0, 10).forEach((apt, index) => {
-        checkNewPage(20);
-        const aptDate =
-          apt.appointment_date || apt.requestedDate || apt.requestDate;
-        const date = aptDate ? new Date(aptDate).toLocaleDateString() : "N/A";
-        const time = aptDate ? new Date(aptDate).toLocaleTimeString() : "N/A";
-
-        yPosition = addWrappedText(
-          `${index + 1}. ${date} at ${time} - Status: ${apt.status || "N/A"}`,
-          margin,
-          yPosition,
-          pageWidth - 2 * margin,
-          9
-        );
-
-        if (apt.psychologist_response || apt.notes) {
-          yPosition = addWrappedText(
-            `   Notes: ${apt.psychologist_response || apt.notes}`,
-            margin,
-            yPosition,
-            pageWidth - 2 * margin,
-            8
-          );
-        }
-        yPosition += 3;
-      });
-      yPosition += 5;
-    }
-
-    // Patient Notes Section
-    if (patientNotes && patientNotes.length > 0) {
-      checkNewPage(60);
-      pdf.setFontSize(14);
-      pdf.setFont("helvetica", "bold");
-      pdf.text("Patient Notes", margin, yPosition);
-      yPosition += 10;
-
-      pdf.setFontSize(9);
-      pdf.setFont("helvetica", "normal");
-
-      patientNotes.slice(0, 5).forEach((note, index) => {
-        checkNewPage(30);
-        const date = note.created_at
-          ? new Date(note.created_at).toLocaleDateString()
-          : "N/A";
-        const psychologist = note.psychologists?.name || "Unknown";
-
-        yPosition = addWrappedText(
-          `${index + 1}. ${date} (by ${psychologist}):`,
-          margin,
-          yPosition,
-          pageWidth - 2 * margin,
-          9
-        );
-        yPosition = addWrappedText(
-          `${note.note_content || note.content || "No content"}`,
-          margin + 5,
-          yPosition,
-          pageWidth - 2 * margin - 5,
-          8
-        );
-        yPosition += 5;
+        // Advance to next row with a small gap
+        yPosition = startY + rowHeight + 2;
       });
     }
 
-    // Save PDF
-    const fileName = `patient_report_${patient.name || patient.id}_${
+    // Clean minimal footer
+    pdf.setFontSize(7);
+    pdf.setTextColor(...textLight);
+    pdf.text(`Generated ${new Date().toLocaleString("en-US", { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`, margin, pageHeight - 8);
+    pdf.text("AnxieEase", pageWidth / 2, pageHeight - 8, { align: "center" });
+
+    // Save the PDF
+    const fileName = `patient_report_${patient.name?.replace(/\s+/g, "_") || patient.id}_${
       new Date().toISOString().split("T")[0]
     }.pdf`;
     pdf.save(fileName);
-
-    return pdf;
   },
 
   // Generate batch report for multiple patients

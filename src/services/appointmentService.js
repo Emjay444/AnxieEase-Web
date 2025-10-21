@@ -65,16 +65,17 @@ export const appointmentService = {
       const updatedAppointments =
         await this.updatePastPendingAppointmentsToExpired(afterComplete);
 
-      // Get patient names from user_profiles
+      // Get patient names from user_profiles AND verify current assignment
       const patientIds = updatedAppointments
         .map((appt) => appt.user_id)
         .filter(Boolean);
       let patientNames = {};
+      let assignedToThisPsych = new Set();
 
       if (patientIds.length > 0) {
         const { data: profiles } = await supabase
           .from("user_profiles")
-          .select("id, first_name, last_name")
+          .select("id, first_name, last_name, assigned_psychologist_id")
           .in("id", patientIds);
 
         profiles?.forEach((profile) => {
@@ -82,11 +83,23 @@ export const appointmentService = {
             .filter(Boolean)
             .join(" ");
           patientNames[profile.id] = fullName || "Patient";
+          if (profile.assigned_psychologist_id === userId) {
+            assignedToThisPsych.add(profile.id);
+          }
         });
       }
 
+      // Exclude PENDING/REQUESTED appointments if the patient is no longer assigned to this psychologist
+      const filteredAppointments = updatedAppointments.filter((appt) => {
+        const s = (appt.status || "").toString().toLowerCase();
+        const isPending = s === "pending" || s === "requested" || s === "request";
+        if (!isPending) return true; // keep non-pending regardless of assignment (historical)
+        // pending/requested should only show if currently assigned
+        return assignedToThisPsych.has(appt.user_id);
+      });
+
       // Format the data (normalized for UI expectations)
-      return updatedAppointments.map((appt) => {
+  return filteredAppointments.map((appt) => {
         const rawStatus = (appt.status || "pending").toLowerCase();
         const status = rawStatus === "canceled" ? "cancelled" : rawStatus;
         const patientName = patientNames[appt.user_id] || "Patient";
@@ -351,27 +364,50 @@ export const appointmentService = {
         );
       });
 
-      // Get patient names
+      // Get patient names AND verify they are still assigned to this psychologist
       const patientIds = requestRows
         .map((appt) => appt.user_id)
         .filter(Boolean);
       let patientNames = {};
+      let currentlyAssignedPatientIds = new Set();
 
       if (patientIds.length > 0) {
         const { data: profiles } = await supabase
           .from("user_profiles")
-          .select("id, first_name, last_name")
+          .select("id, first_name, last_name, assigned_psychologist_id")
           .in("id", patientIds);
+
+        console.log("Checking patient assignments for psychologist:", psychologistId);
+        console.log("Patient profiles found:", profiles);
 
         profiles?.forEach((profile) => {
           const fullName = [profile.first_name, profile.last_name]
             .filter(Boolean)
             .join(" ");
           patientNames[profile.id] = fullName || "Patient";
+          
+          console.log(`Patient ${profile.id} (${fullName}) assigned to:`, profile.assigned_psychologist_id);
+          console.log(`Does it match current psychologist ${psychologistId}?`, profile.assigned_psychologist_id === psychologistId);
+          
+          // Track which patients are currently assigned to this psychologist
+          if (profile.assigned_psychologist_id === psychologistId) {
+            currentlyAssignedPatientIds.add(profile.id);
+          }
         });
+        
+        console.log("Currently assigned patient IDs:", Array.from(currentlyAssignedPatientIds));
+        console.log("Total request rows before filtering:", requestRows.length);
       }
 
-      return requestRows.map((appt) => {
+      // Filter out requests from patients who are no longer assigned to this psychologist
+      const validRequests = requestRows.filter((appt) => 
+        currentlyAssignedPatientIds.has(appt.user_id)
+      );
+      
+      console.log("Valid requests after filtering:", validRequests.length);
+      console.log("Filtered out:", requestRows.length - validRequests.length, "requests from unassigned patients");
+
+      return validRequests.map((appt) => {
         // Show the explicit requested appointment date/time if provided
         const d = appt.appointment_date
           ? new Date(appt.appointment_date)
