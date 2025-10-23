@@ -974,7 +974,7 @@ const DashboardNew = () => {
                     </div>
                   </div>
 
-                  <div className="space-y-3">
+                  <div className="space-y-3 max-h-96 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
                     {patients.length > 0 ? (
                       patients.map((patient) => (
                         <PatientCard
@@ -1003,7 +1003,7 @@ const DashboardNew = () => {
                     <AlertCircle className="h-5 w-5 text-orange-500" />
                   </div>
 
-                  <div className="space-y-4">
+                  <div className="space-y-4 max-h-80 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
                     {appointmentRequests.length > 0 ? (
                       appointmentRequests.map((request) => (
                         <AppointmentRequestCard
@@ -1030,7 +1030,7 @@ const DashboardNew = () => {
                     <Clock className="h-5 w-5 text-gray-400" />
                   </div>
 
-                  <div className="space-y-3">
+                  <div className="space-y-3 max-h-80 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
                     {todayAppointments.length > 0 ? (
                       todayAppointments.map((appointment) => (
                         <AppointmentCard

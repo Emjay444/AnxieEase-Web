@@ -17,6 +17,7 @@ import {
 import { reportService } from "../services/reportService";
 import { psychologistService } from "../services/psychologistService";
 import ProfilePicture from "./ProfilePicture";
+import SuccessModal from "./SuccessModal";
 
 const ReportGeneration = ({ psychologistId, onBack }) => {
   const [loading, setLoading] = useState(true);
@@ -29,6 +30,11 @@ const ReportGeneration = ({ psychologistId, onBack }) => {
   const [showReportModal, setShowReportModal] = useState(false);
   const [previewData, setPreviewData] = useState(null);
   const [error, setError] = useState(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState({
+    title: "",
+    message: "",
+  });
 
   // Load patients assigned to this psychologist
   useEffect(() => {
@@ -130,9 +136,13 @@ const ReportGeneration = ({ psychologistId, onBack }) => {
 
       // Show success message
       const patient = patients.find((p) => p.id === patientId);
-      alert(
-        `Report generated successfully for ${patient?.name || patient?.id}!`
-      );
+      setSuccessMessage({
+        title: "Report Generated Successfully",
+        message: `${exportFormat.toUpperCase()} report has been downloaded for ${
+          patient?.name || patient?.id
+        }.`,
+      });
+      setShowSuccessModal(true);
     } catch (error) {
       console.error("Error generating individual report:", error);
       setError(`Failed to generate report: ${error.message}`);
@@ -158,9 +168,13 @@ const ReportGeneration = ({ psychologistId, onBack }) => {
         exportFormat
       );
 
-      alert(
-        `Batch report generated successfully for ${selectedPatients.length} patients!`
-      );
+      setSuccessMessage({
+        title: "Batch Report Generated Successfully",
+        message: `${exportFormat.toUpperCase()} report has been downloaded for ${
+          selectedPatients.length
+        } patient${selectedPatients.length > 1 ? "s" : ""}.`,
+      });
+      setShowSuccessModal(true);
     } catch (error) {
       console.error("Error generating batch report:", error);
       setError(`Failed to generate batch report: ${error.message}`);
@@ -380,7 +394,21 @@ const ReportGeneration = ({ psychologistId, onBack }) => {
                             {patient.email || "No email"}
                           </p>
                           <p className="text-xs text-gray-500">
-                            ID: {patient.id}
+                            {(() => {
+                              const dob =
+                                patient.birth_date || patient.date_of_birth;
+                              let age = "N/A";
+                              if (dob) {
+                                const d = new Date(dob);
+                                const now = new Date();
+                                age = Math.floor(
+                                  (now - d) / (365.25 * 24 * 60 * 60 * 1000)
+                                );
+                              }
+                              const sex =
+                                patient.sex || patient.gender || "N/A";
+                              return `Age: ${age} | Sex: ${sex}`;
+                            })()}
                           </p>
                         </div>
                       </div>
@@ -483,12 +511,33 @@ const ReportGeneration = ({ psychologistId, onBack }) => {
                       {previewData.patient.name || "N/A"}
                     </p>
                     <p>
-                      <span className="font-medium">ID:</span>{" "}
-                      {previewData.patient.id}
-                    </p>
-                    <p>
                       <span className="font-medium">Email:</span>{" "}
                       {previewData.patient.email || "N/A"}
+                    </p>
+                    <p>
+                      {(() => {
+                        const dob =
+                          previewData.patient.birth_date ||
+                          previewData.patient.date_of_birth;
+                        let age = "N/A";
+                        if (dob) {
+                          const d = new Date(dob);
+                          const now = new Date();
+                          age = Math.floor(
+                            (now - d) / (365.25 * 24 * 60 * 60 * 1000)
+                          );
+                        }
+                        const sex =
+                          previewData.patient.sex ||
+                          previewData.patient.gender ||
+                          "N/A";
+                        return (
+                          <span>
+                            <span className="font-medium">Age | Sex:</span>{" "}
+                            {age} | {sex}
+                          </span>
+                        );
+                      })()}
                     </p>
                   </div>
                 </div>
@@ -499,60 +548,70 @@ const ReportGeneration = ({ psychologistId, onBack }) => {
                     Summary Statistics
                   </h4>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div className="bg-blue-50 rounded-lg p-3 text-center">
-                      <div className="text-xl font-bold text-blue-600">
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 text-center">
+                      <div className="text-xl font-semibold text-gray-900">
                         {previewData.stats.totalSessions}
                       </div>
-                      <div className="text-xs text-blue-800">
+                      <div className="text-xs text-gray-500">
                         Total Sessions
                       </div>
                     </div>
-                    <div className="bg-green-50 rounded-lg p-3 text-center">
-                      <div className="text-xl font-bold text-green-600">
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 text-center">
+                      <div className="text-xl font-semibold text-gray-900">
                         {previewData.stats.totalMoodEntries}
                       </div>
-                      <div className="text-xs text-green-800">Mood Entries</div>
+                      <div className="text-xs text-gray-500">Mood Entries</div>
                     </div>
-                    <div className="bg-purple-50 rounded-lg p-3 text-center">
-                      <div className="text-xl font-bold text-purple-600">
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 text-center">
+                      <div className="text-xl font-semibold text-gray-900">
                         {previewData.stats.avgMoodScore}/10
                       </div>
-                      <div className="text-xs text-purple-800">
+                      <div className="text-xs text-gray-500">
                         Avg Mood Score
                       </div>
                     </div>
-                    <div className="bg-orange-50 rounded-lg p-3 text-center">
-                      <div className="text-xl font-bold text-orange-600">
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 text-center">
+                      <div className="text-xl font-semibold text-gray-900">
                         {previewData.stats.avgStressLevel}/10
                       </div>
-                      <div className="text-xs text-orange-800">
+                      <div className="text-xs text-gray-500">
                         Avg Stress Level
                       </div>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-3">
-                    <div className="bg-red-50 rounded-lg p-3 text-center">
-                      <div className="text-xl font-bold text-red-600">
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 text-center">
+                      <div className="text-xl font-semibold text-gray-900">
                         {previewData.stats.totalAnxietyAttacks}
                       </div>
-                      <div className="text-xs text-red-800">
+                      <div className="text-xs text-gray-500">
                         Anxiety Attacks
                       </div>
                     </div>
-                    <div className="bg-yellow-50 rounded-lg p-3 text-center">
-                      <div className="text-xl font-bold text-yellow-600">
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 text-center">
+                      <div className="text-xl font-semibold text-gray-900">
                         {previewData.stats.attackRatePerWeek}
                       </div>
-                      <div className="text-xs text-yellow-800">
-                        Attacks/Week
-                      </div>
+                      <div className="text-xs text-gray-500">Attacks/Week</div>
                     </div>
-                    <div className="bg-indigo-50 rounded-lg p-3 text-center">
-                      <div className="text-sm font-bold text-indigo-600">
-                        {previewData.stats.improvementTrend}
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 text-center">
+                      <div className="text-sm font-semibold text-gray-900">
+                        {(() => {
+                          const t = (
+                            previewData.stats.improvementTrend || ""
+                          ).toLowerCase();
+                          if (
+                            t.includes("significantly") &&
+                            t.includes("improving")
+                          )
+                            return "Improving well";
+                          if (t.includes("improving")) return "Improving";
+                          if (t.includes("declin")) return "Needs support";
+                          return "Stable";
+                        })()}
                       </div>
-                      <div className="text-xs text-indigo-800">Trend</div>
+                      <div className="text-xs text-gray-500">Trend</div>
                     </div>
                   </div>
                 </div>
@@ -591,39 +650,6 @@ const ReportGeneration = ({ psychologistId, onBack }) => {
                     </div>
                   </div>
                 )}
-
-                {/* Stress Distribution */}
-                <div>
-                  <h4 className="font-semibold text-gray-900 mb-2">
-                    Stress Level Distribution
-                  </h4>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="bg-green-50 rounded-lg p-3 text-center">
-                      <div className="text-lg font-bold text-green-600">
-                        {previewData.stats.stressDistribution?.low || 0}
-                      </div>
-                      <div className="text-xs text-green-800">
-                        Low Stress Days
-                      </div>
-                    </div>
-                    <div className="bg-yellow-50 rounded-lg p-3 text-center">
-                      <div className="text-lg font-bold text-yellow-600">
-                        {previewData.stats.stressDistribution?.medium || 0}
-                      </div>
-                      <div className="text-xs text-yellow-800">
-                        Medium Stress Days
-                      </div>
-                    </div>
-                    <div className="bg-red-50 rounded-lg p-3 text-center">
-                      <div className="text-lg font-bold text-red-600">
-                        {previewData.stats.stressDistribution?.high || 0}
-                      </div>
-                      <div className="text-xs text-red-800">
-                        High Stress Days
-                      </div>
-                    </div>
-                  </div>
-                </div>
 
                 {/* Recent Activity */}
                 <div>
@@ -696,6 +722,15 @@ const ReportGeneration = ({ psychologistId, onBack }) => {
           </div>
         </div>
       )}
+
+      {/* Success Modal */}
+      <SuccessModal
+        isOpen={showSuccessModal}
+        onClose={() => setShowSuccessModal(false)}
+        title={successMessage.title}
+        message={successMessage.message}
+        type="success"
+      />
     </div>
   );
 };
