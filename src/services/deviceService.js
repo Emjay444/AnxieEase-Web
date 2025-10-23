@@ -97,7 +97,9 @@ class DeviceService {
     try {
       const { data: users, error } = await supabase
         .from("user_profiles")
-        .select("id, first_name, last_name, role")
+        .select(
+          "id, first_name, last_name, middle_name, email, avatar_url, role"
+        )
         .eq("role", "patient")
         .order("first_name");
 
