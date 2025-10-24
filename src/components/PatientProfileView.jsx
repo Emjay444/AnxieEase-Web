@@ -585,7 +585,7 @@ const PatientProfileView = ({ patient, onBack, psychologistId }) => {
           <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Improvement</p>
+                <p className="text-sm font-medium text-gray-600">Stress Improvement</p>
                 <div className="flex items-center mt-1">
                   <p className="text-3xl font-bold text-gray-900">
                     {Math.abs(stats.improvementTrend).toFixed(1)}
