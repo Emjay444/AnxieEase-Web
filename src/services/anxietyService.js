@@ -116,51 +116,36 @@ export const anxietyService = {
     }
   },
 
-  // Robust fetch: support both 'anxiety_records' and 'anxiety_record' table names and timestamp/date columns
+  // Fetch anxiety records from anxiety_records table
   async getAnxietyRecordsRobust(patientId) {
-    // Try plural first
-    let records = [];
     try {
       const { data, error } = await supabase
         .from("anxiety_records")
         .select("*")
         .eq("user_id", patientId)
         .order("timestamp", { ascending: true });
-      if (!error && data) records = data;
-    } catch (_) {}
 
-    // If still empty, try singular table
-    if (!records || records.length === 0) {
-      try {
-        // Try ordering by timestamp first, then date
-        let resp = await supabase
-          .from("anxiety_record")
-          .select("*")
-          .eq("user_id", patientId)
-          .order("timestamp", { ascending: true });
-        if (resp.error) {
-          resp = await supabase
-            .from("anxiety_record")
-            .select("*")
-            .eq("user_id", patientId)
-            .order("date", { ascending: true });
-        }
-        if (!resp.error && resp.data) records = resp.data;
-      } catch (_) {}
+      if (error) {
+        console.error("Error fetching anxiety_records:", error);
+        return [];
+      }
+
+      // Normalize to include a Date value in 'ts' for convenience
+      const normalized = (data || [])
+        .map((r) => {
+          const iso = r.timestamp || r.created_at;
+          const ts = iso ? new Date(iso) : null;
+          return { ...r, ts };
+        })
+        .filter((r) => r.ts && !isNaN(r.ts.getTime()));
+
+      // Ensure ascending order
+      normalized.sort((a, b) => a.ts - b.ts);
+      return normalized;
+    } catch (error) {
+      console.error("Error in getAnxietyRecordsRobust:", error);
+      return [];
     }
-
-    // Normalize to include a Date value in 'ts'
-    const normalized = (records || [])
-      .map((r) => {
-        const iso = r.timestamp || r.date || r.created_at;
-        const ts = iso ? new Date(iso) : null;
-        return { ...r, ts };
-      })
-      .filter((r) => r.ts && !isNaN(r.ts.getTime()));
-
-    // Ensure ascending order
-    normalized.sort((a, b) => a.ts - b.ts);
-    return normalized;
   },
 
   // Build a daily time series for the last N days

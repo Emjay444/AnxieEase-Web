@@ -40,44 +40,55 @@ const AddDoctorModal = memo(({ show, onClose, onSave, isLoading = false }) => {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
 
-    // Apply phone number formatting for contact field
+    // For contact field, only allow numeric input and limit to 11 digits
     if (name === "contact") {
-      const formatted = formatPhoneNumber(value);
-      setFormData((prev) => ({
-        ...prev,
-        [name]: formatted,
-      }));
+      const numericValue = value.replace(/\D/g, "");
+      if (numericValue.length <= 11) {
+        setFormData((prev) => ({
+          ...prev,
+          [name]: numericValue,
+        }));
+
+        // Real-time validation for contact number
+        if (numericValue.length > 0) {
+          if (!numericValue.startsWith("09")) {
+            setErrors((prev) => ({
+              ...prev,
+              contact: "Must start with 09",
+            }));
+          } else if (numericValue.length > 0 && numericValue.length < 11) {
+            setErrors((prev) => ({
+              ...prev,
+              contact: `${11 - numericValue.length} more digit${
+                11 - numericValue.length > 1 ? "s" : ""
+              } needed`,
+            }));
+          } else if (numericValue.length === 11) {
+            setErrors((prev) => ({
+              ...prev,
+              contact: "",
+            }));
+          }
+        } else {
+          setErrors((prev) => ({
+            ...prev,
+            contact: "",
+          }));
+        }
+      }
     } else {
       setFormData((prev) => ({
         ...prev,
         [name]: value,
       }));
-    }
 
-    // Clear error when user starts typing
-    if (errors[name]) {
-      setErrors((prev) => ({
-        ...prev,
-        [name]: "",
-      }));
-    }
-  };
-
-  // Format phone number as user types
-  const formatPhoneNumber = (value) => {
-    // Strip all non-numeric characters
-    const phoneNumber = value.replace(/\D/g, "");
-
-    // Format based on length
-    if (phoneNumber.length < 4) {
-      return phoneNumber;
-    } else if (phoneNumber.length < 7) {
-      return `(${phoneNumber.slice(0, 3)}) ${phoneNumber.slice(3)}`;
-    } else {
-      return `(${phoneNumber.slice(0, 3)}) ${phoneNumber.slice(
-        3,
-        6
-      )}-${phoneNumber.slice(6, 10)}`;
+      // Clear error when user starts typing for other fields
+      if (errors[name]) {
+        setErrors((prev) => ({
+          ...prev,
+          [name]: "",
+        }));
+      }
     }
   };
 
@@ -148,9 +159,15 @@ const AddDoctorModal = memo(({ show, onClose, onSave, isLoading = false }) => {
       if (!formData.contact.trim()) {
         newErrors.contact = "Contact Number is required";
         summaryErrors.push("Contact Number is required");
-      } else if (formData.contact.replace(/\D/g, "").length < 10) {
-        newErrors.contact = "Please enter a valid contact number";
-        summaryErrors.push("Please enter a valid contact number");
+      } else {
+        const phoneNumber = formData.contact.replace(/\D/g, "");
+        if (phoneNumber.length !== 11 || !phoneNumber.startsWith("09")) {
+          newErrors.contact =
+            "Please enter a valid Philippine mobile number (09XXXXXXXXX)";
+          summaryErrors.push(
+            "Please enter a valid Philippine mobile number (09XXXXXXXXX)"
+          );
+        }
       }
     }
 
@@ -385,6 +402,7 @@ const AddDoctorModal = memo(({ show, onClose, onSave, isLoading = false }) => {
                     onChange={handleInputChange}
                     className={errors.licenseNumber ? "error" : ""}
                     placeholder="Enter medical license number"
+                    maxLength="7"
                     aria-required="true"
                     aria-invalid={errors.licenseNumber ? "true" : "false"}
                   />
@@ -408,7 +426,8 @@ const AddDoctorModal = memo(({ show, onClose, onSave, isLoading = false }) => {
                       value={formData.contact}
                       onChange={handleInputChange}
                       className={errors.contact ? "error" : ""}
-                      placeholder="(123) 456-7890"
+                      placeholder="Enter contact number"
+                      maxLength="11"
                       aria-required="true"
                       aria-invalid={errors.contact ? "true" : "false"}
                     />

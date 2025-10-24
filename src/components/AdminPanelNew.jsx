@@ -36,7 +36,7 @@ import {
   User,
   X,
   AlertTriangle,
-  Smartphone,
+  Watch,
   Battery,
   Wifi,
   WifiOff,
@@ -1406,7 +1406,7 @@ const AdminPanelNew = () => {
           <TabButton
             tab="devices"
             label="Device Management"
-            icon={Smartphone}
+            icon={Watch}
             isActive={activeTab === "devices"}
             onClick={() => setActiveTab("devices")}
           />
@@ -1478,7 +1478,7 @@ const AdminPanelNew = () => {
               <StatCard
                 title="Total Devices"
                 value={1}
-                icon={Smartphone}
+                icon={Watch}
                 color="blue"
               />
             </div>
@@ -2337,7 +2337,7 @@ const AdminPanelNew = () => {
                     <p className="text-2xl font-bold text-blue-900 mt-1">1</p>
                   </div>
                   <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <Smartphone className="w-5 h-5 text-blue-600" />
+                    <Watch className="w-5 h-5 text-blue-600" />
                   </div>
                 </div>
               </div>
@@ -2403,7 +2403,7 @@ const AdminPanelNew = () => {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-4">
                       <div className="w-14 h-14 bg-gradient-to-br from-emerald-100 to-emerald-200 rounded-xl flex items-center justify-center shadow-inner">
-                        <Smartphone className="w-7 h-7 text-emerald-600" />
+                        <Watch className="w-7 h-7 text-emerald-600" />
                       </div>
                       <div>
                         <h3 className="text-xl font-bold text-gray-900 mb-0.5">
@@ -2495,10 +2495,10 @@ const AdminPanelNew = () => {
                   className="absolute inset-0 bg-black/50 backdrop-blur-sm"
                   onClick={() => setShowAssignModal(false)}
                 ></div>
-                <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full">
-                  <div className="p-6">
+                <div className="relative bg-white rounded-2xl shadow-2xl max-w-2xl w-full">
+                  <div className="p-8">
                     <div className="flex items-center justify-between mb-6">
-                      <h3 className="text-xl font-bold text-gray-900">
+                      <h3 className="text-2xl font-bold text-gray-900">
                         Assign Device to Patient
                       </h3>
                       <button
@@ -2509,27 +2509,29 @@ const AdminPanelNew = () => {
                       </button>
                     </div>
 
-                    <p className="text-gray-600 mb-6">
+                    <p className="text-gray-600 mb-6 text-lg">
                       Select a patient to assign the AnxieEase device to:
                     </p>
 
-                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                    <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
                       {availableUsers.map((user) => (
                         <button
                           key={user.id}
                           onClick={() => handleAssignDevice(user.id)}
-                          className="w-full text-left p-4 border border-gray-200 rounded-xl hover:bg-emerald-50 hover:border-emerald-300 transition-all duration-200 group"
+                          className="w-full text-left p-5 border-2 border-gray-200 rounded-xl hover:bg-emerald-50 hover:border-emerald-400 transition-all duration-200 group"
                         >
-                          <div className="flex items-center space-x-3">
-                            <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center group-hover:bg-emerald-200 transition-colors">
-                              <User className="w-5 h-5 text-emerald-600" />
-                            </div>
-                            <div>
-                              <p className="font-semibold text-gray-900">
+                          <div className="flex items-center space-x-4">
+                            <ProfilePicture
+                              patient={user}
+                              size={56}
+                              className="group-hover:ring-2 group-hover:ring-emerald-400 transition-all"
+                            />
+                            <div className="flex-1">
+                              <p className="font-semibold text-gray-900 text-lg">
                                 {user.first_name} {user.last_name}
                               </p>
-                              <p className="text-sm text-gray-500">
-                                Patient ID: {user.id}
+                              <p className="text-sm text-gray-600 mt-1">
+                                {user.email}
                               </p>
                             </div>
                           </div>
@@ -2537,10 +2539,10 @@ const AdminPanelNew = () => {
                       ))}
                     </div>
 
-                    <div className="mt-6 flex justify-end space-x-3">
+                    <div className="mt-8 flex justify-end space-x-3">
                       <button
                         onClick={() => setShowAssignModal(false)}
-                        className="px-6 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                        className="px-6 py-3 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium"
                       >
                         Cancel
                       </button>
@@ -3345,6 +3347,21 @@ const AdminPanelNew = () => {
                               ) : (
                                 <span className="text-gray-500 italic">
                                   Not specified
+                                </span>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-start space-x-4 p-4 bg-gray-50 rounded-xl border border-gray-100">
+                          <Calendar className="h-5 w-5 text-emerald-600 mt-0.5 flex-shrink-0" />
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-700">
+                              License Number
+                            </p>
+                            <p className="text-gray-900 font-semibold">
+                              {selectedPsychologist.license_number || (
+                                <span className="text-gray-500 italic">
+                                  Not provided
                                 </span>
                               )}
                             </p>

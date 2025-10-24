@@ -94,6 +94,21 @@ export const authService = {
       // Reset login attempts on successful login (but keep lockout level)
       this.resetLoginAttempts(email);
 
+      // Check if this user is a deactivated psychologist
+      const { data: psychologist, error: psychError } = await supabase
+        .from("psychologists")
+        .select("id, is_active")
+        .eq("user_id", data.user.id)
+        .maybeSingle();
+
+      if (psychologist && psychologist.is_active === false) {
+        // Sign out the user immediately
+        await supabase.auth.signOut();
+        throw new Error(
+          "Your account has been deactivated. Please contact the administrator."
+        );
+      }
+
       // Get user role from metadata or from the database
       const role =
         data.user?.user_metadata?.role ||
