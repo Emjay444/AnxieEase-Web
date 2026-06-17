@@ -97,7 +97,7 @@ function createSafeClient(url, key, options = {}) {
                             const baseUrl = target.rest.url.replace(/\/+$/, ""); // Remove trailing slashes
                             const requestPath = sTarget.url.pathname.replace(
                               /^\/+/,
-                              ""
+                              "",
                             ); // Remove leading slashes
                             const cleanUrl = `${baseUrl}/${requestPath}${sTarget.url.search}`;
 
@@ -107,7 +107,7 @@ function createSafeClient(url, key, options = {}) {
                               import.meta?.env?.VITE_DEBUG_SUPABASE === "true"
                             ) {
                               console.log(
-                                `🔧 SafeSupabase: Making ${sProp}() safer:\nOriginal: ${cleanUrl}\nNow using limit(1)&return=array instead of ${sProp}()`
+                                `🔧 SafeSupabase: Making ${sProp}() safer:\nOriginal: ${cleanUrl}\nNow using limit(1)&return=array instead of ${sProp}()`,
                               );
                             }
 
@@ -159,7 +159,7 @@ function createSafeClient(url, key, options = {}) {
                           } catch (err) {
                             console.error(
                               "Error in safe single() implementation:",
-                              err
+                              err,
                             );
                             // Fall back to original method if our implementation fails
                             return originalMethod.call(sTarget);
@@ -205,7 +205,7 @@ try {
   } else {
     // Fallback to mock client if credentials are missing
     console.warn(
-      "Using mock Supabase client. Set up your .env file for actual functionality."
+      "Using mock Supabase client. Set up your .env file for actual functionality.",
     );
     supabase = createMockClient();
   }

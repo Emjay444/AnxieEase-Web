@@ -20,7 +20,7 @@ export const directPasswordService = {
           apikey: SUPABASE_ANON_KEY,
         },
         body: JSON.stringify({ refresh_token: refreshToken }),
-      }
+      },
     );
 
     if (!resp.ok) {
@@ -66,7 +66,7 @@ export const directPasswordService = {
         refreshToken
       ) {
         console.warn(
-          `⚠️ Password update got ${response.status}. Attempting refresh token flow...`
+          `⚠️ Password update got ${response.status}. Attempting refresh token flow...`,
         );
         const refreshed = await this.refreshAccessToken(refreshToken);
         response = await doRequest(refreshed.access_token);
@@ -79,7 +79,7 @@ export const directPasswordService = {
         } catch (_) {}
         console.error("❌ Direct password update failed:", errorData);
         throw new Error(
-          `Password update failed: ${errorData.message || response.statusText}`
+          `Password update failed: ${errorData.message || response.statusText}`,
         );
       }
 
@@ -117,7 +117,7 @@ export const directPasswordService = {
           console.warn(
             `⚠️ Auth ${res.status} on ${
               init?.method || "GET"
-            } ${url}. Refreshing token...`
+            } ${url}. Refreshing token...`,
           );
           const refreshed = await this.refreshAccessToken(refreshToken);
           res = await doFetch(refreshed.access_token);
@@ -131,12 +131,12 @@ export const directPasswordService = {
         {
           method: "GET",
           headers: { "Content-Type": "application/json" },
-        }
+        },
       );
 
       if (!checkResponse.ok) {
         throw new Error(
-          `Failed to check psychologist: ${checkResponse.statusText}`
+          `Failed to check psychologist: ${checkResponse.statusText}`,
         );
       }
 
@@ -154,12 +154,12 @@ export const directPasswordService = {
               user_id: userId,
               updated_at: new Date().toISOString(),
             }),
-          }
+          },
         );
 
         if (!updateResponse.ok) {
           throw new Error(
-            `Failed to update psychologist: ${updateResponse.statusText}`
+            `Failed to update psychologist: ${updateResponse.statusText}`,
           );
         }
       } else {
@@ -176,12 +176,12 @@ export const directPasswordService = {
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
             }),
-          }
+          },
         );
 
         if (!insertResponse.ok) {
           throw new Error(
-            `Failed to insert psychologist: ${insertResponse.statusText}`
+            `Failed to insert psychologist: ${insertResponse.statusText}`,
           );
         }
       }
@@ -202,7 +202,7 @@ export const directPasswordService = {
     password,
     accessToken,
     refreshToken,
-    userId
+    userId,
   ) {
     try {
       console.log("🔧 Completing psychologist setup via direct API...");
@@ -215,7 +215,7 @@ export const directPasswordService = {
         email,
         userId,
         accessToken,
-        refreshToken
+        refreshToken,
       );
 
       // Step 3: Update user profile
@@ -233,7 +233,7 @@ export const directPasswordService = {
               role: "psychologist",
               is_email_verified: true,
             }),
-          }
+          },
         );
 
         if (profileResponse.ok) {
@@ -246,7 +246,7 @@ export const directPasswordService = {
       }
 
       console.log(
-        "✅ Psychologist setup completed successfully via direct API"
+        "✅ Psychologist setup completed successfully via direct API",
       );
       return { success: true };
     } catch (error) {
