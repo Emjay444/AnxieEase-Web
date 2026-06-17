@@ -1007,7 +1007,10 @@ const DashboardNew = () => {
             appt.appointment_date || appt.requestedDate || appt.requestDate;
           if (!apptRaw) return false;
           const apptDate = new Date(apptRaw).toDateString();
-          return apptDate === today;
+          const isToday = apptDate === today;
+          // Exclude declined and expired appointments from today's list
+          const isActiveStatus = appt.status !== "declined" && appt.status !== "expired";
+          return isToday && isActiveStatus;
         });
         setTodayAppointments(todayAppts);
 
@@ -1409,10 +1412,11 @@ const DashboardNew = () => {
       </div>
       <div className="text-right">
         <p className="text-sm font-medium text-gray-900">
-          {new Date(appointment.appointment_date).toLocaleTimeString("en-US", {
+          {new Date(appointment.appointment_date).toLocaleTimeString("en-PH", {
             hour: "numeric",
             minute: "2-digit",
             hour12: true,
+            timeZone: "Asia/Manila",
           })}
         </p>
         <p className="text-xs text-gray-500">Today</p>

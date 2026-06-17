@@ -705,6 +705,10 @@ export const adminService = {
 
       await this.logActivity(currentUserId, actionType, actionDetails);
 
+      // Note: The database trigger will automatically update appointments
+      // when the assigned_psychologist_id changes in user_profiles
+      console.log("Patient assignment updated. Database trigger will sync appointments automatically.");
+
       return { success: true, data };
     } catch (error) {
       console.error("Assign patient error:", error.message);
@@ -1114,7 +1118,52 @@ export const adminService = {
       };
     } catch (error) {
       console.error("Error in setupAdmin:", error);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  },
+
+  // Clean up appointment assignments for reassigned patients
+  async cleanupAppointmentAssignments() {
+    try {
+      const { data, error } = await supabase.rpc('cleanup_mismatched_appointments');
+      
+      if (error) {
+        console.error("Error cleaning up appointments:", error.message);
+        return { success: false, error: error.message };
+      }
+      
+      console.log("Appointment cleanup completed:", data);
+      return { 
+        success: true, 
+        ...data[0] // This includes appointments_updated, appointments_cancelled, cleanup_summary
+      };
+    } catch (error) {
+      console.error("Cleanup appointment assignments error:", error.message);
       return { success: false, error: error.message };
     }
   },
+
+  // Check for appointment assignment issues
+  async checkAppointmentAssignmentIssues() {
+    try {
+      const { data, error } = await supabase.rpc('check_appointment_assignments');
+      
+      if (error) {
+        console.error("Error checking appointments:", error.message);
+        return { success: false, error: error.message, issues: [] };
+      }
+      
+      return { 
+        success: true, 
+        issues: data || [],
+        hasIssues: data && data.length > 0
+      };
+    } catch (error) {
+      console.error("Check appointment assignments error:", error.message);
+      return { success: false, error: error.message, issues: [] };
+    }
+  }
 };

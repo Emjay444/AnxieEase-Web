@@ -1,6 +1,41 @@
 import { supabase } from "./supabaseClient";
 
 export const appointmentService = {
+  // Clean up mismatched appointments (when patients are reassigned)
+  async cleanupMismatchedAppointments() {
+    try {
+      const { data, error } = await supabase.rpc('cleanup_mismatched_appointments');
+      
+      if (error) {
+        console.error("Error cleaning up appointments:", error.message);
+        return { success: false, error: error.message };
+      }
+      
+      console.log("Appointment cleanup result:", data);
+      return { success: true, data: data[0] };
+    } catch (error) {
+      console.error("Cleanup mismatched appointments error:", error.message);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Check for appointment assignment issues
+  async checkAppointmentAssignments() {
+    try {
+      const { data, error } = await supabase.rpc('check_appointment_assignments');
+      
+      if (error) {
+        console.error("Error checking appointments:", error.message);
+        return [];
+      }
+      
+      return data || [];
+    } catch (error) {
+      console.error("Check appointment assignments error:", error.message);
+      return [];
+    }
+  },
+
   // Get appointments for a psychologist or a user
   async getAppointmentsByPsychologist(userId) {
     try {
@@ -20,23 +55,27 @@ export const appointmentService = {
 
       console.log("Found appointments:", appointments);
 
+      // First, fix any appointments that were wrongly expired (future appointments marked as expired)
+      const fixedAppointments = await this.fixWronglyExpiredAppointments(appointments);
+
       // Auto-update past scheduled appointments to completed, and past pending to expired
       const afterComplete = await this.updatePastAppointmentsToCompleted(
-        appointments
+        fixedAppointments
       );
       const updatedAppointments =
         await this.updatePastPendingAppointmentsToExpired(afterComplete);
 
-      // Get patient names from user_profiles
+      // Get patient names from user_profiles AND verify current assignment
       const patientIds = updatedAppointments
         .map((appt) => appt.user_id)
         .filter(Boolean);
       let patientNames = {};
+      let assignedToThisPsych = new Set();
 
       if (patientIds.length > 0) {
         const { data: profiles } = await supabase
           .from("user_profiles")
-          .select("id, first_name, last_name")
+          .select("id, first_name, last_name, assigned_psychologist_id")
           .in("id", patientIds);
 
         profiles?.forEach((profile) => {
@@ -44,11 +83,23 @@ export const appointmentService = {
             .filter(Boolean)
             .join(" ");
           patientNames[profile.id] = fullName || "Patient";
+          if (profile.assigned_psychologist_id === userId) {
+            assignedToThisPsych.add(profile.id);
+          }
         });
       }
 
+      // Exclude PENDING/REQUESTED appointments if the patient is no longer assigned to this psychologist
+      const filteredAppointments = updatedAppointments.filter((appt) => {
+        const s = (appt.status || "").toString().toLowerCase();
+        const isPending = s === "pending" || s === "requested" || s === "request";
+        if (!isPending) return true; // keep non-pending regardless of assignment (historical)
+        // pending/requested should only show if currently assigned
+        return assignedToThisPsych.has(appt.user_id);
+      });
+
       // Format the data (normalized for UI expectations)
-      return updatedAppointments.map((appt) => {
+  return filteredAppointments.map((appt) => {
         const rawStatus = (appt.status || "pending").toLowerCase();
         const status = rawStatus === "canceled" ? "cancelled" : rawStatus;
         const patientName = patientNames[appt.user_id] || "Patient";
@@ -83,12 +134,66 @@ export const appointmentService = {
     }
   },
 
-  // Helper method to update past scheduled appointments to completed
+  // Fix appointments that were wrongly marked as expired (future appointments)
+  async fixWronglyExpiredAppointments(appointments) {
+    try {
+      const now = new Date();
+      
+      // Find appointments marked as expired but with future dates
+      const wronglyExpired = appointments.filter((appt) => {
+        if (appt.status !== 'expired') return false;
+        if (!appt.appointment_date) return false;
+        const appointmentDate = new Date(appt.appointment_date);
+        const isFuture = appointmentDate > now;
+        
+        if (isFuture) {
+          console.log(`Found wrongly expired appointment ${appt.id}:`, {
+            appointmentDate: appointmentDate.toISOString(),
+            now: now.toISOString(),
+            willRevert: true
+          });
+        }
+        
+        return isFuture;
+      });
+
+      if (wronglyExpired.length > 0) {
+        console.log(
+          `Reverting ${wronglyExpired.length} wrongly expired appointments back to requested status`
+        );
+        
+        const updatePromises = wronglyExpired.map((appt) =>
+          supabase
+            .from("appointments")
+            .update({
+              status: "requested",
+              response_message: null,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", appt.id)
+        );
+        
+        await Promise.all(updatePromises);
+
+        // Return updated appointments with corrected status
+        return appointments.map((appt) =>
+          wronglyExpired.find((p) => p.id === appt.id)
+            ? { ...appt, status: "requested", response_message: null }
+            : appt
+        );
+      }
+
+      return appointments;
+    } catch (error) {
+      console.error("Error fixing wrongly expired appointments:", error);
+      return appointments;
+    }
+  },
+
   async updatePastAppointmentsToCompleted(appointments) {
     try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0); // Start of today
-      console.log("Today's date (start of day):", today.toISOString());
+      const now = new Date(); // Current time, not just date
+      console.log("Current time:", now.toISOString());
 
       // Debug: Log all appointments with their status and date
       appointments.forEach((appt) => {
@@ -96,58 +201,58 @@ export const appointmentService = {
           `Appointment ${appt.id}: status="${appt.status}", date="${appt.appointment_date}"`
         );
       });
-      // Treat legacy equivalents of scheduled as scheduled too
-      const scheduledLike = new Set([
-        "scheduled",
+      // Treat legacy equivalents of approved as approved too
+      // "scheduled" is legacy, "approved" is the current standard
+      const approvedLike = new Set([
         "approved",
+        "scheduled", // legacy
         "accept",
         "accepted",
         "confirm",
         "confirmed",
       ]);
 
-      const pastScheduledAppointments = appointments.filter((appt) => {
+      const pastApprovedAppointments = appointments.filter((appt) => {
         if (!appt.appointment_date) {
           console.log(`Skipping appointment ${appt.id}: no appointment_date`);
           return false;
         }
 
         const status = (appt.status || "").toLowerCase().trim();
-        if (!scheduledLike.has(status)) {
+        if (!approvedLike.has(status)) {
           console.log(
-            `Skipping appointment ${appt.id}: status is "${status}" not scheduled-like`
+            `Skipping appointment ${appt.id}: status is "${status}" not approved-like`
           );
           return false;
         }
 
         const appointmentDate = new Date(appt.appointment_date);
-        appointmentDate.setHours(0, 0, 0, 0);
         console.log(
           `Appointment ${
             appt.id
           }: date=${appointmentDate.toISOString()}, isPast=${
-            appointmentDate < today
+            appointmentDate < now
           }`
         );
 
-        return appointmentDate < today;
+        return appointmentDate < now;
       });
 
       console.log(
-        `Found ${pastScheduledAppointments.length} past scheduled appointments to complete:`,
-        pastScheduledAppointments.map((a) => ({
+        `Found ${pastApprovedAppointments.length} past approved appointments to complete:`,
+        pastApprovedAppointments.map((a) => ({
           id: a.id,
           date: a.appointment_date,
           status: a.status,
         }))
       );
 
-      if (pastScheduledAppointments.length > 0) {
+      if (pastApprovedAppointments.length > 0) {
         console.log(
-          `Auto-completing ${pastScheduledAppointments.length} past appointments`
+          `Auto-completing ${pastApprovedAppointments.length} past appointments`
         );
 
-        const updatePromises = pastScheduledAppointments.map((appt) =>
+        const updatePromises = pastApprovedAppointments.map((appt) =>
           supabase
             .from("appointments")
             .update({
@@ -163,10 +268,10 @@ export const appointmentService = {
 
         // Return updated appointments with new status
         return appointments.map((appt) => {
-          const isPastScheduled = pastScheduledAppointments.find(
+          const isPastApproved = pastApprovedAppointments.find(
             (p) => p.id === appt.id
           );
-          if (isPastScheduled) {
+          if (isPastApproved) {
             console.log(`Marking appointment ${appt.id} as completed`);
             return { ...appt, status: "completed" };
           }
@@ -184,22 +289,30 @@ export const appointmentService = {
   // Helper method to update past pending/requested appointments to expired
   async updatePastPendingAppointmentsToExpired(appointments) {
     try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      const now = new Date(); // Current time, not just date
       const pendingLike = new Set(["pending", "requested", "request"]);
 
       const pastPending = appointments.filter((appt) => {
         if (!appt.appointment_date) return false;
         const status = (appt.status || "").toLowerCase().trim();
         if (!pendingLike.has(status)) return false;
-        const d = new Date(appt.appointment_date);
-        d.setHours(0, 0, 0, 0);
-        return d < today;
+        const appointmentDate = new Date(appt.appointment_date);
+        
+        // Log for debugging
+        console.log(`Checking appointment ${appt.id}:`, {
+          appointmentDate: appointmentDate.toISOString(),
+          now: now.toISOString(),
+          isPast: appointmentDate < now,
+          status: appt.status
+        });
+        
+        return appointmentDate < now;
       });
 
       if (pastPending.length > 0) {
         console.log(
-          `Auto-expiring ${pastPending.length} past pending appointments`
+          `Auto-expiring ${pastPending.length} past pending appointments`,
+          pastPending.map(a => ({ id: a.id, date: a.appointment_date }))
         );
         const updatePromises = pastPending.map((appt) =>
           supabase
@@ -251,27 +364,50 @@ export const appointmentService = {
         );
       });
 
-      // Get patient names
+      // Get patient names AND verify they are still assigned to this psychologist
       const patientIds = requestRows
         .map((appt) => appt.user_id)
         .filter(Boolean);
       let patientNames = {};
+      let currentlyAssignedPatientIds = new Set();
 
       if (patientIds.length > 0) {
         const { data: profiles } = await supabase
           .from("user_profiles")
-          .select("id, first_name, last_name")
+          .select("id, first_name, last_name, assigned_psychologist_id")
           .in("id", patientIds);
+
+        console.log("Checking patient assignments for psychologist:", psychologistId);
+        console.log("Patient profiles found:", profiles);
 
         profiles?.forEach((profile) => {
           const fullName = [profile.first_name, profile.last_name]
             .filter(Boolean)
             .join(" ");
           patientNames[profile.id] = fullName || "Patient";
+          
+          console.log(`Patient ${profile.id} (${fullName}) assigned to:`, profile.assigned_psychologist_id);
+          console.log(`Does it match current psychologist ${psychologistId}?`, profile.assigned_psychologist_id === psychologistId);
+          
+          // Track which patients are currently assigned to this psychologist
+          if (profile.assigned_psychologist_id === psychologistId) {
+            currentlyAssignedPatientIds.add(profile.id);
+          }
         });
+        
+        console.log("Currently assigned patient IDs:", Array.from(currentlyAssignedPatientIds));
+        console.log("Total request rows before filtering:", requestRows.length);
       }
 
-      return requestRows.map((appt) => {
+      // Filter out requests from patients who are no longer assigned to this psychologist
+      const validRequests = requestRows.filter((appt) => 
+        currentlyAssignedPatientIds.has(appt.user_id)
+      );
+      
+      console.log("Valid requests after filtering:", validRequests.length);
+      console.log("Filtered out:", requestRows.length - validRequests.length, "requests from unassigned patients");
+
+      return validRequests.map((appt) => {
         // Show the explicit requested appointment date/time if provided
         const d = appt.appointment_date
           ? new Date(appt.appointment_date)
@@ -328,7 +464,7 @@ export const appointmentService = {
         .from("appointments")
         .select("id, appointment_date, status")
         .eq("psychologist_id", psychologistId)
-        .in("status", ["scheduled", "approved", "accepted"]) // Only check accepted appointments
+        .in("status", ["approved"]) // Only check approved appointments
         .gte("appointment_date", startWindow.toISOString())
         .lte("appointment_date", endWindow.toISOString());
 
@@ -365,8 +501,8 @@ export const appointmentService = {
 
       // If we're scheduling/accepting an appointment, check for conflicts first
       if (
-        status === "scheduled" ||
         status === "approved" ||
+        status === "scheduled" || // legacy
         status === "accepted"
       ) {
         // First get the appointment details to check for conflicts
@@ -473,22 +609,22 @@ export const appointmentService = {
         ...appointmentData,
       };
 
-      // Normalize appointment_date to UTC if provided without timezone info.
+      // Normalize appointment_date to handle Asia/Manila timezone consistently
       if (
         payload.appointment_date &&
         typeof payload.appointment_date === "string"
       ) {
         const s = payload.appointment_date;
         const hasTZ = /[zZ]|[\+\-]\d{2}:?\d{2}$/.test(s);
-        // If no timezone is present, assume Asia/Manila local time and convert to UTC ISO
+        // If no timezone is present, assume Asia/Manila local time (Philippines timezone)
         if (!hasTZ) {
-          // Accept formats like "YYYY-MM-DD HH:mm" or "YYYY-MM-DDTHH:mm" (optionally with :ss)
+          // Accept formats like "YYYY-MM-DD HH:mm" or "YYYY-MM-DDTHH:mm" 
           const normalized = s.trim().replace(" ", "T");
-          // Append Asia/Manila offset
-          const iso = new Date(
-            `${normalized}${normalized.includes(":") ? "" : "T00:00"}+08:00`
-          ).toISOString();
+          // Append Asia/Manila offset (+08:00) and convert to UTC ISO for database storage
+          const withTimezone = `${normalized}${normalized.includes(":") ? "" : "T00:00"}+08:00`;
+          const iso = new Date(withTimezone).toISOString();
           payload.appointment_date = iso;
+          console.log(`Timezone conversion: ${s} → ${withTimezone} → ${iso}`);
         }
       }
       const { data, error } = await supabase
