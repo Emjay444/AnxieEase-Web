@@ -71,9 +71,9 @@ const ForgotPasswordPage = () => {
       return;
     }
 
-    // Check OTP length (6 digits)
-    if (otp.length !== 6) {
-      setError("Please enter the 6-digit OTP from your email");
+    // Check OTP length (8 digits)
+    if (otp.length !== 8) {
+      setError("Please enter the 8-digit OTP from your email");
       return;
     }
 
@@ -110,8 +110,8 @@ const ForgotPasswordPage = () => {
           </h1>
           <p className="text-emerald-100 drop-shadow-sm">
             {!otpSent
-              ? "Enter your email and we will send you a 6-digit OTP code."
-              : "Check your email and enter the 6-digit OTP code."}
+              ? "Enter your email and we will send you an 8-digit OTP code."
+              : "Check your email and enter the 8-digit OTP code."}
           </p>
         </div>
 
@@ -194,12 +194,12 @@ const ForgotPasswordPage = () => {
                     id="otp"
                     value={otp}
                     onChange={(e) =>
-                      setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))
+                      setOtp(e.target.value.replace(/\D/g, "").slice(0, 8))
                     }
                     disabled={isVerifying}
                     className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors text-center text-lg font-mono tracking-widest"
-                    placeholder="000000"
-                    maxLength="6"
+                    placeholder="00000000"
+                    maxLength="8"
                     required
                     aria-label="OTP Code"
                   />
@@ -207,7 +207,7 @@ const ForgotPasswordPage = () => {
                     htmlFor="otp"
                     className="absolute left-10 top-3 text-gray-500 transition-all duration-200 pointer-events-none peer-focus:-top-2 peer-focus:left-2 peer-focus:text-emerald-600 peer-focus:text-sm peer-focus:bg-white peer-focus:px-1 peer-valid:-top-2 peer-valid:left-2 peer-valid:text-emerald-600 peer-valid:text-sm peer-valid:bg-white peer-valid:px-1"
                   >
-                    6-Digit OTP
+                    8-Digit OTP
                   </label>
                 </div>
               </div>
@@ -215,7 +215,7 @@ const ForgotPasswordPage = () => {
               {/* Verify Button */}
               <button
                 type="submit"
-                disabled={isVerifying || otp.length !== 6}
+                disabled={isVerifying || otp.length !== 8}
                 className="w-full btn-gradient text-white py-3 px-4 rounded-lg font-medium hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"
               >
                 {isVerifying ? (

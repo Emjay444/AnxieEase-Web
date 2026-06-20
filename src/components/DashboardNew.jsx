@@ -29,6 +29,7 @@ import { appointmentService } from "../services/appointmentService";
 import { supabase } from "../services/supabaseClient";
 import ProfilePicture from "./ProfilePicture";
 import LogoutButton from "./LogoutButton";
+import { getFullNameParts } from "../utils/helpers";
 
 // Top-level, memoized Profile modal to avoid remounts on parent re-render
 const ProfileModal = React.memo(
@@ -903,9 +904,7 @@ const DashboardNew = () => {
         // Debug: Check all psychologists to see if there's a match
         const { data: allPsychologists, error: allPsychError } = await supabase
           .from("psychologists")
-          .select(
-            "id, user_id, first_name, middle_name, last_name, email, is_active"
-          );
+          .select("id, user_id, name, email, is_active");
 
         console.log("All psychologists in database:", allPsychologists);
         console.log("Looking for user_id match:", user.id);
@@ -914,7 +913,7 @@ const DashboardNew = () => {
         const { data: psychologist, error: psychError } = await supabase
           .from("psychologists")
           .select(
-            "id, first_name, middle_name, last_name, email, contact, license_number, sex, avatar_url, bio, specialization, is_active"
+            "id, name, email, contact, license_number, sex, avatar_url, bio, is_active"
           )
           .eq("user_id", user.id)
           .single();
@@ -967,9 +966,7 @@ const DashboardNew = () => {
         }
 
         console.log("Found psychologist:", psychologist);
-        console.log("Psychologist first_name:", psychologist.first_name);
-        console.log("Psychologist last_name:", psychologist.last_name);
-        // Legacy `name` may be present during transition; prefer split fields
+        console.log("Psychologist name:", psychologist.name);
         console.log("Psychologist gender (sex) value:", psychologist.sex);
 
         // Use the psychologist's ID to load their data
@@ -1024,10 +1021,13 @@ const DashboardNew = () => {
         setCalendarReloadKey((prev) => prev + 1);
 
         // Update profile form with psychologist data
+        // The psychologists table only stores a single `name` column; split it
+        // into parts so the existing first/middle/last name inputs keep working
+        const nameParts = getFullNameParts(psychologist.name);
         const updatedProfileForm = {
-          first_name: psychologist.first_name || "",
-          middle_name: psychologist.middle_name || "",
-          last_name: psychologist.last_name || "",
+          first_name: nameParts.first_name || "",
+          middle_name: nameParts.middle_name || "",
+          last_name: nameParts.last_name || "",
           email: psychologist.email || "",
           phone: psychologist.contact || "",
           license_number: psychologist.license_number || "",
@@ -1199,10 +1199,18 @@ const DashboardNew = () => {
       }
 
       // Prepare the update data
+      // The psychologists table only has a single `name` column, so combine
+      // the first/middle/last name inputs back into one value before saving
+      const combinedName = [
+        profileForm.first_name.trim(),
+        profileForm.middle_name?.trim(),
+        profileForm.last_name.trim(),
+      ]
+        .filter(Boolean)
+        .join(" ");
+
       const updateData = {
-        first_name: profileForm.first_name.trim(),
-        middle_name: profileForm.middle_name?.trim() || null,
-        last_name: profileForm.last_name.trim(),
+        name: combinedName,
         contact: profileForm.phone.trim(),
         license_number: profileForm.license_number.trim(),
         bio: profileForm.bio?.trim() || null,
@@ -1228,11 +1236,12 @@ const DashboardNew = () => {
       console.log("Profile updated successfully:", updatedData);
 
       // Update the local profile form with the returned data
+      const updatedNameParts = getFullNameParts(updatedData.name);
       setProfileForm((prev) => ({
         ...prev,
-        first_name: updatedData.first_name || "",
-        middle_name: updatedData.middle_name || "",
-        last_name: updatedData.last_name || "",
+        first_name: updatedNameParts.first_name || "",
+        middle_name: updatedNameParts.middle_name || "",
+        last_name: updatedNameParts.last_name || "",
         phone: updatedData.contact || "",
         license_number: updatedData.license_number || "",
         bio: updatedData.bio || "",

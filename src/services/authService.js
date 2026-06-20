@@ -109,10 +109,12 @@ export const authService = {
         );
       }
 
-      // Get user role from metadata or from the database
-      const role =
-        data.user?.user_metadata?.role ||
-        (await this.getUserRole(data.user.id));
+      // Get user role: an active row in the psychologists table is the source
+      // of truth (auth metadata can be stale, e.g. still say "patient" after
+      // an admin invite), then fall back to metadata or the database lookup
+      const role = psychologist
+        ? "psychologist"
+        : data.user?.user_metadata?.role || (await this.getUserRole(data.user.id));
 
       // Check if this user is a patient - patients cannot sign in
       if (role === "patient") {
@@ -121,11 +123,11 @@ export const authService = {
         throw new Error("Invalid login credentials");
       }
 
-      // Additional check in user_profiles table if no role found
+      // Additional check in users table if no role found
       if (!role) {
         try {
           const { data: userProfile, error: profileError } = await supabase
-            .from("user_profiles")
+            .from("users")
             .select("role")
             .eq("email", email)
             .single();
@@ -316,36 +318,13 @@ export const authService = {
 
       console.log("User metadata role:", metaRole);
 
-      // Prefer explicit role from metadata for admin only, but verify against admins table.
-      // Do NOT trust 'psychologist' in metadata because invite/magic-link
-      // may attach it before setup completion. We'll verify via DB below.
+      // There is no admin_profiles table in this project - the admin account
+      // is created directly in Supabase Auth with user_metadata.role = "admin".
+      // Trust that metadata role directly instead of verifying against a
+      // table that doesn't exist (that lookup would always fail and lock
+      // the admin out).
       if (metaRole === "admin") {
-        // Verify user exists in admin_profiles table
-        console.log(
-          "Verifying admin status against admin_profiles table for user:",
-          userId
-        );
-        const { data: adminProfile, error: adminError } = await supabase
-          .from("admin_profiles")
-          .select("id")
-          .eq("id", userId)
-          .single();
-
-        if (adminError) {
-          console.log("Admin lookup error:", adminError.message);
-          // If user has admin metadata but not in admin_profiles table, they're not a valid admin
-          if (adminError.code === "PGRST116") {
-            // Row not found
-            console.log(
-              "User has admin metadata but not found in admin_profiles table - access denied"
-            );
-            return null;
-          }
-          // For other errors, fall through to psychologist check
-        } else if (adminProfile) {
-          console.log("User verified as admin in admin_profiles table");
-          return "admin";
-        }
+        return "admin";
       }
       // ignore other metadata roles here; fall through to DB check
 
@@ -423,8 +402,7 @@ export const authService = {
           {
             id: authData.user.id,
             user_id: authData.user.id,
-            first_name: nameParts[0] || "",
-            last_name: nameParts.slice(1).join(" ") || "",
+            name,
             email,
             is_active: true,
           },

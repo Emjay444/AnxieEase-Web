@@ -118,8 +118,8 @@ const ChangePasswordOTPModal = ({
 
   // Step 2: Verify OTP and update password
   const handleVerifyAndUpdate = async () => {
-    if (!formData.otp || formData.otp.length !== 6) {
-      setError("Please enter the 6-digit OTP from your email");
+    if (!formData.otp || formData.otp.length !== 8) {
+      setError("Please enter the 8-digit OTP from your email");
       return;
     }
 
@@ -389,7 +389,7 @@ const ChangePasswordOTPModal = ({
                 OTP sent to <strong>{userEmail}</strong>
               </p>
               <p className="text-xs text-gray-500 mt-1">
-                Enter the 6-digit code to complete password change
+                Enter the 8-digit code to complete password change
               </p>
             </div>
 
@@ -404,12 +404,12 @@ const ChangePasswordOTPModal = ({
                 onChange={(e) =>
                   handleFormChange(
                     "otp",
-                    e.target.value.replace(/\D/g, "").slice(0, 6)
+                    e.target.value.replace(/\D/g, "").slice(0, 8)
                   )
                 }
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-center text-lg font-mono tracking-widest"
-                placeholder="000000"
-                maxLength="6"
+                placeholder="00000000"
+                maxLength="8"
                 disabled={loading}
               />
             </div>
@@ -417,7 +417,7 @@ const ChangePasswordOTPModal = ({
             {/* Verify and Update Button */}
             <button
               onClick={handleVerifyAndUpdate}
-              disabled={loading || formData.otp.length !== 6}
+              disabled={loading || formData.otp.length !== 8}
               className="w-full px-4 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
             >
               {loading ? (

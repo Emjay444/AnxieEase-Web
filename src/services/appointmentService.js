@@ -74,7 +74,7 @@ export const appointmentService = {
 
       if (patientIds.length > 0) {
         const { data: profiles } = await supabase
-          .from("user_profiles")
+          .from("users")
           .select("id, first_name, last_name, assigned_psychologist_id")
           .in("id", patientIds);
 
@@ -373,7 +373,7 @@ export const appointmentService = {
 
       if (patientIds.length > 0) {
         const { data: profiles } = await supabase
-          .from("user_profiles")
+          .from("users")
           .select("id, first_name, last_name, assigned_psychologist_id")
           .in("id", patientIds);
 

@@ -1,6 +1,6 @@
 import { supabase } from "./supabaseClient";
 import { adminService } from "./adminService";
-import { getFullName, getFullNameParts } from "../utils/helpers";
+import { getFullName } from "../utils/helpers";
 
 // In-memory storage for development - will be removed once database works
 const mockStorage = {
@@ -25,49 +25,36 @@ export const psychologistService = {
         const formattedPsychologists = psychologists.map((psych) => ({
           id: psych.id,
           user_id: psych.user_id,
-          name:
-            `${psych.first_name || ""} ${psych.middle_name || ""} ${
-              psych.last_name || ""
-            }`.trim() ||
-            psych.name || // Fallback to legacy name field
-            psych.email?.split("@")[0] ||
-            "Psychologist",
-          first_name: psych.first_name,
-          middle_name: psych.middle_name,
-          last_name: psych.last_name,
+          name: psych.name || psych.email?.split("@")[0] || "Psychologist",
           email: psych.email,
           contact: psych.contact,
-          specialization: psych.specialization,
-          license_number: psych.license_number,
-          sex: psych.sex,
-          birth_date: psych.birth_date,
+          specialization: "General Psychologist", // No specialization column in DB; use fallback
+          bio: psych.bio || null,
+          license_number: psych.license_number || null,
+          sex: psych.sex || null,
           is_active: psych.is_active,
           created_at: psych.created_at,
           updated_at: psych.updated_at,
           avatar_url: psych.avatar_url || null, // Include avatar_url from psychologists table
-          // Add missing fields for gender and birth date display
-          sex: psych.sex || null,
-          birth_date: psych.birth_date || null,
-          license_number: psych.license_number || null,
         }));
         allPsychologists.push(...formattedPsychologists);
       }
 
-      // Also get psychologists from user_profiles table (for any legacy entries)
+      // Also get psychologists from the users table (for any legacy entries)
       const { data: userProfiles, error: userProfilesError } = await supabase
-        .from("user_profiles")
+        .from("users")
         .select("*")
         .eq("role", "psychologist")
         .order("created_at", { ascending: false });
 
       if (!userProfilesError && userProfiles && userProfiles.length > 0) {
-        // Add user_profiles psychologists that are not already in the list (avoid duplicates by email)
+        // Add legacy psychologists that are not already in the list (avoid duplicates by email)
         const existingEmails = new Set(allPsychologists.map((p) => p.email));
         const uniqueUserProfiles = userProfiles.filter(
           (p) => !existingEmails.has(p.email)
         );
 
-        // Format user_profiles data to match expected psychologist structure
+        // Format users-table data to match expected psychologist structure
         const formattedUserProfiles = uniqueUserProfiles.map((user) => ({
           id: user.id,
           user_id: user.id,
@@ -82,11 +69,10 @@ export const psychologistService = {
           last_name: user.last_name,
           email: user.email,
           contact: user.contact_number,
-          specialization: user.specialization,
+          specialization: "General Psychologist", // No specialization column in DB; use fallback
           is_active: user.is_email_verified || true,
           created_at: user.created_at,
           updated_at: user.updated_at,
-          avatar_url: user.avatar_url || null, // Include avatar_url from user_profiles
         }));
         allPsychologists.push(...formattedUserProfiles);
       }
@@ -128,7 +114,7 @@ export const psychologistService = {
   async getPsychologistPatients(psychologistId) {
     try {
       const { data, error } = await supabase
-        .from("user_profiles")
+        .from("users")
         .select("*")
         .eq("role", "patient")
         .eq("assigned_psychologist_id", psychologistId);
@@ -156,7 +142,7 @@ export const psychologistService = {
           email: user.email || "No email",
           contact_number: user.contact_number || null,
           emergency_contact: user.emergency_contact || null,
-          gender: user.sex || null,
+          gender: user.gender || null,
           birth_date: user.birth_date || null,
           age: age,
           assigned_psychologist_id: psychologistId,
@@ -168,7 +154,6 @@ export const psychologistService = {
             minute: "2-digit",
             hour12: true,
           }),
-          avatar_url: user.avatar_url || null, // Include avatar_url in the returned data
         };
       });
     } catch (error) {
@@ -180,19 +165,37 @@ export const psychologistService = {
   // Create a new psychologist
   async createPsychologist(psychologistData) {
     try {
+      // Normalize email: Supabase Auth always lowercases emails, so the
+      // psychologists row must match or the setup-completion lookup
+      // (which matches by the auth session's email) will never find it
+      // and will insert a duplicate, blank, inactive row instead.
+      const normalizedEmail = psychologistData.email?.trim().toLowerCase();
+
+      // Check for an existing psychologist with this email before sending
+      // the invite - otherwise the invite email goes out even when the
+      // insert below is about to fail on a duplicate.
+      const { data: existing } = await supabase
+        .from("psychologists")
+        .select("id")
+        .eq("email", normalizedEmail)
+        .maybeSingle();
+
+      if (existing) {
+        throw new Error("A psychologist with this email already exists");
+      }
+
       // Generate a UUID for the psychologist
       const psychologistId = crypto.randomUUID();
 
-      // Parse name inputs; supports either `name` or split fields
-      const parsed = getFullNameParts({
-        first_name: psychologistData.first_name,
-        middle_name: psychologistData.middle_name,
-        last_name: psychologistData.last_name,
-      });
-      const fullNameForLogs = getFullName({
-        ...parsed,
-        email: psychologistData.email,
-      });
+      // Combine name inputs; supports either `name` or split first/middle/last fields
+      const fullNameForLogs =
+        psychologistData.name ||
+        getFullName({
+          first_name: psychologistData.first_name,
+          middle_name: psychologistData.middle_name,
+          last_name: psychologistData.last_name,
+          email: normalizedEmail,
+        });
 
       // Create the psychologist record and send email in parallel for better performance
       const [psychResult, emailResult] = await Promise.allSettled([
@@ -202,13 +205,9 @@ export const psychologistService = {
           .insert([
             {
               id: psychologistId,
-              // Prefer split fields; transition trigger keeps legacy `name` in sync
-              first_name: parsed.first_name || null,
-              middle_name: parsed.middle_name || null,
-              last_name: parsed.last_name || null,
-              email: psychologistData.email,
+              name: fullNameForLogs,
+              email: normalizedEmail,
               contact: psychologistData.contact,
-              birth_date: psychologistData.birthdate || null,
               license_number: psychologistData.licenseNumber,
               sex: psychologistData.sex,
               is_active:
@@ -221,23 +220,22 @@ export const psychologistService = {
 
         // Send magic link with setup URL
         supabase.auth.signInWithOtp({
-          email: psychologistData.email,
+          email: normalizedEmail,
           options: {
             // Include query parameters in the redirect URL for better persistence
             emailRedirectTo: `${
               import.meta.env.VITE_APP_URL || window.location.origin
             }/psychologist-setup?email=${encodeURIComponent(
-              psychologistData.email
+              normalizedEmail
             )}&psychologist_id=${encodeURIComponent(
               psychologistId
             )}&source=admin_invite&setup=true&flow=account_creation`,
-            // Extend magic link expiration to 24 hours (86400 seconds) for better user experience
             shouldCreateUser: true, // Create a new auth user for the magic link to work
             data: {
               role: "psychologist",
               psychologistId: psychologistId,
               name: fullNameForLogs,
-              email: psychologistData.email,
+              email: normalizedEmail,
               setupMode: true, // Flag to indicate this is a setup session
             },
           },
@@ -325,34 +323,33 @@ export const psychologistService = {
       if (updates.contact !== undefined) {
         psychologistUpdates.contact = updates.contact;
       }
-      if (updates.specialization !== undefined) {
-        psychologistUpdates.specialization = updates.specialization;
-      }
       if (updates.is_active !== undefined) {
         psychologistUpdates.is_active = updates.is_active;
       }
+      if (updates.license_number !== undefined) {
+        psychologistUpdates.license_number = updates.license_number;
+      }
+      if (updates.sex !== undefined) {
+        psychologistUpdates.sex = updates.sex;
+      }
+      if (updates.avatar_url !== undefined) {
+        psychologistUpdates.avatar_url = updates.avatar_url;
+      }
+      if (updates.bio !== undefined) {
+        psychologistUpdates.bio = updates.bio;
+      }
 
-      // Add individual name fields if provided
-      if (updates.first_name !== undefined) {
-        psychologistUpdates.first_name = updates.first_name;
-      }
-      if (updates.middle_name !== undefined) {
-        psychologistUpdates.middle_name = updates.middle_name;
-      }
-      if (updates.last_name !== undefined) {
-        psychologistUpdates.last_name = updates.last_name;
-      }
-
-      // Legacy support: Parse name into components if provided and individual fields aren't
-      if (
-        updates.name &&
-        updates.name.trim() &&
-        !updates.first_name &&
-        !updates.last_name
-      ) {
-        const nameParts = updates.name.trim().split(" ");
-        psychologistUpdates.first_name = nameParts[0] || "";
-        psychologistUpdates.last_name = nameParts.slice(1).join(" ") || "";
+      // Name: prefer explicit `name`; fall back to combining split fields for legacy callers
+      if (updates.name !== undefined && updates.name.trim()) {
+        psychologistUpdates.name = updates.name.trim();
+      } else if (updates.first_name || updates.last_name) {
+        psychologistUpdates.name = [
+          updates.first_name,
+          updates.middle_name,
+          updates.last_name,
+        ]
+          .filter(Boolean)
+          .join(" ");
       }
 
       console.log("Updating psychologist with data:", psychologistUpdates);
@@ -424,7 +421,7 @@ export const psychologistService = {
     try {
       // First, check if psychologist has any assigned patients
       const { data: assignedPatients, error: patientsError } = await supabase
-        .from("user_profiles")
+        .from("users")
         .select("id, first_name, last_name")
         .eq("role", "patient")
         .eq("assigned_psychologist_id", id);
@@ -455,7 +452,7 @@ export const psychologistService = {
       // Get the psychologist details first for the activity log
       const { data: psychologist, error: fetchError } = await supabase
         .from("psychologists")
-        .select("first_name, middle_name, last_name, email")
+        .select("name, email")
         .eq("id", id)
         .single();
 
@@ -517,7 +514,7 @@ export const psychologistService = {
     try {
       // First, check if psychologist has any assigned patients
       const { data: assignedPatients, error: patientsError } = await supabase
-        .from("user_profiles")
+        .from("users")
         .select("id, first_name, last_name")
         .eq("role", "patient")
         .eq("assigned_psychologist_id", id);
@@ -594,7 +591,7 @@ export const psychologistService = {
 
       // Update the patient record in the user_profiles table
       const { data, error } = await supabase
-        .from("user_profiles")
+        .from("users")
         .update({ assigned_psychologist_id: psychologistId })
         .eq("id", patientId)
         .select("first_name, last_name");
@@ -617,7 +614,7 @@ export const psychologistService = {
         // Try to get psychologist name from the psychologists table
         const { data: psychData, error: psychError } = await supabase
           .from("psychologists")
-          .select("first_name, middle_name, last_name")
+          .select("name")
           .eq("id", psychologistId)
           .single();
 
@@ -672,7 +669,7 @@ export const psychologistService = {
       try {
         // Try to get patient data from the user_profiles table
         const { data: userData, error: userError } = await supabase
-          .from("user_profiles")
+          .from("users")
           .select("first_name, last_name, assigned_psychologist_id")
           .eq("id", patientId)
           .single();
@@ -688,7 +685,7 @@ export const psychologistService = {
           if (psychologistId) {
             const { data: psychData, error: psychError } = await supabase
               .from("psychologists")
-              .select("first_name, middle_name, last_name")
+              .select("name")
               .eq("id", psychologistId)
               .single();
 
@@ -704,7 +701,7 @@ export const psychologistService = {
 
       // Clear the psychologist reference in the user_profiles table
       const { data, error } = await supabase
-        .from("user_profiles")
+        .from("users")
         .update({ assigned_psychologist_id: null })
         .eq("id", patientId)
         .select();
@@ -738,8 +735,10 @@ export const psychologistService = {
       const { error } = await supabase
         .from("psychologists")
         // Link the auth user but keep inactive until setup is complete
+        // Case-insensitive match: Supabase Auth lowercases emails, but
+        // rows created before that normalization may still have mixed case
         .update({ user_id: userId })
-        .eq("email", email);
+        .ilike("email", email);
 
       if (error) {
         console.error("Update user_id error:", error.message);
@@ -749,7 +748,7 @@ export const psychologistService = {
       // Best-effort: mark the profile as verified/role psychologist if present
       try {
         await supabase
-          .from("user_profiles")
+          .from("users")
           .update({ is_email_verified: true, role: "psychologist" })
           .eq("email", email);
       } catch (e) {
@@ -770,7 +769,7 @@ export const psychologistService = {
       // Get psychologist details
       const { data: psychologist, error: fetchError } = await supabase
         .from("psychologists")
-        .select("first_name, middle_name, last_name, email")
+        .select("name, email")
         .eq("id", psychologistId)
         .single();
 
@@ -849,7 +848,7 @@ export const psychologistService = {
   async updateUserProfilesAsync(id, updates) {
     try {
       const { error: userProfileError } = await supabase
-        .from("user_profiles")
+        .from("users")
         .update({
           contact_number: updates.contact,
           // Parse name into components if provided

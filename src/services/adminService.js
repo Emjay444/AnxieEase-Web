@@ -1,4 +1,4 @@
-import { supabase } from "./supabaseClient";
+﻿import { supabase } from "./supabaseClient";
 import { getFullName } from "../utils/helpers";
 
 // Mock data for development
@@ -213,7 +213,7 @@ export const adminService = {
           // First try with 'id' column
           try {
             const { data, error } = await supabase
-              .from("user_profiles")
+              .from("users")
               .select("first_name, last_name, role")
               .eq("id", uuid)
               .maybeSingle();
@@ -225,7 +225,7 @@ export const adminService = {
             // Try with 'user_id' column if 'id' fails
             try {
               const { data, error } = await supabase
-                .from("user_profiles")
+                .from("users")
                 .select("first_name, last_name, role")
                 .eq("user_id", uuid)
                 .maybeSingle();
@@ -436,7 +436,7 @@ export const adminService = {
 
       // Get count of all patients from user_profiles table (role 'patient' or blank)
       const { data: patientsCount, error: patientsError } = await supabase
-        .from("user_profiles")
+        .from("users")
         .select("id", { count: "exact" })
         .or("role.eq.patient,role.is.null,role.eq.");
 
@@ -454,7 +454,7 @@ export const adminService = {
 
       // Get count of unassigned patients (role 'patient' or blank)
       const { data: unassignedCount, error: unassignedError } = await supabase
-        .from("user_profiles")
+        .from("users")
         .select("id", { count: "exact" })
         .or("role.eq.patient,role.is.null,role.eq.")
         .is("assigned_psychologist_id", null);
@@ -499,7 +499,7 @@ export const adminService = {
     try {
       // Query from the user_profiles table
       const { data, error } = await supabase
-        .from("user_profiles")
+        .from("users")
         .select("*")
         .or("role.eq.patient,role.is.null,role.eq.")
         .is("assigned_psychologist_id", null);
@@ -538,10 +538,10 @@ export const adminService = {
   async getAllUsers() {
     try {
       // Fetch from user_profiles without strict role filter
-      const { data, error } = await supabase.from("user_profiles").select(
+      const { data, error } = await supabase.from("users").select(
         `
           *,
-          psychologists:assigned_psychologist_id(first_name,middle_name,last_name)
+          psychologists:assigned_psychologist_id(name)
         `
       );
 
@@ -592,14 +592,13 @@ export const adminService = {
 
       return patients.map((patient) => ({
         id: patient.id,
-        avatar_url: patient.avatar_url || null,
         email:
           patient.email ||
           `${patient.first_name?.toLowerCase() || "user"}.${
             patient.last_name?.toLowerCase() || patient.id.substring(0, 8)
           }@anxieease.com`,
         contact_number: patient.contact_number || "No contact number",
-        gender: patient.sex || "Not specified",
+        gender: patient.gender || "Not specified",
         birth_date: patient.birth_date || "Not specified",
         name:
           [patient.first_name, patient.middle_name, patient.last_name]
@@ -630,7 +629,7 @@ export const adminService = {
     try {
       // First get patient name for the activity log
       const { data: patientData, error: patientError } = await supabase
-        .from("user_profiles")
+        .from("users")
         .select("first_name, last_name")
         .eq("id", patientId)
         .single();
@@ -645,7 +644,7 @@ export const adminService = {
         // Try to get psychologist name from psychologists table first
         const { data: psychData, error: psychError } = await supabase
           .from("psychologists")
-          .select("first_name, middle_name, last_name")
+          .select("name")
           .eq("id", psychologistId)
           .single();
 
@@ -656,7 +655,7 @@ export const adminService = {
           );
           // Fallback: try to get from user_profiles table
           const { data: userPsychData, error: userPsychError } = await supabase
-            .from("user_profiles")
+            .from("users")
             .select("first_name, last_name")
             .eq("id", psychologistId)
             .maybeSingle();
@@ -681,7 +680,7 @@ export const adminService = {
 
       // Now update the assignment
       const { data, error } = await supabase
-        .from("user_profiles")
+        .from("users")
         .update({ assigned_psychologist_id: psychologistId })
         .eq("id", patientId)
         .select("first_name, last_name");
@@ -746,8 +745,8 @@ export const adminService = {
     try {
       // Get gender distribution
       const { data: genderData, error: genderError } = await supabase
-        .from("user_profiles")
-        .select("sex")
+        .from("users")
+        .select("gender")
         .eq("role", "patient");
 
       if (genderError) {
@@ -756,7 +755,7 @@ export const adminService = {
 
       // Get age distribution (calculate from birth_date)
       const { data: ageData, error: ageError } = await supabase
-        .from("user_profiles")
+        .from("users")
         .select("birth_date")
         .eq("role", "patient")
         .not("birth_date", "is", null);
@@ -768,7 +767,7 @@ export const adminService = {
       // Get monthly registrations for specified year
       const { data: registrationData, error: registrationError } =
         await supabase
-          .from("user_profiles")
+          .from("users")
           .select("created_at")
           .eq("role", "patient")
           .gte("created_at", `${year}-01-01`)
@@ -790,7 +789,7 @@ export const adminService = {
 
       if (genderData) {
         genderData.forEach((user) => {
-          const gender = user.sex?.toLowerCase();
+          const gender = user.gender?.toLowerCase();
           if (gender === "male" || gender === "m") {
             genderStats.male++;
           } else if (gender === "female" || gender === "f") {

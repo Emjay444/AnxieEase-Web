@@ -83,15 +83,13 @@ export const patientService = {
   async getPatientsByPsychologist(psychologistId) {
     try {
       const { data, error } = await supabase
-        .from("user_profiles")
+        .from("users")
         .select(
           `
           *,
           psychologists:assigned_psychologist_id (
             id,
-            first_name,
-            middle_name,
-            last_name,
+            name,
             email
           )
         `
@@ -135,7 +133,7 @@ export const patientService = {
               hour12: true,
             }),
             // Add additional fields for dashboard display
-            gender: user.sex || null,
+            gender: user.gender || null,
             contact_number: user.contact_number || null,
             emergency_contact: user.emergency_contact || null,
             birth_date: user.birth_date || null,
@@ -155,8 +153,8 @@ export const patientService = {
   async getAllPatients() {
     try {
       const { data, error } = await supabase
-        .from("user_profiles")
-        .select("*, psychologists(first_name, middle_name, last_name, email)")
+        .from("users")
+        .select("*, psychologists(name, email)")
         .eq("role", "patient");
 
       if (error) {
@@ -174,15 +172,13 @@ export const patientService = {
   async getPatientById(patientId) {
     try {
       const { data, error } = await supabase
-        .from("user_profiles")
+        .from("users")
         .select(
           `
           *,
           psychologists:assigned_psychologist_id (
             id,
-            first_name,
-            middle_name,
-            last_name,
+            name,
             email
           )
         `
@@ -215,9 +211,7 @@ export const patientService = {
           ? {
               ...data.psychologists,
               name:
-                `${data.psychologists.first_name || ""} ${
-                  data.psychologists.middle_name || ""
-                } ${data.psychologists.last_name || ""}`.trim() ||
+                data.psychologists.name ||
                 data.psychologists.email?.split("@")[0],
             }
           : data.psychologists,
@@ -247,9 +241,7 @@ export const patientService = {
           *,
           psychologists:psychologist_id (
             id,
-            first_name,
-            middle_name,
-            last_name,
+            name,
             email
           )
         `

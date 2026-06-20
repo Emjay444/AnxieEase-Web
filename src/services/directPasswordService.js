@@ -126,8 +126,12 @@ export const directPasswordService = {
       };
 
       // First, check if psychologist exists
+      // Case-insensitive + URL-encoded: Supabase Auth lowercases emails, and
+      // raw "+" in an email would otherwise be decoded as a space by PostgREST
       const checkResponse = await authedFetch(
-        `${SUPABASE_URL}/rest/v1/psychologists?email=eq.${email}&select=id,is_active`,
+        `${SUPABASE_URL}/rest/v1/psychologists?email=ilike.${encodeURIComponent(
+          email
+        )}&select=id,is_active`,
         {
           method: "GET",
           headers: { "Content-Type": "application/json" },
@@ -221,7 +225,7 @@ export const directPasswordService = {
       // Step 3: Update user profile
       try {
         const profileResponse = await fetch(
-          `${SUPABASE_URL}/rest/v1/user_profiles?email=eq.${email}`,
+          `${SUPABASE_URL}/rest/v1/users?email=eq.${email}`,
           {
             method: "PATCH",
             headers: {

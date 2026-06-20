@@ -19,7 +19,7 @@ class DeviceService {
           status,
           battery_level,
           last_seen_at,
-          user_profiles (
+          users (
             id,
             first_name,
             last_name
@@ -55,14 +55,14 @@ class DeviceService {
 
       // Use joined profile only if it has actual name fields
       let assignedProfile =
-        device.user_profiles &&
-        (device.user_profiles.first_name || device.user_profiles.last_name)
-          ? device.user_profiles
+        device.users &&
+        (device.users.first_name || device.users.last_name)
+          ? device.users
           : null;
       // Fallback: if user_id exists but join returned empty/missing names, fetch profile directly
       if (!assignedProfile && device.user_id) {
         const { data: profile } = await supabase
-          .from("user_profiles")
+          .from("users")
           .select("id, first_name, last_name")
           .eq("id", device.user_id)
           .single();
@@ -96,10 +96,8 @@ class DeviceService {
   async getAvailableUsers() {
     try {
       const { data: users, error } = await supabase
-        .from("user_profiles")
-        .select(
-          "id, first_name, last_name, middle_name, email, avatar_url, role"
-        )
+        .from("users")
+        .select("id, first_name, last_name, middle_name, email, role")
         .eq("role", "patient")
         .order("first_name");
 

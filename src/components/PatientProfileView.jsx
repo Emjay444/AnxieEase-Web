@@ -1505,11 +1505,7 @@ const PatientProfileView = ({ patient, onBack, psychologistId }) => {
                                 {note.psychologists && (
                                   <span className="text-emerald-600 font-medium">
                                     By:{" "}
-                                    {`${note.psychologists.first_name || ""} ${
-                                      note.psychologists.middle_name || ""
-                                    } ${
-                                      note.psychologists.last_name || ""
-                                    }`.trim() ||
+                                    {note.psychologists.name ||
                                       note.psychologists.email?.split("@")[0] ||
                                       "Psychologist"}
                                   </span>

@@ -148,7 +148,7 @@ export const psychologistSetupService = {
         const { data: psychRow, error: fetchPsychErr } = await supabase
           .from("psychologists")
           .select("id, email, is_active, user_id")
-          .eq("email", email)
+          .ilike("email", email)
           .maybeSingle();
 
         if (fetchPsychErr) {
@@ -208,7 +208,7 @@ export const psychologistSetupService = {
           }
         }
 
-        // Note: user_profiles is for patients only
+        // Note: the users table is for patients only
         // Psychologists are stored in the psychologists table only
 
         // Best-effort: persist role in auth metadata too

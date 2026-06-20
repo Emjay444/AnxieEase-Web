@@ -225,12 +225,9 @@ const AdminPanelNew = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showOptionsMenu, setShowOptionsMenu] = useState(null);
   const [editFormData, setEditFormData] = useState({
-    first_name: "",
-    middle_name: "",
-    last_name: "",
+    name: "",
     email: "",
     contact: "",
-    specialization: "",
   });
   const [isUpdatingPsychologist, setIsUpdatingPsychologist] = useState(false);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
@@ -772,24 +769,10 @@ const AdminPanelNew = () => {
       // Close the modal immediately but keep loading state
       setShowAddPsychologistModal(false);
 
-      // Map the name fields from AddDoctorModal format to service format
-      const mappedPsychologist = {
-        ...psychologistWithStatus,
-        first_name:
-          psychologistWithStatus.firstName || psychologistWithStatus.first_name,
-        middle_name:
-          psychologistWithStatus.middleName ||
-          psychologistWithStatus.middle_name,
-        last_name:
-          psychologistWithStatus.lastName || psychologistWithStatus.last_name,
-        // Clean up the old format fields to avoid confusion
-        firstName: undefined,
-        middleName: undefined,
-        lastName: undefined,
-      };
-
+      // AddDoctorModal already builds a combined `name` field, which is the
+      // only name column the psychologists table has
       const newPsychologist = await psychologistService.createPsychologist(
-        mappedPsychologist
+        psychologistWithStatus
       );
 
       // Run these operations in parallel for better performance
@@ -856,11 +839,8 @@ const AdminPanelNew = () => {
   const handleEditPsychologist = (psychologist) => {
     setSelectedPsychologist(psychologist);
     setEditFormData({
-      first_name: psychologist.first_name || "",
-      middle_name: psychologist.middle_name || "",
-      last_name: psychologist.last_name || "",
+      name: psychologist.name || "",
       contact: psychologist.contact || "",
-      specialization: psychologist.specialization || "",
     });
     setShowEditModal(true);
   };
@@ -871,22 +851,16 @@ const AdminPanelNew = () => {
 
       console.log("Updating psychologist with data:", {
         id: selectedPsychologist.id,
-        first_name: editFormData.first_name,
-        middle_name: editFormData.middle_name,
-        last_name: editFormData.last_name,
+        name: editFormData.name,
         contact: editFormData.contact,
-        specialization: editFormData.specialization,
       });
 
       // Update in the database with timeout
       const updatePromise = psychologistService.updatePsychologist(
         selectedPsychologist.id,
         {
-          first_name: editFormData.first_name,
-          middle_name: editFormData.middle_name,
-          last_name: editFormData.last_name,
+          name: editFormData.name,
           contact: editFormData.contact,
-          specialization: editFormData.specialization,
         }
       );
 
@@ -902,15 +876,10 @@ const AdminPanelNew = () => {
 
       console.log("Update successful:", updatedPsychologist);
 
-      // Update local state with the individual name fields
+      // Update local state with the updated name/contact
       setPsychologists((prev) =>
         prev.map((p) =>
-          p.id === selectedPsychologist.id
-            ? {
-                ...p,
-                ...editFormData, // This now contains first_name, middle_name, last_name directly
-              }
-            : p
+          p.id === selectedPsychologist.id ? { ...p, ...editFormData } : p
         )
       );
 
@@ -1208,7 +1177,7 @@ const AdminPanelNew = () => {
                 psychologist.is_active ? "text-gray-600" : "text-gray-400"
               }`}
             >
-              {psychologist.specialization || ""}
+              {psychologist.specialization || "General Psychologist"}
             </p>
           </div>
         </div>
@@ -3193,11 +3162,10 @@ const AdminPanelNew = () => {
                         <h3 className="text-3xl font-bold text-gray-900 mb-2">
                           {getFullName(selectedPsychologist)}
                         </h3>
-                        {selectedPsychologist.specialization && (
-                          <p className="text-emerald-700 font-semibold text-lg mb-4 bg-emerald-50 px-4 py-2 rounded-xl inline-block">
-                            {selectedPsychologist.specialization}
-                          </p>
-                        )}
+                        <p className="text-emerald-700 font-semibold text-lg mb-4 bg-emerald-50 px-4 py-2 rounded-xl inline-block">
+                          {selectedPsychologist.specialization ||
+                            "General Psychologist"}
+                        </p>
                         <div className="flex flex-wrap gap-3 justify-center md:justify-start">
                           <span
                             className={`inline-flex items-center px-4 py-2 rounded-xl text-sm font-semibold shadow-sm ${
@@ -3517,59 +3485,22 @@ const AdminPanelNew = () => {
             </div>
 
             <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">
-                    First Name *
-                  </label>
-                  <input
-                    type="text"
-                    value={editFormData.first_name}
-                    onChange={(e) =>
-                      setEditFormData({
-                        ...editFormData,
-                        first_name: e.target.value,
-                      })
-                    }
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-gray-50/50 transition-all duration-200 hover:bg-white"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">
-                    Middle Name
-                  </label>
-                  <input
-                    type="text"
-                    value={editFormData.middle_name}
-                    onChange={(e) =>
-                      setEditFormData({
-                        ...editFormData,
-                        middle_name: e.target.value,
-                      })
-                    }
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-gray-50/50 transition-all duration-200 hover:bg-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">
-                    Last Name *
-                  </label>
-                  <input
-                    type="text"
-                    value={editFormData.last_name}
-                    onChange={(e) =>
-                      setEditFormData({
-                        ...editFormData,
-                        last_name: e.target.value,
-                      })
-                    }
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-gray-50/50 transition-all duration-200 hover:bg-white"
-                    required
-                  />
-                </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">
+                  Full Name *
+                </label>
+                <input
+                  type="text"
+                  value={editFormData.name}
+                  onChange={(e) =>
+                    setEditFormData({
+                      ...editFormData,
+                      name: e.target.value,
+                    })
+                  }
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-gray-50/50 transition-all duration-200 hover:bg-white"
+                  required
+                />
               </div>
 
               <div>
@@ -3632,23 +3563,6 @@ const AdminPanelNew = () => {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">
-                  Specialization
-                </label>
-                <input
-                  type="text"
-                  value={editFormData.specialization}
-                  onChange={(e) =>
-                    setEditFormData({
-                      ...editFormData,
-                      specialization: e.target.value,
-                    })
-                  }
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-gray-50/50 transition-all duration-200 hover:bg-white"
-                  placeholder="e.g., Anxiety Disorders, Depression, PTSD"
-                />
-              </div>
             </div>
 
             <div className="flex justify-end space-x-4 pt-8 border-t border-gray-200 mt-8">
@@ -3661,11 +3575,7 @@ const AdminPanelNew = () => {
               </button>
               <button
                 onClick={handleSavePsychologistChanges}
-                disabled={
-                  isUpdatingPsychologist ||
-                  !editFormData.first_name.trim() ||
-                  !editFormData.last_name.trim()
-                }
+                disabled={isUpdatingPsychologist || !editFormData.name.trim()}
                 className="px-6 py-3 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-xl hover:from-emerald-700 hover:to-emerald-800 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center transition-all duration-200 font-medium"
               >
                 {isUpdatingPsychologist && (
@@ -4592,7 +4502,8 @@ const AdminPanelNew = () => {
                               {getFullName(psychologist)}
                             </div>
                             <div className="text-xs text-emerald-600 font-medium mb-1">
-                              {psychologist.specialization || "Psychologist"}
+                              {psychologist.specialization ||
+                                "General Psychologist"}
                             </div>
                             <div className="text-xs text-gray-500">
                               {psychologist.email}
