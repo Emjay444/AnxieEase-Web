@@ -95,7 +95,7 @@ export const adminSetupService = {
 
       const { error: insertError } = await supabase
         .from("admin_profiles")
-        .insert({
+        .upsert({
           id: session.user.id,
           email: email,
           full_name: fullName,

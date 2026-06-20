@@ -5,7 +5,7 @@ import { supabase } from "../services/supabaseClient";
 import LoadingSpinner from "./LoadingSpinner";
 
 export default function ProtectedRoute({ requireAdmin = false }) {
-  const { user, loading, userRole } = useAuth();
+  const { user, loading, userRole, hasPsychologistAccess } = useAuth();
   const [signingOut, setSigningOut] = useState(false);
   const [checkingUnknown, setCheckingUnknown] = useState(false);
   const [adminWaitExpired, setAdminWaitExpired] = useState(false);
@@ -156,7 +156,8 @@ export default function ProtectedRoute({ requireAdmin = false }) {
   if (
     userRole === "admin" &&
     !requireAdmin &&
-    window.location.pathname === "/dashboard"
+    window.location.pathname === "/dashboard" &&
+    !hasPsychologistAccess
   ) {
     console.log(
       "👨‍💼 ProtectedRoute: Admin user accessing dashboard, redirecting to admin"

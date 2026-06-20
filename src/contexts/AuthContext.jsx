@@ -15,6 +15,11 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [userRole, setUserRole] = useState(null);
+  // Independent of userRole: true when this account also has an active row
+  // in the psychologists table, regardless of whether its primary role
+  // resolved to "admin" or "psychologist". Lets a dual-access admin reach
+  // their psychologist dashboard without being redirected away.
+  const [hasPsychologistAccess, setHasPsychologistAccess] = useState(false);
   const [loading, setLoading] = useState(true);
   const [lastAuthEvent, setLastAuthEvent] = useState({
     event: null,
@@ -164,15 +169,21 @@ export const AuthProvider = ({ children }) => {
               setUserRole(null);
               clearCachedRole();
             }
+
+            setHasPsychologistAccess(
+              await authService.isActivePsychologist(session.user.id)
+            );
           } catch (validationError) {
             console.error("Error validating session:", validationError);
             // Clear everything on validation error
             setUser(null);
             setUserRole(null);
+            setHasPsychologistAccess(false);
             clearCachedRole();
           }
         } else {
           console.log("No existing session found");
+          setHasPsychologistAccess(false);
           clearCachedRole();
           setIsInitializing(false); // Mark initialization as complete even when no session
         }
@@ -308,9 +319,13 @@ export const AuthProvider = ({ children }) => {
                   setUserRole(null);
                   clearCachedRole();
                 }
+                setHasPsychologistAccess(
+                  await authService.isActivePsychologist(session.user.id)
+                );
               } catch (error) {
                 console.error("Error getting user role:", error);
                 setUserRole(null);
+                setHasPsychologistAccess(false);
                 clearCachedRole();
               }
             })();
@@ -368,9 +383,13 @@ export const AuthProvider = ({ children }) => {
                 setUserRole(null);
                 clearCachedRole();
               }
+              setHasPsychologistAccess(
+                await authService.isActivePsychologist(session.user.id)
+              );
             } catch (error) {
               console.error("Error validating user role after refresh:", error);
               setUserRole(null);
+              setHasPsychologistAccess(false);
               clearCachedRole();
             }
           })();
@@ -378,6 +397,7 @@ export const AuthProvider = ({ children }) => {
       } else if (event === "SIGNED_OUT") {
         setUser(null);
         setUserRole(null);
+        setHasPsychologistAccess(false);
         clearCachedRole();
         setLoading(false);
       }
@@ -402,6 +422,9 @@ export const AuthProvider = ({ children }) => {
       );
       setUser(authUser);
       setUserRole(role);
+      setHasPsychologistAccess(
+        await authService.isActivePsychologist(authUser.id)
+      );
 
       return { user: authUser, role };
     } catch (err) {
@@ -420,6 +443,7 @@ export const AuthProvider = ({ children }) => {
       await authService.signOut();
       setUser(null);
       setUserRole(null);
+      setHasPsychologistAccess(false);
 
       // Clear all cached role data to prevent stale authentication
       clearCachedRole();
@@ -445,6 +469,7 @@ export const AuthProvider = ({ children }) => {
   const value = {
     user,
     userRole,
+    hasPsychologistAccess,
     loading,
     error,
     signIn,

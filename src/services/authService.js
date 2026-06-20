@@ -109,12 +109,20 @@ export const authService = {
         );
       }
 
-      // Get user role: an active row in the psychologists table is the source
-      // of truth (auth metadata can be stale, e.g. still say "patient" after
-      // an admin invite), then fall back to metadata or the database lookup
-      const role = psychologist
+      // Get user role: admin (via metadata or admin_profiles) takes priority,
+      // then an active row in the psychologists table, then other metadata.
+      // This priority order must match authService.getUserRole exactly -
+      // otherwise a dual-access account (admin + active psychologist row)
+      // could resolve to a different role here than the auth-state-change
+      // listener resolves, depending on which one happens to finish last.
+      const metaRole = data.user?.user_metadata?.role;
+      const isAdmin =
+        metaRole === "admin" || (await this.isGrantedAdmin(data.user.id));
+      const role = isAdmin
+        ? "admin"
+        : psychologist?.is_active
         ? "psychologist"
-        : data.user?.user_metadata?.role || (await this.getUserRole(data.user.id));
+        : metaRole || null;
 
       // Check if this user is a patient - patients cannot sign in
       if (role === "patient") {
@@ -150,8 +158,9 @@ export const authService = {
         }
       }
 
-      // If this is a psychologist, update their user_id
-      if (role === "psychologist") {
+      // If this account has a psychologists row (psychologist-only or
+      // dual-access admin+psychologist), keep their user_id fresh
+      if (psychologist) {
         try {
           const { error: updateError } = await supabase
             .from("psychologists")
@@ -305,6 +314,41 @@ export const authService = {
     }
   },
 
+  // Check independently whether this user has an active row in the
+  // psychologists table. Kept separate from getUserRole so callers can
+  // detect psychologist access even for an account whose primary role
+  // resolves to "admin" (dual-access accounts).
+  async isActivePsychologist(userId) {
+    if (!userId) return false;
+    const { data, error } = await supabase
+      .from("psychologists")
+      .select("is_active")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (error || !data) return false;
+    return !!data.is_active;
+  },
+
+  // Check independently whether this user has been granted admin access via
+  // a row in admin_profiles. This is necessary in addition to trusting
+  // user_metadata.role === "admin": granting access to an *existing* user
+  // (e.g. a psychologist being promoted) can only write to admin_profiles -
+  // Supabase only applies signInWithOtp's metadata payload when creating a
+  // brand-new auth user, so an existing account's metadata can't be updated
+  // this way.
+  async isGrantedAdmin(userId) {
+    if (!userId) return false;
+    const { data, error } = await supabase
+      .from("admin_profiles")
+      .select("id")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (error || !data) return false;
+    return true;
+  },
+
   // Get user role (psychologist or admin)
   async getUserRole(userId) {
     try {
@@ -318,49 +362,25 @@ export const authService = {
 
       console.log("User metadata role:", metaRole);
 
-      // There is no admin_profiles table in this project - the admin account
-      // is created directly in Supabase Auth with user_metadata.role = "admin".
-      // Trust that metadata role directly instead of verifying against a
-      // table that doesn't exist (that lookup would always fail and lock
-      // the admin out).
-      if (metaRole === "admin") {
+      // Admin role is granted either via auth metadata (set at account
+      // creation for brand-new admin invites) or via a row in admin_profiles
+      // (used when promoting an existing account, e.g. a psychologist).
+      if (metaRole === "admin" || (await this.isGrantedAdmin(userId))) {
         return "admin";
       }
       // ignore other metadata roles here; fall through to DB check
 
       // If no metadata role, check if user exists in psychologists table
       console.log("Checking psychologists table for user:", userId);
-      const { data: psychologist, error } = await supabase
-        .from("psychologists")
-        .select("id, is_active")
-        .eq("user_id", userId)
-        .single();
+      const isPsychologist = await this.isActivePsychologist(userId);
 
-      if (error) {
-        console.log("Psychologist lookup error:", error.message);
-        // If it's a "not found" error, we cannot conclude admin; return null
-        return null;
+      if (isPsychologist) {
+        console.log("User found in psychologists table, is_active: true");
+        return "psychologist";
       }
 
-      // If found in psychologists table, check if they're active
-      if (psychologist) {
-        console.log(
-          "User found in psychologists table, is_active:",
-          psychologist.is_active
-        );
-
-        // Only return psychologist role if they're active (completed setup)
-        if (psychologist.is_active) {
-          return "psychologist";
-        } else {
-          // Psychologist exists but hasn't completed setup - return null
-          console.log("Psychologist found but not active - access denied");
-          return null;
-        }
-      }
-
-      // Default fallback: unknown
-      console.log("No role found in metadata or psychologists table");
+      // Default fallback: unknown (not found, or found but inactive)
+      console.log("No role found in metadata or active psychologists table");
       return null;
     } catch (error) {
       console.error("Get user role error:", error.message);

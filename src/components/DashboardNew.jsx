@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import SuccessModal from "./SuccessModal";
 import {
   Users,
@@ -22,6 +23,7 @@ import {
   EyeOff,
   ArrowLeft,
   FileText,
+  ArrowLeftRight,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { psychologistService } from "../services/psychologistService";
@@ -826,7 +828,8 @@ import PatientProfileView from "./PatientProfileView";
 import ReportGeneration from "./ReportGeneration";
 
 const DashboardNew = () => {
-  const { user } = useAuth();
+  const { user, userRole } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [showPatientProfile, setShowPatientProfile] = useState(false);
@@ -1597,6 +1600,16 @@ const DashboardNew = () => {
                 </div>
 
                 <div className="flex items-center space-x-4">
+                  {userRole === "admin" && (
+                    <button
+                      onClick={() => navigate("/admin")}
+                      className="flex items-center space-x-2 px-4 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 rounded-xl shadow-md hover:shadow-lg ring-2 ring-indigo-200 transition-all"
+                      title="You also have admin access - switch to the Admin Dashboard"
+                    >
+                      <ArrowLeftRight className="h-4 w-4" />
+                      <span>Switch to Admin View</span>
+                    </button>
+                  )}
                   <div className="flex items-center space-x-3">
                     <button
                       onClick={() => setShowProfileOverview(true)}

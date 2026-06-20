@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../services/supabaseClient";
 import { authService } from "../services/authService";
@@ -43,6 +44,8 @@ import {
   Lock,
   ArrowLeft,
   Loader2,
+  ShieldPlus,
+  ArrowLeftRight,
 } from "lucide-react";
 import LogoutButton from "./LogoutButton";
 // Charts
@@ -77,7 +80,7 @@ const SuccessModal = ({ isOpen, onClose, title, message, details = [] }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center">
       {/* Blurred backdrop with slight dark tint */}
       <div
         className="absolute inset-0 bg-transparent backdrop-blur-md"
@@ -115,7 +118,8 @@ const SuccessModal = ({ isOpen, onClose, title, message, details = [] }) => {
 };
 
 const AdminPanelNew = () => {
-  const { user } = useAuth();
+  const { user, hasPsychologistAccess } = useAuth();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("overview");
   const [psychologistSearchTerm, setPsychologistSearchTerm] = useState("");
   const [patientSearchTerm, setPatientSearchTerm] = useState("");
@@ -179,6 +183,7 @@ const AdminPanelNew = () => {
     useState(false);
   const [deletingOwnAccount, setDeletingOwnAccount] = useState(false);
   const [addingAdmin, setAddingAdmin] = useState(false);
+  const [grantingAdminAccess, setGrantingAdminAccess] = useState(false);
 
   // Real data states - connected to Supabase
   const [stats, setStats] = useState({
@@ -618,6 +623,73 @@ const AdminPanelNew = () => {
       setShowErrorModal(true);
     } finally {
       setAddingAdmin(false);
+    }
+  };
+
+  // Grant an existing psychologist additional admin-dashboard access, on
+  // top of (not instead of) their existing psychologist access.
+  //
+  // This does NOT reuse the magic-link "Add Admin" invite mechanism:
+  // signInWithOtp's options.data (used to stamp role/invitation_pending
+  // into user_metadata) is only applied by Supabase when a brand-new auth
+  // user is created. This psychologist already has an account, so that
+  // metadata would never be written, and AdminSetupPage would reject the
+  // link as an invalid invitation. Since they already have working login
+  // credentials, no email/password step is needed at all - granting access
+  // is just adding them to admin_profiles directly, which authService now
+  // also checks (alongside auth metadata) when resolving a user's role.
+  const handleGrantAdminAccess = async (psychologist) => {
+    if (!psychologist.user_id) {
+      setErrorModalData({
+        title: "Cannot Grant Admin Access",
+        message:
+          "This psychologist has no linked login account yet (their own setup link hasn't been completed).",
+      });
+      setShowErrorModal(true);
+      return;
+    }
+
+    setGrantingAdminAccess(true);
+    try {
+      const fullName = getFullName(psychologist);
+      const { error } = await supabase.from("admin_profiles").upsert({
+        id: psychologist.user_id,
+        email: psychologist.email,
+        full_name: fullName,
+      });
+
+      if (error) throw error;
+
+      try {
+        await adminService.logActivity(
+          user?.id,
+          "Admin Access Granted to Psychologist",
+          `Granted admin access to existing psychologist ${fullName} (${psychologist.email})`
+        );
+      } catch (logError) {
+        console.warn("Failed to log admin-access grant activity:", logError);
+      }
+
+      setSuccessMessage({
+        title: "Admin Access Granted",
+        message: `${fullName} now has admin access in addition to their existing psychologist account.`,
+        details: [
+          `Email: ${psychologist.email}`,
+          "✅ No new password needed - they already have login credentials",
+          "🔁 They'll see admin access starting with their next login (or after refreshing if already logged in)",
+          "✅ Their existing psychologist access is preserved alongside the new admin access",
+        ],
+      });
+      setShowSuccessModal(true);
+    } catch (error) {
+      console.error("Error granting admin access:", error);
+      setErrorModalData({
+        title: "Failed to Grant Admin Access",
+        message: error.message,
+      });
+      setShowErrorModal(true);
+    } finally {
+      setGrantingAdminAccess(false);
     }
   };
 
@@ -1332,6 +1404,16 @@ const AdminPanelNew = () => {
             </div>
 
             <div className="flex items-center space-x-4">
+              {hasPsychologistAccess && (
+                <button
+                  onClick={() => navigate("/dashboard")}
+                  className="flex items-center space-x-2 px-4 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 rounded-xl shadow-md hover:shadow-lg ring-2 ring-indigo-200 transition-all"
+                  title="You also have psychologist access - switch to your Psychologist Dashboard"
+                >
+                  <ArrowLeftRight className="h-4 w-4" />
+                  <span>Switch to Psychologist View</span>
+                </button>
+              )}
               {/* User Menu */}
               <div className="flex items-center space-x-3">
                 <div className="text-right">
@@ -3452,7 +3534,22 @@ const AdminPanelNew = () => {
               </div>
 
               {/* Enhanced Footer */}
-              <div className="bg-gray-50 px-8 py-6 flex justify-end border-t border-gray-200">
+              <div className="bg-gray-50 px-8 py-6 flex justify-end items-center gap-4 border-t border-gray-200">
+                {selectedPsychologist.is_active && (
+                  <button
+                    onClick={() => handleGrantAdminAccess(selectedPsychologist)}
+                    disabled={grantingAdminAccess}
+                    className="px-6 py-3 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-2xl hover:from-emerald-700 hover:to-emerald-800 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    title="Send this psychologist an invitation to also gain admin dashboard access"
+                  >
+                    {grantingAdminAccess ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <ShieldPlus className="h-5 w-5" />
+                    )}
+                    Grant Admin Access
+                  </button>
+                )}
                 <button
                   onClick={() => setShowViewModal(false)}
                   className="px-8 py-3 bg-gradient-to-r from-gray-800 to-gray-900 text-white rounded-2xl hover:from-gray-900 hover:to-black transition-all duration-200 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
@@ -4979,7 +5076,7 @@ const AdminPanelNew = () => {
 
       {/* General Error Modal */}
       {showErrorModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center">
           {/* Backdrop */}
           <div
             className="absolute inset-0 bg-black/50 backdrop-blur-md"
