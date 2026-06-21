@@ -10,7 +10,6 @@ import LoginPageNew from "./components/LoginPageNew";
 import Dashboard from "./components/Dashboard";
 import PatientProfile from "./components/PatientProfile";
 import AdminPanelNew from "./components/AdminPanelNew";
-import AdminDashboard from "./components/AdminDashboard";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ForgotPasswordPage from "./components/ForgotPasswordPage";
 import NewPasswordPage from "./components/NewPasswordPage";
@@ -88,8 +87,13 @@ const router = createBrowserRouter(
           element: <AdminPanelNew />,
         },
         {
+          // AdminDashboard's device-management sub-views depend on a
+          // deviceService.getAllDevices() method that doesn't exist and a
+          // multi-device schema that isn't part of this deployment. Not
+          // linked from anywhere in the UI; redirect rather than render
+          // a broken/incomplete page if someone navigates here directly.
           path: "/admin-iot",
-          element: <AdminDashboard />,
+          element: <Navigate to="/admin" replace />,
         },
       ],
     },

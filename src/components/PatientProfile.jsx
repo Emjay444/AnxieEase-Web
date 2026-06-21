@@ -33,7 +33,6 @@ const PatientProfile = () => {
   const {
     currentPatient,
     patientNotes,
-    sessionLogs,
     loading,
     error,
     loadPatient,
@@ -194,7 +193,7 @@ const PatientProfile = () => {
         </div>
 
         <div className="flex gap-2 mb-4">
-          {["vitals", "notes", "sessions"].map((tab) => (
+          {["vitals", "notes"].map((tab) => (
             <button
               key={tab}
               className={`px-4 py-2 rounded-full border transition ${
@@ -204,11 +203,7 @@ const PatientProfile = () => {
               }`}
               onClick={() => setActiveTab(tab)}
             >
-              {tab === "vitals"
-                ? "Vitals & Graphs"
-                : tab === "notes"
-                ? "Notes"
-                : "Session Logs"}
+              {tab === "vitals" ? "Vitals & Graphs" : "Notes"}
             </button>
           ))}
         </div>
@@ -377,35 +372,6 @@ const PatientProfile = () => {
                   </div>
                 )}
               </div>
-            </div>
-          )}
-
-          {activeTab === "sessions" && (
-            <div className="space-y-4">
-              <h3 className="text-sm font-medium text-gray-900">
-                Session History
-              </h3>
-              {sessionLogs.length === 0 ? (
-                <div className="text-sm text-gray-600">
-                  No session logs available for this patient
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 gap-3">
-                  {sessionLogs.map((session) => (
-                    <div
-                      key={session.id}
-                      className="glass p-4 rounded-xl border border-white/40"
-                    >
-                      <div className="font-medium text-gray-800 mb-1">
-                        Session on {formatDate(session.session_date)}
-                      </div>
-                      <div className="text-gray-700 whitespace-pre-wrap">
-                        {session.session_summary}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           )}
         </div>

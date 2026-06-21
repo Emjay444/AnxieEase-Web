@@ -167,6 +167,7 @@ const AdminPanelNew = () => {
 
   // Admin management states
   const [adminsList, setAdminsList] = useState([]);
+  const [pendingAdminInvites, setPendingAdminInvites] = useState([]);
   const [showAddAdminModal, setShowAddAdminModal] = useState(false);
   const [addAdminForm, setAddAdminForm] = useState({
     email: "",
@@ -375,6 +376,17 @@ const AdminPanelNew = () => {
     }
   };
 
+  // Device hardware integration isn't wired up in this environment (the
+  // underlying tables don't exist yet) - show a clean message instead of
+  // the raw "relation does not exist" error from Postgres
+  const friendlyDeviceError = (error) => {
+    const message = error?.message || "";
+    if (/relation .* does not exist/i.test(message)) {
+      return "Device management isn't available in this environment yet.";
+    }
+    return message || "Failed to update device";
+  };
+
   // Handle device assignment
   const handleAssignDevice = async (userId) => {
     try {
@@ -397,7 +409,7 @@ const AdminPanelNew = () => {
       setShowSuccessModal(true);
     } catch (error) {
       console.error("Error assigning device:", error);
-      setDeviceError(error.message || "Failed to assign device");
+      setDeviceError(friendlyDeviceError(error));
     } finally {
       setLoadingDevices(false);
     }
@@ -423,7 +435,7 @@ const AdminPanelNew = () => {
       setShowSuccessModal(true);
     } catch (error) {
       console.error("Error removing access:", error);
-      setDeviceError(error.message || "Failed to remove device access");
+      setDeviceError(friendlyDeviceError(error));
     } finally {
       setLoadingDevices(false);
     }
@@ -496,30 +508,30 @@ const AdminPanelNew = () => {
     try {
       const result = await adminService.getAllAdmins();
       if (result.success) {
-        console.log("📋 All admins from database:", result.admins);
-        console.log("📋 Current user email:", user?.email);
-        console.log("📋 Current user ID:", user?.id);
-        console.log(
-          "📋 Admin IDs and emails:",
-          result.admins.map((admin) => `${admin.id}: "${admin.email}"`)
+        // Show every admin, including the currently logged-in one - hiding
+        // your own row made "Current Administrators" show "No administrators
+        // found" whenever you were the only admin. Self-deletion is already
+        // separately blocked inside handleRemoveAdmin.
+        setAdminsList(result.admins);
+
+        // Pending invites are only relevant for emails that haven't
+        // actually become admins yet - drop any that already have
+        const activeEmails = new Set(result.admins.map((a) => a.email));
+        const pendingResult = await adminService.getPendingAdminInvites();
+        setPendingAdminInvites(
+          pendingResult.success
+            ? pendingResult.invites.filter((inv) => !activeEmails.has(inv.email))
+            : []
         );
-        console.log("📋 Filtering out current user from admin list...");
-        const filteredAdmins = result.admins.filter((admin) => {
-          const shouldKeep = admin.id !== user?.id;
-          console.log(
-            `📋 Admin "${admin.email}" (ID: ${admin.id}) - Keep: ${shouldKeep}`
-          );
-          return shouldKeep;
-        });
-        console.log("📋 Filtered admins:", filteredAdmins);
-        setAdminsList(filteredAdmins);
       } else {
         console.error("Error loading admins:", result.error);
         setAdminsList([]);
+        setPendingAdminInvites([]);
       }
     } catch (error) {
       console.error("Error loading admins:", error);
       setAdminsList([]);
+      setPendingAdminInvites([]);
     }
   };
 
@@ -574,6 +586,18 @@ const AdminPanelNew = () => {
         addAdminForm.fullName
       );
 
+      // Track this as a pending invite so the list shows it's in flight
+      // instead of looking empty until the invite is accepted
+      try {
+        await adminService.addPendingAdminInvite(
+          addAdminForm.email,
+          addAdminForm.fullName,
+          user?.id
+        );
+      } catch (pendingError) {
+        console.warn("Failed to track pending admin invite:", pendingError);
+      }
+
       // Clear form and close modal
       setAddAdminForm({
         email: "",
@@ -623,6 +647,21 @@ const AdminPanelNew = () => {
       setShowErrorModal(true);
     } finally {
       setAddingAdmin(false);
+    }
+  };
+
+  const handleCancelPendingInvite = async (invite) => {
+    try {
+      const result = await adminService.removePendingAdminInvite(invite.email);
+      if (!result.success) throw new Error(result.error);
+      await loadAdminsList();
+    } catch (error) {
+      console.error("Error cancelling pending invite:", error);
+      setErrorModalData({
+        title: "Failed to Cancel Invite",
+        message: error.message,
+      });
+      setShowErrorModal(true);
     }
   };
 
@@ -2999,39 +3038,90 @@ const AdminPanelNew = () => {
                     </div>
 
                     <div className="divide-y divide-gray-200">
-                      {adminsList.length > 0 ? (
-                        adminsList.map((admin, index) => (
-                          <div key={admin.id} className="px-4 py-3">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center space-x-3">
-                                <div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center">
-                                  <User className="h-4 w-4 text-emerald-600" />
+                      {adminsList.length > 0 || pendingAdminInvites.length > 0 ? (
+                        <>
+                          {adminsList.map((admin) => (
+                            <div key={admin.id} className="px-4 py-3">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-3">
+                                  <div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center">
+                                    <User className="h-4 w-4 text-emerald-600" />
+                                  </div>
+                                  <div>
+                                    <p className="font-medium text-gray-900">
+                                      {admin.full_name || "Admin User"}
+                                    </p>
+                                    <p className="text-sm text-gray-600">
+                                      {admin.email}
+                                    </p>
+                                  </div>
                                 </div>
-                                <div>
-                                  <p className="font-medium text-gray-900">
-                                    {admin.full_name || "Admin User"}
-                                  </p>
-                                  <p className="text-sm text-gray-600">
-                                    {admin.email}
-                                  </p>
+                                <div className="flex items-center space-x-2">
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+                                    Administrator
+                                  </span>
+                                  {admin.id === user?.id ? (
+                                    <span className="text-xs text-gray-500 px-2 py-1">
+                                      (You)
+                                    </span>
+                                  ) : (
+                                    <button
+                                      onClick={() => handleRemoveAdmin(admin)}
+                                      className="flex items-center space-x-1 px-2 py-1 text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors text-sm"
+                                      title="Delete Admin Account"
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                      <span>Delete</span>
+                                    </button>
+                                  )}
                                 </div>
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
-                                  Administrator
-                                </span>
-                                <button
-                                  onClick={() => handleRemoveAdmin(admin)}
-                                  className="flex items-center space-x-1 px-2 py-1 text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors text-sm"
-                                  title="Delete Admin Account"
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                  <span>Delete</span>
-                                </button>
                               </div>
                             </div>
-                          </div>
-                        ))
+                          ))}
+                          {pendingAdminInvites.map((invite) => (
+                            <div key={invite.id} className="px-4 py-3 bg-amber-50/50">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-3">
+                                  <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center">
+                                    <Clock className="h-4 w-4 text-amber-600" />
+                                  </div>
+                                  <div>
+                                    <p className="font-medium text-gray-900">
+                                      {invite.full_name || "Invited User"}
+                                    </p>
+                                    <p className="text-sm text-gray-600">
+                                      {invite.email}
+                                    </p>
+                                    <p className="text-xs text-amber-700 mt-0.5">
+                                      Invitation sent{" "}
+                                      {invite.invited_at
+                                        ? new Date(
+                                            invite.invited_at
+                                          ).toLocaleDateString()
+                                        : ""}{" "}
+                                      - awaiting confirmation
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                                    Pending
+                                  </span>
+                                  <button
+                                    onClick={() =>
+                                      handleCancelPendingInvite(invite)
+                                    }
+                                    className="flex items-center space-x-1 px-2 py-1 text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors text-sm"
+                                    title="Cancel Invitation"
+                                  >
+                                    <X className="h-3 w-3" />
+                                    <span>Cancel</span>
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </>
                       ) : (
                         <div className="px-4 py-8 text-center text-gray-500">
                           <User className="h-8 w-8 mx-auto mb-2 text-gray-300" />
@@ -3609,7 +3699,7 @@ const AdminPanelNew = () => {
                 </div>
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mt-2">
                   <p className="text-xs text-gray-600 font-medium">
-                    � Email addresses cannot be changed for security reasons.
+                    Email addresses cannot be changed for security reasons.
                   </p>
                 </div>
               </div>

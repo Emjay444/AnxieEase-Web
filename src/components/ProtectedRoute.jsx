@@ -12,7 +12,7 @@ export default function ProtectedRoute({ requireAdmin = false }) {
 
   // Debug logging for troubleshooting
   useEffect(() => {
-    console.log("� ProtectedRoute state:", {
+    console.log("ProtectedRoute state:", {
       loading,
       signingOut,
       checkingUnknown,

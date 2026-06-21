@@ -110,6 +110,15 @@ export const adminSetupService = {
 
       console.log("✅ Admin profile created successfully");
 
+      // Clean up the "invitation sent, awaiting confirmation" placeholder
+      // now that a real admin_profiles row exists. Best-effort: the admin
+      // profile is already created above, so don't fail setup over this.
+      try {
+        await supabase.from("pending_admin_invites").delete().eq("email", email);
+      } catch (cleanupError) {
+        console.warn("Failed to clean up pending admin invite:", cleanupError);
+      }
+
       console.log("🎉 Admin setup completed successfully!");
 
       return {

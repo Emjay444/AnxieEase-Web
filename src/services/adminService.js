@@ -1090,6 +1090,58 @@ export const adminService = {
     }
   },
 
+  // Pending admin invites: separate from admin_profiles because a brand-new
+  // admin invite has no auth user (and therefore no id to satisfy
+  // admin_profiles' FK to auth.users) until the invited person actually
+  // clicks the link and completes setup. This table is purely a "we sent
+  // an invite and are waiting for it to be accepted" placeholder.
+  async getPendingAdminInvites() {
+    try {
+      const { data, error } = await supabase
+        .from("pending_admin_invites")
+        .select("id, email, full_name, invited_at")
+        .order("invited_at", { ascending: false });
+
+      if (error) throw error;
+      return { success: true, invites: data || [] };
+    } catch (error) {
+      console.error("Error fetching pending admin invites:", error);
+      return { success: false, error: error.message, invites: [] };
+    }
+  },
+
+  async addPendingAdminInvite(email, fullName, invitedBy) {
+    try {
+      const { error } = await supabase.from("pending_admin_invites").upsert({
+        email,
+        full_name: fullName,
+        invited_by: invitedBy,
+        invited_at: new Date().toISOString(),
+      });
+
+      if (error) throw error;
+      return { success: true };
+    } catch (error) {
+      console.error("Error adding pending admin invite:", error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  async removePendingAdminInvite(email) {
+    try {
+      const { error } = await supabase
+        .from("pending_admin_invites")
+        .delete()
+        .eq("email", email);
+
+      if (error) throw error;
+      return { success: true };
+    } catch (error) {
+      console.error("Error removing pending admin invite:", error);
+      return { success: false, error: error.message };
+    }
+  },
+
   // Comprehensive admin setup function
   async setupAdmin(userId, email) {
     try {

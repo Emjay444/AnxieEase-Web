@@ -1,4 +1,5 @@
 import { supabase } from "./supabaseClient";
+import { getAppUrl } from "../utils/helpers";
 
 // Track login attempts - load from localStorage if available
 const getLoginAttempts = () => {
@@ -444,9 +445,7 @@ export const authService = {
       const emailResult = await supabase.auth.signInWithOtp({
         email,
         options: {
-          emailRedirectTo: `${
-            import.meta.env.VITE_APP_URL || window.location.origin
-          }/admin-setup?email=${encodeURIComponent(email)}`,
+          emailRedirectTo: `${getAppUrl()}/admin-setup?email=${encodeURIComponent(email)}`,
           data: {
             role: "admin",
             full_name: fullName,

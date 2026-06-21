@@ -916,7 +916,7 @@ const DashboardNew = () => {
         const { data: psychologist, error: psychError } = await supabase
           .from("psychologists")
           .select(
-            "id, name, email, contact, license_number, sex, avatar_url, bio, is_active"
+            "id, name, first_name, middle_name, last_name, email, contact, license_number, sex, avatar_url, bio, is_active"
           )
           .eq("user_id", user.id)
           .single();
@@ -1024,13 +1024,20 @@ const DashboardNew = () => {
         setCalendarReloadKey((prev) => prev + 1);
 
         // Update profile form with psychologist data
-        // The psychologists table only stores a single `name` column; split it
-        // into parts so the existing first/middle/last name inputs keep working
-        const nameParts = getFullNameParts(psychologist.name);
+        // Prefer the real split columns. Only fall back to deriving from
+        // the combined `name` for a psychologist who has never saved
+        // through this form yet (e.g. just created by an admin, which only
+        // sets `name`) - a one-time starting point, not a recurring split,
+        // so it can't reintroduce the round-trip bug.
+        const hasSplitName = psychologist.first_name || psychologist.last_name;
+        const fallbackParts = hasSplitName
+          ? null
+          : getFullNameParts(psychologist.name);
         const updatedProfileForm = {
-          first_name: nameParts.first_name || "",
-          middle_name: nameParts.middle_name || "",
-          last_name: nameParts.last_name || "",
+          first_name: psychologist.first_name || fallbackParts?.first_name || "",
+          middle_name:
+            psychologist.middle_name || fallbackParts?.middle_name || "",
+          last_name: psychologist.last_name || fallbackParts?.last_name || "",
           email: psychologist.email || "",
           phone: psychologist.contact || "",
           license_number: psychologist.license_number || "",
@@ -1202,18 +1209,19 @@ const DashboardNew = () => {
       }
 
       // Prepare the update data
-      // The psychologists table only has a single `name` column, so combine
-      // the first/middle/last name inputs back into one value before saving
-      const combinedName = [
-        profileForm.first_name.trim(),
-        profileForm.middle_name?.trim(),
-        profileForm.last_name.trim(),
-      ]
-        .filter(Boolean)
-        .join(" ");
+      // Write the real first/middle/last columns directly (no lossy
+      // combine-then-split), and also keep `name` in sync since other
+      // parts of the app (admin panel, patient-facing views) still read
+      // the single combined field.
+      const firstName = profileForm.first_name.trim();
+      const middleName = profileForm.middle_name?.trim() || "";
+      const lastName = profileForm.last_name.trim();
 
       const updateData = {
-        name: combinedName,
+        first_name: firstName,
+        middle_name: middleName || null,
+        last_name: lastName,
+        name: [firstName, middleName, lastName].filter(Boolean).join(" "),
         contact: profileForm.phone.trim(),
         license_number: profileForm.license_number.trim(),
         bio: profileForm.bio?.trim() || null,
@@ -1239,12 +1247,11 @@ const DashboardNew = () => {
       console.log("Profile updated successfully:", updatedData);
 
       // Update the local profile form with the returned data
-      const updatedNameParts = getFullNameParts(updatedData.name);
       setProfileForm((prev) => ({
         ...prev,
-        first_name: updatedNameParts.first_name || "",
-        middle_name: updatedNameParts.middle_name || "",
-        last_name: updatedNameParts.last_name || "",
+        first_name: updatedData.first_name || "",
+        middle_name: updatedData.middle_name || "",
+        last_name: updatedData.last_name || "",
         phone: updatedData.contact || "",
         license_number: updatedData.license_number || "",
         bio: updatedData.bio || "",

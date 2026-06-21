@@ -378,27 +378,6 @@ export const patientService = {
     }
   },
 
-  // Get patient session logs
-  async getPatientSessionLogs(patientId) {
-    try {
-      const { data, error } = await supabase
-        .from("session_logs")
-        .select("*")
-        .eq("patient_id", patientId)
-        .order("session_date", { ascending: false });
-
-      if (error) {
-        console.error("❌ Error fetching session logs:", error.message);
-        return [];
-      }
-      console.log("✅ Returning", data?.length || 0, "session logs");
-      return data || [];
-    } catch (error) {
-      console.error("❌ Get patient session logs error:", error.message);
-      return [];
-    }
-  },
-
   // Get patient mood logs
   async getPatientMoodLogs(patientId) {
     try {

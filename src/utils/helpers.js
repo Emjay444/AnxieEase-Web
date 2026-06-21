@@ -8,6 +8,18 @@ export function cn(...inputs) {
 }
 
 /**
+ * Base URL for building auth redirect links (invites, password resets).
+ * In dev, always use the current origin so local testing never sends
+ * the user to production - VITE_APP_URL only applies to production builds.
+ */
+export function getAppUrl() {
+  if (import.meta.env.DEV) {
+    return window.location.origin;
+  }
+  return import.meta.env.VITE_APP_URL || window.location.origin;
+}
+
+/**
  * Format date to a readable string
  */
 export function formatDate(date, options = {}) {

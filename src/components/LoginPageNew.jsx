@@ -106,7 +106,7 @@ const LoginPage = () => {
 
     try {
       console.log("Attempting to sign in...");
-      const { role } = await signIn(email, password);
+      const { role, hasPsychologistAccess } = await signIn(email, password);
       console.log("Sign in successful, role:", role);
 
       // Handle remember me functionality
@@ -124,10 +124,13 @@ const LoginPage = () => {
 
       // Small delay to show success state
       setTimeout(() => {
-        // Redirect based on role
-        if (role === "admin") {
+        // Redirect based on role. A dual-access account (admin metadata +
+        // an active psychologist row) lands on their psychologist
+        // dashboard by default, not the admin panel - admin is reachable
+        // via the "Switch to Admin View" button from there.
+        if (role === "admin" && !hasPsychologistAccess) {
           navigate("/admin");
-        } else if (role === "psychologist") {
+        } else if (role === "psychologist" || hasPsychologistAccess) {
           navigate("/dashboard");
         }
       }, 800);

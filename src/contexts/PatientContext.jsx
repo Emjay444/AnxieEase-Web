@@ -18,7 +18,6 @@ export const PatientProvider = ({ children }) => {
   const [patients, setPatients] = useState([]);
   const [currentPatient, setCurrentPatient] = useState(null);
   const [patientNotes, setPatientNotes] = useState([]);
-  const [sessionLogs, setSessionLogs] = useState([]);
   const [moodLogs, setMoodLogs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -154,9 +153,8 @@ export const PatientProvider = ({ children }) => {
       const data = await patientService.getPatientById(patientId);
       setCurrentPatient(data);
 
-      // Load patient notes and session logs
+      // Load patient notes and mood logs
       await loadPatientNotes(patientId);
-      await loadSessionLogs(patientId);
       await loadMoodLogs(patientId);
 
       return data;
@@ -177,18 +175,6 @@ export const PatientProvider = ({ children }) => {
       return data;
     } catch (err) {
       console.error("Load patient notes error:", err.message);
-      throw err;
-    }
-  };
-
-  // Load session logs
-  const loadSessionLogs = async (patientId) => {
-    try {
-      const data = await patientService.getPatientSessionLogs(patientId);
-      setSessionLogs(data);
-      return data;
-    } catch (err) {
-      console.error("Load session logs error:", err.message);
       throw err;
     }
   };
@@ -318,14 +304,12 @@ export const PatientProvider = ({ children }) => {
     patients,
     currentPatient,
     patientNotes,
-    sessionLogs,
     moodLogs,
     loading,
     error,
     loadPatients,
     loadPatient,
     loadPatientNotes,
-    loadSessionLogs,
     loadMoodLogs,
     addNote,
     updateNote,

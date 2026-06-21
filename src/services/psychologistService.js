@@ -1,6 +1,6 @@
 import { supabase } from "./supabaseClient";
 import { adminService } from "./adminService";
-import { getFullName } from "../utils/helpers";
+import { getFullName, getAppUrl } from "../utils/helpers";
 
 // In-memory storage for development - will be removed once database works
 const mockStorage = {
@@ -223,9 +223,7 @@ export const psychologistService = {
           email: normalizedEmail,
           options: {
             // Include query parameters in the redirect URL for better persistence
-            emailRedirectTo: `${
-              import.meta.env.VITE_APP_URL || window.location.origin
-            }/psychologist-setup?email=${encodeURIComponent(
+            emailRedirectTo: `${getAppUrl()}/psychologist-setup?email=${encodeURIComponent(
               normalizedEmail
             )}&psychologist_id=${encodeURIComponent(
               psychologistId
@@ -783,7 +781,7 @@ export const psychologistService = {
       }
 
       // Send magic link for password reset
-      const appUrl = import.meta.env.VITE_APP_URL || window.location.origin;
+      const appUrl = getAppUrl();
 
       // First try with shouldCreateUser: false (for existing auth users)
       let { error: resetError } = await supabase.auth.signInWithOtp({

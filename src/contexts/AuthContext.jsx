@@ -159,7 +159,15 @@ export const AuthProvider = ({ children }) => {
               "Fetching role for validated session:",
               session.user.id
             );
-            const role = await authService.getUserRole(session.user.id);
+            // Fetch both together and set both states back-to-back (no
+            // await between them) so React batches them into a single
+            // render - otherwise there's a frame where userRole is
+            // "admin" but hasPsychologistAccess hasn't caught up yet,
+            // which can trigger a premature redirect in ProtectedRoute.
+            const [role, isPsych] = await Promise.all([
+              authService.getUserRole(session.user.id),
+              authService.isActivePsychologist(session.user.id),
+            ]);
             console.log("Initial role retrieved:", role);
 
             if (role) {
@@ -169,10 +177,7 @@ export const AuthProvider = ({ children }) => {
               setUserRole(null);
               clearCachedRole();
             }
-
-            setHasPsychologistAccess(
-              await authService.isActivePsychologist(session.user.id)
-            );
+            setHasPsychologistAccess(isPsych);
           } catch (validationError) {
             console.error("Error validating session:", validationError);
             // Clear everything on validation error
@@ -310,7 +315,10 @@ export const AuthProvider = ({ children }) => {
             console.log("Getting user role for:", session.user.id);
             (async () => {
               try {
-                const role = await authService.getUserRole(session.user.id);
+                const [role, isPsych] = await Promise.all([
+                  authService.getUserRole(session.user.id),
+                  authService.isActivePsychologist(session.user.id),
+                ]);
                 console.log("User role retrieved:", role);
                 if (role) {
                   setUserRole(role);
@@ -319,9 +327,7 @@ export const AuthProvider = ({ children }) => {
                   setUserRole(null);
                   clearCachedRole();
                 }
-                setHasPsychologistAccess(
-                  await authService.isActivePsychologist(session.user.id)
-                );
+                setHasPsychologistAccess(isPsych);
               } catch (error) {
                 console.error("Error getting user role:", error);
                 setUserRole(null);
@@ -374,7 +380,10 @@ export const AuthProvider = ({ children }) => {
           );
           (async () => {
             try {
-              const role = await authService.getUserRole(session.user.id);
+              const [role, isPsych] = await Promise.all([
+                authService.getUserRole(session.user.id),
+                authService.isActivePsychologist(session.user.id),
+              ]);
               console.log("User role validated after refresh:", role);
               if (role) {
                 setUserRole(role);
@@ -383,9 +392,7 @@ export const AuthProvider = ({ children }) => {
                 setUserRole(null);
                 clearCachedRole();
               }
-              setHasPsychologistAccess(
-                await authService.isActivePsychologist(session.user.id)
-              );
+              setHasPsychologistAccess(isPsych);
             } catch (error) {
               console.error("Error validating user role after refresh:", error);
               setUserRole(null);
@@ -420,13 +427,12 @@ export const AuthProvider = ({ children }) => {
         email,
         password
       );
+      const isPsych = await authService.isActivePsychologist(authUser.id);
       setUser(authUser);
       setUserRole(role);
-      setHasPsychologistAccess(
-        await authService.isActivePsychologist(authUser.id)
-      );
+      setHasPsychologistAccess(isPsych);
 
-      return { user: authUser, role };
+      return { user: authUser, role, hasPsychologistAccess: isPsych };
     } catch (err) {
       console.error("Sign in error:", err.message);
       setError(err.message);
