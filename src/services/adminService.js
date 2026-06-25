@@ -555,10 +555,15 @@ export const adminService = {
         return [];
       }
 
-      // Also fetch psychologists to exclude them from patients list
+      // Also fetch psychologists to exclude them from patients list.
+      // Match on user_id (the actual auth-linked identity), not the
+      // psychologists row's own `id` or `email` - those can collide with
+      // an unrelated patient (e.g. a psychologist invited at an email
+      // that was already registered as a patient) and incorrectly hide
+      // a genuine patient record.
       const { data: psychRows, error: psychErr } = await supabase
         .from("psychologists")
-        .select("id,email");
+        .select("user_id");
 
       if (psychErr) {
         console.log(
@@ -567,23 +572,18 @@ export const adminService = {
         );
       }
 
-      const psychIdSet = new Set((psychRows || []).map((p) => p.id));
-      const psychEmailSet = new Set(
-        (psychRows || [])
-          .map((p) => (p.email || "").toLowerCase())
-          .filter(Boolean)
+      const psychUserIdSet = new Set(
+        (psychRows || []).map((p) => p.user_id).filter(Boolean)
       );
 
       // Consider records with role 'patient' (case-insensitive) OR missing/blank role as patients
-      // Exclude records that match psychologists by id or email
+      // Exclude records whose auth identity is also linked to a psychologist row
       const patients = data.filter((u) => {
         const role = (u.role || "").toString().trim().toLowerCase();
-        const email = (u.email || "").toLowerCase();
-        const isPsychById = psychIdSet.has(u.id);
-        const isPsychByEmail = email && psychEmailSet.has(email);
+        const isPsychByUserId = psychUserIdSet.has(u.id);
         const classifyAsPatient = role === "patient" || role === "";
 
-        return !isPsychById && !isPsychByEmail && classifyAsPatient;
+        return !isPsychByUserId && classifyAsPatient;
       });
 
       console.log(
