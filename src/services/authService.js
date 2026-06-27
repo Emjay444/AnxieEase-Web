@@ -448,6 +448,7 @@ export const authService = {
           emailRedirectTo: `${getAppUrl()}/admin-setup?email=${encodeURIComponent(email)}`,
           data: {
             role: "admin",
+            flow: "admin_invite",
             full_name: fullName,
             invitation_pending: true,
           },

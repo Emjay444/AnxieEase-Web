@@ -231,6 +231,7 @@ export const psychologistService = {
             shouldCreateUser: true, // Create a new auth user for the magic link to work
             data: {
               role: "psychologist",
+              flow: "account_creation",
               psychologistId: psychologistId,
               name: fullNameForLogs,
               email: normalizedEmail,
@@ -791,6 +792,11 @@ export const psychologistService = {
             psychologist.email
           )}&source=reset_password&flow=password_reset`,
           shouldCreateUser: false, // Don't create new users initially
+          data: {
+            role: "psychologist",
+            flow: "password_reset",
+            name: psychologist.name,
+          },
         },
       });
 
@@ -806,6 +812,11 @@ export const psychologistService = {
               psychologist.email
             )}&source=reset_password&flow=password_reset`,
             shouldCreateUser: true, // Create user for password reset
+            data: {
+              role: "psychologist",
+              flow: "password_reset",
+              name: psychologist.name,
+            },
           },
         });
         resetError = createError;
