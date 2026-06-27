@@ -16,7 +16,6 @@ class DeviceService {
           device_name,
           user_id,
           linked_at,
-          status,
           battery_level,
           last_seen_at,
           users (
@@ -170,7 +169,7 @@ class DeviceService {
             device_name: "AnxieEase Sensor #001", // Keep clean device name
             user_id: userId,
             linked_at: new Date().toISOString(),
-            status: "assigned",
+            is_active: true, // Mobile gates "device linked" on this column
             baseline_hr: finalBaseline, // Use the flexible baseline
           })
           .eq("device_id", DEVICE_ID);
@@ -201,7 +200,7 @@ class DeviceService {
             device_name: "AnxieEase Sensor #001", // Keep clean device name
             user_id: userId,
             linked_at: new Date().toISOString(),
-            status: "assigned",
+            is_active: true, // Mobile gates "device linked" on this column
             baseline_hr: userBaseline?.baseline_hr || null, // Sync baseline immediately
           });
 
@@ -228,7 +227,7 @@ class DeviceService {
           device_name: "AnxieEase Sensor #001", // Reset to clean name
           user_id: null,
           linked_at: null,
-          status: "available",
+          is_active: false,
           baseline_hr: null, // Clear baseline when removing user
         })
         .eq("device_id", DEVICE_ID);

@@ -15,7 +15,7 @@ const LoginPage = () => {
   const [lockoutInfo, setLockoutInfo] = useState(null);
   const [countdown, setCountdown] = useState(0);
   const navigate = useNavigate();
-  const { signIn, user, userRole, loading } = useAuth();
+  const { signIn, user, userRole, hasPsychologistAccess, loading } = useAuth();
 
   // Load saved credentials on mount
   useEffect(() => {
@@ -61,17 +61,21 @@ const LoginPage = () => {
     }
   }, [lockoutInfo]);
 
-  // Redirect if already authenticated
+  // Redirect if already authenticated. Mirrors handleSubmit's destination
+  // logic below - a dual-access account (admin role + active psychologist
+  // row) must land on /dashboard, not /admin, or this effect races
+  // handleSubmit's redirect and the admin panel flashes first.
   useEffect(() => {
     if (!loading && user) {
       const cached = localStorage.getItem("userRole");
       const role = userRole || cached;
       if (!role) return; // wait for a known role
-      const dest = role === "admin" ? "/admin" : "/dashboard";
+      const dest =
+        role === "admin" && !hasPsychologistAccess ? "/admin" : "/dashboard";
       console.log("Authenticated, navigating to:", dest, "role:", role);
       navigate(dest, { replace: true });
     }
-  }, [user, userRole, loading, navigate]);
+  }, [user, userRole, hasPsychologistAccess, loading, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

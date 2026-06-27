@@ -19,6 +19,48 @@ const mockActivityLogs = [
   },
 ];
 
+// Prepends a visible notice so sample data is never mistaken for real
+// activity when the real activity_logs query fails (e.g. table missing,
+// RLS blocking access).
+function withMockDataNotice(logs) {
+  return [
+    {
+      id: "mock-notice",
+      user_id: null,
+      action: "⚠️ Sample Data Notice",
+      details:
+        "Could not load real activity logs from the database. The entries below are sample data, not actual system activity.",
+      timestamp: new Date().toISOString(),
+    },
+    ...logs,
+  ];
+}
+
+// Real activity_logs writes that failed this session. Kept in memory (lost
+// on refresh) so the action they record isn't silently dropped - they're
+// merged into every getActivityLogs() result, not just the mock fallback,
+// since a write failure is independent of whether reads are working.
+const pendingFailedLogs = [];
+
+function mergePendingFailedLogs(logs, dateFilter) {
+  if (pendingFailedLogs.length === 0) return logs;
+
+  let pending = pendingFailedLogs;
+  if (dateFilter) {
+    const filterDate = new Date(dateFilter);
+    pending = pending.filter((log) => {
+      const logDate = new Date(log.timestamp);
+      return (
+        logDate.getDate() === filterDate.getDate() &&
+        logDate.getMonth() === filterDate.getMonth() &&
+        logDate.getFullYear() === filterDate.getFullYear()
+      );
+    });
+  }
+
+  return [...pending, ...logs];
+}
+
 const mockUnassignedPatients = [
   {
     id: "mock-patient-1",
@@ -181,82 +223,38 @@ export const adminService = {
       return { error: error.message };
     }
   },
-  // Helper function to replace UUIDs with names in activity details
+  // Helper function to replace any raw UUIDs left in activity details with
+  // display names. Callers are expected to log pre-resolved names already;
+  // this only catches the rare case where a UUID slipped through.
   async replaceIdsWithNames(details) {
     if (!details || typeof details !== "string") return details;
 
-    // Manual mapping for known UUIDs (fallback approach)
-    const knownUsers = {
-      "e0997cb7-68df-41e6-923f-48107872d434": "Jamie Lou Sabeniano Mapalad",
-      "627f6a9f-c0f4-47a2-a136-9e280c7f4faa": "Mark Joseph Rosales Molina",
-    };
-
-    // First try manual mapping for known problematic UUIDs
-    let processedDetails = details;
-    for (const [uuid, name] of Object.entries(knownUsers)) {
-      const regex = new RegExp(uuid, "gi");
-      processedDetails = processedDetails.replace(regex, name);
-    }
-
-    // Then try database lookup for any remaining UUIDs
     const uuidRegex =
       /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
-    const remainingUuids = processedDetails.match(uuidRegex);
+    const uuids = details.match(uuidRegex);
+    if (!uuids || uuids.length === 0) return details;
 
-    if (remainingUuids && remainingUuids.length > 0) {
-      // For each remaining UUID, try to get the corresponding name
-      for (const uuid of remainingUuids) {
-        try {
-          // Try different possible ID column names
-          let userData = null;
+    let processedDetails = details;
+    for (const uuid of uuids) {
+      try {
+        const { data, error } = await supabase
+          .from("users")
+          .select("first_name, last_name, role")
+          .eq("id", uuid)
+          .maybeSingle();
 
-          // First try with 'id' column
-          try {
-            const { data, error } = await supabase
-              .from("users")
-              .select("first_name, last_name, role")
-              .eq("id", uuid)
-              .maybeSingle();
-
-            if (!error && data) {
-              userData = data;
-            }
-          } catch (err) {
-            // Try with 'user_id' column if 'id' fails
-            try {
-              const { data, error } = await supabase
-                .from("users")
-                .select("first_name, last_name, role")
-                .eq("user_id", uuid)
-                .maybeSingle();
-
-              if (!error && data) {
-                userData = data;
-              }
-            } catch (err2) {
-              console.log(
-                `Could not resolve UUID ${uuid} with either id or user_id:`,
-                err2
-              );
-            }
-          }
-
-          if (userData) {
-            const name =
-              `${userData.first_name || ""} ${
-                userData.last_name || ""
-              }`.trim() || `Unknown ${userData.role || "User"}`;
-
-            // Replace the UUID with the name
-            processedDetails = processedDetails.replace(
-              new RegExp(uuid, "g"),
-              name
-            );
-          }
-        } catch (err) {
-          // If we can't find the user, leave the UUID as is
-          console.log(`Could not resolve UUID ${uuid}:`, err);
+        if (!error && data) {
+          const name =
+            `${data.first_name || ""} ${data.last_name || ""}`.trim() ||
+            `Unknown ${data.role || "User"}`;
+          processedDetails = processedDetails.replace(
+            new RegExp(uuid, "g"),
+            name
+          );
         }
+      } catch (err) {
+        // If we can't find the user, leave the UUID as is
+        console.log(`Could not resolve UUID ${uuid}:`, err);
       }
     }
 
@@ -279,18 +277,23 @@ export const adminService = {
         // Return filtered mock data if date filter is provided
         if (dateFilter) {
           const filterDate = new Date(dateFilter);
-          return mockActivityLogs.filter((log) => {
-            const logDate = new Date(log.timestamp);
-            return (
-              logDate.getDate() === filterDate.getDate() &&
-              logDate.getMonth() === filterDate.getMonth() &&
-              logDate.getFullYear() === filterDate.getFullYear()
-            );
-          });
+          return mergePendingFailedLogs(
+            withMockDataNotice(
+              mockActivityLogs.filter((log) => {
+                const logDate = new Date(log.timestamp);
+                return (
+                  logDate.getDate() === filterDate.getDate() &&
+                  logDate.getMonth() === filterDate.getMonth() &&
+                  logDate.getFullYear() === filterDate.getFullYear()
+                );
+              })
+            ),
+            dateFilter
+          );
         }
 
         // Otherwise return all mock data
-        return mockActivityLogs;
+        return mergePendingFailedLogs(withMockDataNotice(mockActivityLogs));
       }
 
       // Table exists, proceed with query
@@ -316,7 +319,10 @@ export const adminService = {
 
       if (error) {
         console.log("Error fetching activity logs:", error.message);
-        return mockActivityLogs;
+        return mergePendingFailedLogs(
+          withMockDataNotice(mockActivityLogs),
+          dateFilter
+        );
       }
 
       // Process the logs to replace UUIDs with names
@@ -333,36 +339,33 @@ export const adminService = {
           (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
         );
 
-        return processedLogs;
+        return mergePendingFailedLogs(processedLogs, dateFilter);
       }
 
-      return data || [];
+      return mergePendingFailedLogs(data || [], dateFilter);
     } catch (error) {
       console.error("Get activity logs error:", error.message);
       // Ensure we return at least the mock data
-      return mockActivityLogs;
+      return mergePendingFailedLogs(
+        withMockDataNotice(mockActivityLogs),
+        dateFilter
+      );
     }
   },
 
   // Log an activity action
   async logActivity(userId, action, details) {
+    // Get current authenticated user if userId is invalid
+    let validUserId = userId;
+
+    // Check if userId is the placeholder or invalid
+    if (!userId || userId === "00000000-0000-0000-0000-000000000000") {
+      // Try to get current authenticated user
+      const { data: authUser } = await supabase.auth.getUser();
+      validUserId = authUser?.user?.id || null;
+    }
+
     try {
-      // Get current authenticated user if userId is invalid
-      let validUserId = userId;
-
-      // Check if userId is the placeholder or invalid
-      if (!userId || userId === "00000000-0000-0000-0000-000000000000") {
-        // Try to get current authenticated user
-        const { data: authUser } = await supabase.auth.getUser();
-        if (authUser?.user?.id) {
-          validUserId = authUser.user.id;
-        } else {
-          // If no auth user, set to null for database
-          validUserId = null;
-        }
-      }
-
-      // Try to insert the activity log
       const { data, error } = await supabase
         .from("activity_logs")
         .insert([
@@ -375,33 +378,25 @@ export const adminService = {
         ])
         .select();
 
-      if (error) {
-        console.log("Using mock activity logging due to error:", error.message);
-        // Add to mock logs for the UI to display
-        const mockLog = {
-          id: `mock-${mockActivityLogs.length + 1}`,
-          user_id: validUserId,
-          action,
-          details,
-          timestamp: new Date().toISOString(),
-        };
-        mockActivityLogs.unshift(mockLog);
-        return mockLog;
-      }
+      if (error) throw error;
 
       return data[0];
     } catch (error) {
-      console.error("Log activity error:", error.message);
-      // Add to mock logs even on error to ensure UI shows something
-      const mockLog = {
-        id: `mock-${mockActivityLogs.length + 1}`,
-        user_id: null, // Set to null instead of invalid UUID
+      console.error("Log activity error - entry was NOT saved:", error.message);
+      // The real write failed. Keep the event visible for the rest of this
+      // session (lost on refresh - it was never persisted) instead of
+      // silently dropping it, but mark it clearly as unsaved rather than
+      // pretending it's a real log entry.
+      const unsavedLog = {
+        id: `unsaved-${Date.now()}`,
+        user_id: validUserId,
         action,
-        details,
+        details: `${details} (⚠️ not saved to database: ${error.message})`,
         timestamp: new Date().toISOString(),
+        _unsaved: true,
       };
-      mockActivityLogs.unshift(mockLog);
-      return mockLog;
+      pendingFailedLogs.unshift(unsavedLog);
+      return unsavedLog;
     }
   },
 
@@ -718,19 +713,20 @@ export const adminService = {
   // Delete an activity log
   async deleteActivityLog(logId) {
     try {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from("activity_logs")
         .delete()
         .match({ id: logId });
 
       if (error) {
-        console.log("Error deleting activity log:", error.message);
-        // Remove from mock logs if using mock data
+        // Only treat this as success if logId was actually mock data
         const index = mockActivityLogs.findIndex((log) => log.id === logId);
         if (index !== -1) {
           mockActivityLogs.splice(index, 1);
+          return { success: true };
         }
-        return { success: true }; // Return success even for mock data
+        console.log("Error deleting activity log:", error.message);
+        return { success: false, error: error.message };
       }
 
       return { success: true };
