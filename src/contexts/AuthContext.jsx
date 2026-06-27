@@ -1,4 +1,12 @@
-import { createContext, useContext, useState, useEffect, useRef } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
 import { authService } from "../services/authService";
 import { supabase } from "../services/supabaseClient";
 
@@ -417,8 +425,13 @@ export const AuthProvider = ({ children }) => {
     };
   }, []); // Keep empty dependencies but use refs for current values
 
-  // Sign in with email and password
-  const signIn = async (email, password) => {
+  // Sign in with email and password.
+  // Wrapped in useCallback (stable identity) - consumers like
+  // useSessionTimeout depend on this function reference, and an unstable
+  // reference there causes their effects to re-run and reset unrelated
+  // timers on every unrelated AuthProvider render (e.g. a background
+  // token refresh).
+  const signIn = useCallback(async (email, password) => {
     try {
       setLoading(true);
       setError(null);
@@ -440,49 +453,67 @@ export const AuthProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  // Sign out
-  const signOut = async () => {
+  // Sign out. Local auth state is always cleared, even if the remote
+  // sign-out call fails - for a forced/auto logout, staying "logged in"
+  // locally because of a transient network error is the less safe
+  // failure mode. The error is still surfaced via `error` and rethrown
+  // so callers that care can react to it.
+  const signOut = useCallback(async () => {
+    setLoading(true);
+    let signOutError = null;
     try {
-      setLoading(true);
       await authService.signOut();
-      setUser(null);
-      setUserRole(null);
-      setHasPsychologistAccess(false);
-
-      // Clear all cached role data to prevent stale authentication
-      clearCachedRole();
     } catch (err) {
       console.error("Sign out error:", err.message);
       setError(err.message);
-      throw err;
+      signOutError = err;
     } finally {
+      setUser(null);
+      setUserRole(null);
+      setHasPsychologistAccess(false);
+      clearCachedRole();
       setLoading(false);
     }
-  };
+    if (signOutError) throw signOutError;
+  }, []);
 
   // Check if user is admin
-  const isAdmin = () => {
-    return userRole === "admin";
-  };
+  const isAdmin = useCallback(() => userRole === "admin", [userRole]);
 
   // Check if user is psychologist
-  const isPsychologist = () => {
-    return userRole === "psychologist";
-  };
+  const isPsychologist = useCallback(
+    () => userRole === "psychologist",
+    [userRole]
+  );
 
-  const value = {
-    user,
-    userRole,
-    hasPsychologistAccess,
-    loading,
-    error,
-    signIn,
-    signOut,
-    isAdmin,
-    isPsychologist,
-  };
+  // Memoized so consumers (e.g. useSessionTimeout) don't see a new context
+  // value - and therefore a new `signOut` reference - on every render.
+  const value = useMemo(
+    () => ({
+      user,
+      userRole,
+      hasPsychologistAccess,
+      loading,
+      error,
+      signIn,
+      signOut,
+      isAdmin,
+      isPsychologist,
+    }),
+    [
+      user,
+      userRole,
+      hasPsychologistAccess,
+      loading,
+      error,
+      signIn,
+      signOut,
+      isAdmin,
+      isPsychologist,
+    ]
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

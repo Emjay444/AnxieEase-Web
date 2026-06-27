@@ -6,7 +6,7 @@ const SessionTimeoutWrapper = ({ children }) => {
   // Initialize session timeout for all authenticated users
   const {
     showWarning,
-    warningTimeRemaining,
+    warningSecondsLeft,
     handleExtendSession,
     handleLogout,
   } = useSessionTimeout();
@@ -16,7 +16,7 @@ const SessionTimeoutWrapper = ({ children }) => {
       {children}
       <SessionWarningModal
         show={showWarning}
-        timeRemaining={warningTimeRemaining}
+        secondsLeft={warningSecondsLeft}
         onExtend={handleExtendSession}
         onLogout={handleLogout}
       />

@@ -31,6 +31,7 @@ import { appointmentService } from "../services/appointmentService";
 import { supabase } from "../services/supabaseClient";
 import ProfilePicture from "./ProfilePicture";
 import LogoutButton from "./LogoutButton";
+import TransitionOverlay from "./TransitionOverlay";
 import { getFullNameParts } from "../utils/helpers";
 
 // Top-level, memoized Profile modal to avoid remounts on parent re-render
@@ -831,6 +832,7 @@ const DashboardNew = () => {
   const { user, userRole } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [isSwitchingView, setIsSwitchingView] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [showPatientProfile, setShowPatientProfile] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
@@ -1567,7 +1569,8 @@ const DashboardNew = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <>
+    <div className="min-h-screen bg-gray-50 page-enter">
       {/* Report Generation View */}
       {showReportGeneration ? (
         <ReportGeneration
@@ -1609,7 +1612,10 @@ const DashboardNew = () => {
                 <div className="flex items-center space-x-4">
                   {userRole === "admin" && (
                     <button
-                      onClick={() => navigate("/admin")}
+                      onClick={() => {
+                        setIsSwitchingView(true);
+                        setTimeout(() => navigate("/admin"), 1600);
+                      }}
                       className="flex items-center space-x-2 px-4 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 rounded-xl shadow-md hover:shadow-lg ring-2 ring-indigo-200 transition-all"
                       title="You also have admin access - switch to the Admin Dashboard"
                     >
@@ -2102,6 +2108,15 @@ const DashboardNew = () => {
         </>
       )}
     </div>
+
+    {/* Full-screen transition shown when switching to the Admin Dashboard */}
+    {isSwitchingView && (
+      <TransitionOverlay
+        title="Switching views..."
+        subtitle="Taking you to the admin dashboard..."
+      />
+    )}
+    </>
   );
 };
 

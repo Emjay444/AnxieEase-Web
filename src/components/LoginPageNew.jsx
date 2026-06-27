@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { authService } from "../services/authService";
+import TransitionOverlay from "./TransitionOverlay";
 import { Mail, Lock, Eye, EyeOff, AlertCircle, Loader2 } from "lucide-react";
 
 const LoginPage = () => {
@@ -14,6 +15,16 @@ const LoginPage = () => {
   const [rememberMe, setRememberMe] = useState(false);
   const [lockoutInfo, setLockoutInfo] = useState(null);
   const [countdown, setCountdown] = useState(0);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [transitionRole, setTransitionRole] = useState(null);
+  // signIn() sets `user`/`userRole` on the auth context as soon as its own
+  // network calls resolve - that lands in a render *before* this
+  // component's own setIsTransitioning(true) below ever runs, so the
+  // auto-redirect effect (keyed off `user`) would otherwise fire first and
+  // navigate away before the overlay had a chance to render. A ref is
+  // readable synchronously (no render needed), so setting it at the very
+  // start of handleSubmit closes that gap regardless of render order.
+  const isSubmittingRef = useRef(false);
   const navigate = useNavigate();
   const { signIn, user, userRole, hasPsychologistAccess, loading } = useAuth();
 
@@ -66,7 +77,13 @@ const LoginPage = () => {
   // row) must land on /dashboard, not /admin, or this effect races
   // handleSubmit's redirect and the admin panel flashes first.
   useEffect(() => {
-    if (!loading && user) {
+    // Skip while handleSubmit owns an in-flight sign-in - it drives its own
+    // navigate() call once the transition overlay has had time to show.
+    // Checked via a ref (not isTransitioning state) because signIn() sets
+    // `user` on the auth context in its own render, before handleSubmit's
+    // setIsTransitioning(true) below has committed - a state-based guard
+    // can still lose that race; a ref is synchronous and closes it.
+    if (!loading && user && !isSubmittingRef.current) {
       const cached = localStorage.getItem("userRole");
       const role = userRole || cached;
       if (!role) return; // wait for a known role
@@ -108,6 +125,10 @@ const LoginPage = () => {
       return;
     }
 
+    // Set synchronously, before signIn() runs, so the auto-redirect effect
+    // sees it the instant `user` updates - no render-order gap to lose.
+    isSubmittingRef.current = true;
+
     try {
       console.log("Attempting to sign in...");
       const { role, hasPsychologistAccess } = await signIn(email, password);
@@ -126,7 +147,13 @@ const LoginPage = () => {
       setError("");
       setSuccess("Sign in successful! Redirecting...");
 
-      // Small delay to show success state
+      // Play a full-screen transition instead of cutting straight to the
+      // next page - covers the form immediately so the redirect feels like
+      // one continuous motion rather than a hard page swap.
+      const destRole = role === "admin" && !hasPsychologistAccess ? "admin" : "psychologist";
+      setTransitionRole(destRole);
+      setIsTransitioning(true);
+
       setTimeout(() => {
         // Redirect based on role. A dual-access account (admin metadata +
         // an active psychologist row) lands on their psychologist
@@ -137,8 +164,9 @@ const LoginPage = () => {
         } else if (role === "psychologist" || hasPsychologistAccess) {
           navigate("/dashboard");
         }
-      }, 800);
+      }, 1600);
     } catch (err) {
+      isSubmittingRef.current = false;
       console.error("Sign in error:", err);
 
       // Handle different types of errors with specific messages
@@ -190,6 +218,7 @@ const LoginPage = () => {
   }
 
   return (
+    <>
     <div className="min-h-screen animated-bg flex items-center justify-center p-4 relative">
       {/* Floating shapes for enhanced animation */}
       <div className="floating-shapes">
@@ -364,6 +393,17 @@ const LoginPage = () => {
         </div>
       </div>
     </div>
+
+    {/* Full-screen transition shown immediately after a successful sign-in */}
+    {isTransitioning && (
+      <TransitionOverlay
+        title="Welcome back!"
+        subtitle={`Taking you to your ${
+          transitionRole === "admin" ? "admin" : "psychologist"
+        } dashboard...`}
+      />
+    )}
+    </>
   );
 };
 

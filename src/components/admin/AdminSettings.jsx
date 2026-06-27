@@ -44,7 +44,6 @@ const AdminSettings = () => {
       alertRecipients: ['admin@anxieease.com']
     },
     security: {
-      sessionTimeout: 3600,
       maxLoginAttempts: 5,
       requireTwoFactor: false,
       passwordMinLength: 8,
@@ -344,18 +343,6 @@ const AdminSettings = () => {
 
   const renderSecuritySettings = () => (
     <div className="space-y-6">
-      <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-          Session Timeout (seconds)
-        </label>
-        <input
-          type="number"
-          value={settings.security.sessionTimeout}
-          onChange={(e) => handleSettingChange('security', 'sessionTimeout', parseInt(e.target.value))}
-          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-emerald-500 focus:border-emerald-500 dark:bg-gray-700 dark:text-white"
-        />
-      </div>
-
       <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
           Maximum Login Attempts

@@ -351,6 +351,95 @@
   }
 }
 
+/* Full-screen transition overlay shown right after a successful login */
+.transition-overlay {
+  animation: overlayFadeIn 0.5s ease-out both;
+}
+@keyframes overlayFadeIn {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.transition-logo-pop {
+  animation: logoPop 1s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes logoPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.transition-text {
+  animation: transitionTextIn 0.7s ease-out 0.3s both;
+}
+@keyframes transitionTextIn {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Entrance animation for pages landed on after a transition (e.g. dashboard, admin panel) */
+.page-enter {
+  animation: pageEnter 0.5s ease-out both;
+}
+@keyframes pageEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.99);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Session-expiring warning modal */
+.session-warning-overlay {
+  animation: overlayFadeIn 0.25s ease-out both;
+}
+.session-warning-card {
+  animation: sessionCardPopIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes sessionCardPopIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.92) translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .transition-overlay,
+  .transition-logo-pop,
+  .transition-text,
+  .page-enter,
+  .session-warning-overlay,
+  .session-warning-card {
+    animation: none;
+  }
+}
+
 /* Custom Scrollbar Styles */
 .custom-scrollbar {
   scrollbar-width: thin;

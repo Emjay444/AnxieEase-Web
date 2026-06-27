@@ -9,6 +9,7 @@ import deviceService from "../services/deviceService";
 import AddDoctorModal from "./AddDoctorModal";
 import ProfilePicture from "./ProfilePicture";
 import ChangePasswordOTPModal from "./ChangePasswordOTPModal";
+import TransitionOverlay from "./TransitionOverlay";
 import { getFullName } from "../utils/helpers";
 import { getFullNameParts } from "../utils/helpers";
 import {
@@ -120,6 +121,7 @@ const SuccessModal = ({ isOpen, onClose, title, message, details = [] }) => {
 const AdminPanelNew = () => {
   const { user, hasPsychologistAccess } = useAuth();
   const navigate = useNavigate();
+  const [isSwitchingView, setIsSwitchingView] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
   const [psychologistSearchTerm, setPsychologistSearchTerm] = useState("");
   const [patientSearchTerm, setPatientSearchTerm] = useState("");
@@ -1422,7 +1424,8 @@ const AdminPanelNew = () => {
   }
 
   return (
-    <div className="min-h-screen bg-app-light">
+    <>
+    <div className="min-h-screen bg-app-light page-enter">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="px-6 py-4">
@@ -1445,7 +1448,10 @@ const AdminPanelNew = () => {
             <div className="flex items-center space-x-4">
               {hasPsychologistAccess && (
                 <button
-                  onClick={() => navigate("/dashboard")}
+                  onClick={() => {
+                    setIsSwitchingView(true);
+                    setTimeout(() => navigate("/dashboard"), 1600);
+                  }}
                   className="flex items-center space-x-2 px-4 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 rounded-xl shadow-md hover:shadow-lg ring-2 ring-indigo-200 transition-all"
                   title="You also have psychologist access - switch to your Psychologist Dashboard"
                 >
@@ -5422,6 +5428,15 @@ const AdminPanelNew = () => {
         onError={handleOTPPasswordChangeError}
       />
     </div>
+
+    {/* Full-screen transition shown when switching to the Psychologist Dashboard */}
+    {isSwitchingView && (
+      <TransitionOverlay
+        title="Switching views..."
+        subtitle="Taking you to your psychologist dashboard..."
+      />
+    )}
+    </>
   );
 };
 
