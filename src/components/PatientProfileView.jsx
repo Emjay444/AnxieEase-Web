@@ -276,10 +276,10 @@ const PatientProfileView = ({ patient, onBack, psychologistId }) => {
   };
 
   const computeSeverity = (records = []) => {
-    const counts = { Severe: 0, Moderate: 0, Mild: 0 };
+    const counts = { Severe: 0, Moderate: 0, Mild: 0, Unknown: 0 };
     (records || []).forEach((r) => {
       const sev = normalizeSeverity(r);
-      if (counts[sev] !== undefined) counts[sev] += 1;
+      counts[sev] = (counts[sev] || 0) + 1;
     });
     const data = [
       {
@@ -301,6 +301,16 @@ const PatientProfileView = ({ patient, onBack, psychologistId }) => {
         color: SEVERITY_COLORS.Mild,
       },
     ];
+    // Only show Unknown when it actually occurs, so the chart stays
+    // clean for the common case while keeping totals consistent
+    if (counts.Unknown > 0) {
+      data.push({
+        category: "Unknown",
+        key: "Unknown",
+        count: counts.Unknown,
+        color: SEVERITY_COLORS.Unknown,
+      });
+    }
     setSeverityData(data);
   };
 

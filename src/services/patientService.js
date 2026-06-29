@@ -413,10 +413,14 @@ export const patientService = {
         const mappedLogs = wellnessData.map((log) => {
           // Convert numeric stress level to text and preserve original value
           let stressLevelText = "Low";
-          let stressLevelValue = log.stress_level || 1;
+          let stressLevelValue =
+            log.stress_level === null || log.stress_level === undefined
+              ? 1
+              : log.stress_level;
 
           if (typeof stressLevelValue !== "number") {
-            stressLevelValue = parseFloat(stressLevelValue) || 1;
+            const parsed = parseFloat(stressLevelValue);
+            stressLevelValue = isNaN(parsed) ? 1 : parsed;
           }
 
           if (stressLevelValue > 3 && stressLevelValue <= 6) {

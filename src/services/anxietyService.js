@@ -155,18 +155,25 @@ export const anxietyService = {
     const start = new Date(end);
     start.setDate(end.getDate() - (days - 1));
 
+    // Use local-date keys (not UTC) so buckets line up with the rest of
+    // the dashboard, which filters by local getMonth()/getFullYear()
+    const localDateKey = (d) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
+        2,
+        "0"
+      )}-${String(d.getDate()).padStart(2, "0")}`;
+
     // Initialize map with zero counts
     const map = new Map();
     for (let i = 0; i < days; i++) {
       const d = new Date(start);
       d.setDate(start.getDate() + i);
-      const key = d.toISOString().slice(0, 10); // YYYY-MM-DD
-      map.set(key, 0);
+      map.set(localDateKey(d), 0);
     }
 
     // Count records per day
     records.forEach((r) => {
-      const key = r.ts.toISOString().slice(0, 10);
+      const key = localDateKey(r.ts);
       if (map.has(key)) map.set(key, (map.get(key) || 0) + 1);
     });
 
@@ -175,10 +182,10 @@ export const anxietyService = {
       month: "short",
       day: "numeric",
     });
-    return Array.from(map.entries()).map(([key, count]) => ({
-      date: formatter.format(new Date(key)),
-      count,
-    }));
+    return Array.from(map.entries()).map(([key, count]) => {
+      const [y, m, d] = key.split("-").map(Number);
+      return { date: formatter.format(new Date(y, m - 1, d)), count };
+    });
   },
 
   // Summary stats
