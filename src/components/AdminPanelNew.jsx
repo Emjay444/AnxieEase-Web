@@ -1452,7 +1452,7 @@ const AdminPanelNew = () => {
                     setIsSwitchingView(true);
                     setTimeout(() => navigate("/dashboard"), 1600);
                   }}
-                  className="flex items-center space-x-2 px-4 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 rounded-xl shadow-md hover:shadow-lg ring-2 ring-indigo-200 transition-all"
+                  className="flex items-center space-x-2 px-4 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 rounded-xl shadow-md hover:shadow-lg ring-2 ring-emerald-200 transition-all"
                   title="You also have psychologist access - switch to your Psychologist Dashboard"
                 >
                   <ArrowLeftRight className="h-4 w-4" />
