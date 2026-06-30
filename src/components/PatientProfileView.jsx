@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   ArrowLeft,
   Calendar,
@@ -81,6 +81,7 @@ const PatientProfileView = ({ patient, onBack, psychologistId }) => {
   const [severityFilter, setSeverityFilter] = useState("all"); // all, 1m, 3m, 6m, 1y
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth()); // 0-11
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const defaultMonthInitialized = useRef(false);
   // Mood logs pagination
   const [moodLogsPage, setMoodLogsPage] = useState(1);
   const [moodLogsPageSize] = useState(10);
@@ -225,6 +226,27 @@ const PatientProfileView = ({ patient, onBack, psychologistId }) => {
         improvementTrend: improvement,
         attackRatePerWeek: summary.ratePerWeek,
       });
+
+      // Default the month/year filter to the most recent month that
+      // actually has data, instead of always assuming "this month" --
+      // patient records can predate the current calendar month, which
+      // made the month-scoped charts look empty on first load.
+      if (!defaultMonthInitialized.current) {
+        defaultMonthInitialized.current = true;
+        const candidateDates = [
+          ...mood
+            .map((log) => new Date(log.log_date || log.created_at))
+            .filter((d) => !isNaN(d.getTime())),
+          ...allRecords.map((r) => r.ts).filter((d) => d && !isNaN(d.getTime())),
+        ];
+        if (candidateDates.length > 0) {
+          const mostRecent = new Date(
+            Math.max(...candidateDates.map((d) => d.getTime()))
+          );
+          setSelectedMonth(mostRecent.getMonth());
+          setSelectedYear(mostRecent.getFullYear());
+        }
+      }
     } catch (error) {
       console.error("Error loading patient data:", error);
     } finally {
