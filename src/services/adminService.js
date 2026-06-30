@@ -522,6 +522,10 @@ export const adminService = {
         }),
         assigned_psychologist_id: null,
         is_active: patient.is_email_verified,
+        avatar_url: patient.avatar_url || null,
+        first_name: patient.first_name,
+        middle_name: patient.middle_name,
+        last_name: patient.last_name,
       }));
     } catch (error) {
       console.error("Get unassigned patients error:", error.message);
@@ -612,6 +616,10 @@ export const adminService = {
           ? getFullName(patient.psychologists)
           : null,
         is_active: patient.is_email_verified,
+        avatar_url: patient.avatar_url || null,
+        first_name: patient.first_name,
+        middle_name: patient.middle_name,
+        last_name: patient.last_name,
       }));
     } catch (error) {
       console.error("Get all users error:", error.message);
