@@ -139,6 +139,10 @@ export const psychologistService = {
         return {
           id: user.id,
           name: fullName || `Patient ${user.id.slice(0, 8)}`,
+          first_name: user.first_name,
+          middle_name: user.middle_name,
+          last_name: user.last_name,
+          avatar_url: user.avatar_url || null,
           email: user.email || "No email",
           contact_number: user.contact_number || null,
           emergency_contact: user.emergency_contact || null,
