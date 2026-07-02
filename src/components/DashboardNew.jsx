@@ -1495,7 +1495,7 @@ const DashboardNew = () => {
     try {
       setAppointmentError(null); // Clear any previous errors
       const { requestId, action } = pendingAction;
-      const status = action === "approve" ? "scheduled" : "declined"; // Use "scheduled" not "approved"
+      const status = action === "approve" ? "approved" : "declined";
       const message =
         action === "approve"
           ? "Approved by psychologist"
